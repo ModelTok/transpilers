@@ -117,10 +117,28 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirStringLiteral):
         return lir.GoStringLiteral(value=node.value)
     if isinstance(node, mir.MirCall):
+        args = [_lower_expr(a) for a in node.args]
         if node.func == "len":
-            # Go's `len(x)` is a builtin returning `int` — emit as a direct call.
-            return lir.GoCall(func="len", args=[_lower_expr(a) for a in node.args])
-        return lir.GoCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+            return lir.GoCall(func="len", args=args)
+        if node.func in ("print", "println"):
+            # Go's `println` builtin is a debug print — no import needed.
+            return lir.GoCall(func="println", args=args)
+        if node.func == "abs" and len(args) == 1:
+            x = args[0]
+            return _GoIfExpr(
+                test=lir.GoCompare(op="<", left=x, right=lir.GoIntLiteral(value=0)),
+                then_=lir.GoUnary(op="-", operand=x),
+                else_=x,
+            )
+        if node.func == "min" and len(args) == 2:
+            return lir.GoCall(func="min", args=args)
+        if node.func == "max" and len(args) == 2:
+            return lir.GoCall(func="max", args=args)
+        if node.func == "int" and len(args) == 1:
+            return lir.GoCall(func="int64", args=args)
+        if node.func == "float" and len(args) == 1:
+            return lir.GoCall(func="float64", args=args)
+        return lir.GoCall(func=node.func, args=args)
     raise NotImplementedError(f"MIR expr {type(node).__name__}")
 
 
@@ -129,6 +147,16 @@ class _GoMethodCall(lir.LirNode):
         self.receiver = receiver
         self.method = method
         self.args = args
+
+
+class _GoIfExpr(lir.LirNode):
+    """Branchless expression form via an inline IIFE. Used for builtin
+    lowering when Go has no equivalent (`abs` on int)."""
+
+    def __init__(self, test: lir.LirNode, then_: lir.LirNode, else_: lir.LirNode) -> None:
+        self.test = test
+        self.then_ = then_
+        self.else_ = else_
 
 
 def _is_string_concat(node: mir.MirBinOp) -> bool:

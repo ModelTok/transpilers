@@ -120,6 +120,11 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> list[str]:
         return [f"{pad}return"]
     if isinstance(node, lir.FortranAssign):
         return [f"{pad}{node.name} = {_emit_expr(node.value)}"]
+    # `print(x, y, z)` lowers to a FortranCall but Fortran's print is a
+    # statement form, not a function call — rewrite at emit.
+    if isinstance(node, lir.FortranCall) and node.func in ("print", "println"):
+        rendered = ", ".join(_emit_expr(a) for a in node.args)
+        return [f"{pad}print *, {rendered}"]
     if isinstance(node, lir.FortranIf):
         out = [f"{pad}if ({_emit_expr(node.test)}) then"]
         for inner in node.body:

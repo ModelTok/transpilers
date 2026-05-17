@@ -144,12 +144,33 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirStringLiteral):
         return lir.CStringLiteral(value=node.value)
     if isinstance(node, mir.MirCall):
-        # `len(x)` and `range(...)` aren't C builtins. range() is handled at
-        # MirForRange; len() of a slice has no zero-cost C equivalent in our
-        # subset. Surface that gap rather than fake it.
+        args = [_lower_expr(a) for a in node.args]
         if node.func == "len":
             raise NotImplementedError("len() in C requires a slice/length protocol; not yet supported")
-        return lir.CCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+        if node.func in ("print", "println"):
+            # Best-effort printf. Use `%lld` for our IntT(64) and `%g` for
+            # floats. The emitter escapes the real newline to `\n` in the
+            # emitted source.
+            template = " ".join("%lld" for _ in args) + "\n"
+            return lir.CCall(
+                func="printf",
+                args=[lir.CStringLiteral(value=template), *args],
+            )
+        if node.func == "abs" and len(args) == 1:
+            # C's stdlib has abs/labs/llabs — use llabs for int64.
+            return lir.CCall(func="llabs", args=args)
+        if node.func == "min" and len(args) == 2:
+            # No stdlib min in pure C; emit a ternary.
+            return lir.CTernary(test=lir.CCompare(op="<", left=args[0], right=args[1]),
+                                then_=args[0], else_=args[1])
+        if node.func == "max" and len(args) == 2:
+            return lir.CTernary(test=lir.CCompare(op=">", left=args[0], right=args[1]),
+                                then_=args[0], else_=args[1])
+        if node.func == "int" and len(args) == 1:
+            return lir.CCall(func="(int64_t)", args=args)
+        if node.func == "float" and len(args) == 1:
+            return lir.CCall(func="(double)", args=args)
+        return lir.CCall(func=node.func, args=args)
     if isinstance(node, mir.MirSubscript):
         return lir.CIndex(value=_lower_expr(node.value), index=_lower_expr(node.index))
     raise NotImplementedError(f"MIR expr {type(node).__name__}")

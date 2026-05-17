@@ -10,7 +10,17 @@ from transpilers.ir import lir
 
 
 INDENT = "    "
-PREAMBLE = "#include <stdint.h>\n#include <stdbool.h>\n\n"
+PREAMBLE = "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include <stdlib.h>\n\n"
+
+
+def _c_string_escape(s: str) -> str:
+    return (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+        .replace("\r", "\\r")
+    )
 
 
 def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | None:
@@ -44,9 +54,15 @@ def _emit_struct(s: lir.CStruct) -> str:
 
 def _emit_fn(fn: lir.CFn, *, self_type: str | None = None) -> str:
     params = ", ".join(_emit_param(n, t, self_type) for n, t in fn.params) or "void"
-    header = f"{fn.return_type} {fn.name}({params}) {{"
-    body = _emit_block(fn.body, 1)
-    return f"{header}\n{body}\n}}"
+    # C requires `main` to return `int` (and a hosted environment expects
+    # `int main(...)`). Coerce void return → int and append `return 0;`.
+    ret_type = fn.return_type
+    body_text = _emit_block(fn.body, 1)
+    if fn.name == "main" and ret_type == "void":
+        ret_type = "int"
+        body_text = body_text + f"\n{INDENT}return 0;"
+    header = f"{ret_type} {fn.name}({params}) {{"
+    return f"{header}\n{body_text}\n}}"
 
 
 def _emit_param(name: str, ty: str, self_type: str | None) -> str:
@@ -127,13 +143,18 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.CBoolLiteral):
         return "true" if node.value else "false"
     if isinstance(node, lir.CStringLiteral):
-        escaped = node.value.replace("\\", "\\\\").replace('"', '\\"')
+        escaped = _c_string_escape(node.value)
         return f'"{escaped}"'
     if isinstance(node, lir.CIndex):
         return f"{_emit_expr(node.value)}[{_emit_expr(node.index)}]"
     if isinstance(node, lir.CCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
+        # Cast-style "calls" (`(int64_t)`, `(double)`) emit as cast prefix.
+        if node.func.startswith("(") and node.func.endswith(")"):
+            return f"{node.func}{args}"
         return f"{node.func}({args})"
+    if isinstance(node, lir.CTernary):
+        return f"({_emit_expr(node.test)} ? {_emit_expr(node.then_)} : {_emit_expr(node.else_)})"
     if isinstance(node, lir.CFieldAccess):
         sep = "->" if node.via_pointer else "."
         return f"{_emit_expr(node.value)}{sep}{node.field}"

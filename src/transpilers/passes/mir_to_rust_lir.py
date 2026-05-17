@@ -183,16 +183,33 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
 
 
 def _lower_call(node: mir.MirCall) -> lir.LirNode:
+    # Stdlib mapping table — turn well-known Python-style builtins into
+    # idiomatic Rust so the output is runnable, not just syntactically OK.
+    args = [_lower_expr(a) for a in node.args]
     if node.func == "len":
-        if len(node.args) != 1:
+        if len(args) != 1:
             raise ValueError("len() takes exactly one argument")
-        # Python `len(x)` -> Rust `x.len() as i64`. The cast bridges Rust's
-        # usize to our IntT(64) lattice — a real-world transpiler would offer a
-        # `--strict-usize` mode; for now we pick ergonomics.
-        return lir.RustMethodCall(receiver=_lower_expr(node.args[0]), method="len", args=[], cast_to="i64")
-    # Default: emit as a direct function call. User-defined functions and
-    # unknown builtins land here; signature lookup / LLM mapping is future work.
-    return lir.RustCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+        return lir.RustMethodCall(receiver=args[0], method="len", args=[], cast_to="i64")
+    if node.func in ("print", "println"):
+        template = " ".join("{}" for _ in args)
+        return lir.RustMacro(name="println", template=template, args=args)
+    if node.func == "abs" and len(args) == 1:
+        return lir.RustMethodChain(receiver=args[0], method="abs", args=[])
+    if node.func == "min" and len(args) == 2:
+        return lir.RustMethodChain(receiver=args[0], method="min", args=[args[1]])
+    if node.func == "max" and len(args) == 2:
+        return lir.RustMethodChain(receiver=args[0], method="max", args=[args[1]])
+    if node.func == "int" and len(args) == 1:
+        return lir.RustBinOp(op="as", left=args[0], right=lir.RustName(name="i64"))
+    if node.func == "float" and len(args) == 1:
+        return lir.RustBinOp(op="as", left=args[0], right=lir.RustName(name="f64"))
+    if node.func == "bool" and len(args) == 1:
+        return lir.RustCompare(op="!=", left=args[0], right=lir.RustIntLiteral(value=0))
+    if node.func == "str" and len(args) == 1:
+        return lir.RustMethodChain(receiver=args[0], method="to_string", args=[])
+    # Default: emit as a direct function call. User-defined functions land
+    # here; unknown builtins too (rustc surfaces the error).
+    return lir.RustCall(func=node.func, args=args)
 
 
 def _is_string_concat(node: mir.MirBinOp) -> bool:

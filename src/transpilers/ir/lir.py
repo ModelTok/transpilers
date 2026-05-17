@@ -298,6 +298,28 @@ class RustFormat(LirNode):
     args: list[LirNode]
 
 
+@dataclass
+class RustMacro(LirNode):
+    """Rust macro-call emission: `name!(<rendered args>)`. Used for
+    builtins that map to macros (`println!`, `print!`, `format!`,
+    `vec!`, ...). The args are rendered as-is between the parens."""
+
+    name: str       # without the trailing `!`
+    template: str   # format spec, e.g. "{} {}" — empty when no template
+    args: list[LirNode]
+
+
+@dataclass
+class RustMethodChain(LirNode):
+    """`receiver.method(args)` shorthand for stdlib-builtin lowering.
+    Different from RustMethodCall (which carries a `cast_to` for length-
+    style emission) — this is a plain method call, no cast."""
+
+    receiver: LirNode
+    method: str
+    args: list[LirNode]
+
+
 # ---------------- Zig dialect ----------------
 #
 # A separate dialect rather than a shared "C-family LIR": Zig's `var`/`const`
@@ -589,6 +611,15 @@ class CIndex(LirNode):
 class CCall(LirNode):
     func: str
     args: list[LirNode]
+
+
+@dataclass
+class CTernary(LirNode):
+    """`<test> ? <then_> : <else_>` — C ternary expression."""
+
+    test: LirNode
+    then_: LirNode
+    else_: LirNode
 
 
 @dataclass

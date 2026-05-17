@@ -133,6 +133,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
     if isinstance(node, lir.RustBinOp):
+        # `x as i64` style casts are emitted as binops with op="as".
+        if node.op == "as":
+            return f"{_emit_expr(node.left)} as {_emit_expr(node.right)}"
         return f"{_emit_expr(node.left)} {node.op} {_emit_expr(node.right)}"
     if isinstance(node, lir.RustCompare):
         return f"{_emit_expr(node.left)} {node.op} {_emit_expr(node.right)}"
@@ -162,6 +165,14 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         template = "{}" * len(node.args)
         rendered = ", ".join(_emit_expr(a) for a in node.args)
         return f'format!("{template}", {rendered})'
+    if isinstance(node, lir.RustMacro):
+        rendered = ", ".join(_emit_expr(a) for a in node.args)
+        if node.template:
+            return f'{node.name}!("{node.template}", {rendered})' if rendered else f'{node.name}!("{node.template}")'
+        return f"{node.name}!({rendered})"
+    if isinstance(node, lir.RustMethodChain):
+        rendered = ", ".join(_emit_expr(a) for a in node.args)
+        return f"{_emit_expr(node.receiver)}.{node.method}({rendered})"
     if isinstance(node, lir.RustVec):
         items = ", ".join(_emit_expr(e) for e in node.elements)
         return f"vec![{items}]"
