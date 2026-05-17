@@ -23,7 +23,8 @@ example:
 
 # Transpile every example to every supported target
 examples-all:
-    @for src in examples/*.py; do \
+    @for src in examples/*; do \
+        case "$src" in *.py|*.c) ;; *) continue ;; esac; \
         for target in rust zig; do \
             echo "=== $src -> $target ==="; \
             just transpile $src $target || exit 1; \
