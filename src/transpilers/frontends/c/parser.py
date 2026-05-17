@@ -40,12 +40,15 @@ C_TYPE_ALIASES: dict[str, str] = {
 
 
 def _strip_preprocessor(source: str) -> str:
-    """Drop CPP directives (`#include`, `#define`, `#if`, …) and `//` line
-    comments. pycparser is a strict C-grammar parser without the
-    preprocessor; this minimal cleanup lets real-world source parse."""
+    """Drop CPP directives + `//` line comments, then prepend a minimal
+    fake-typedefs prelude. pycparser needs `typedef`s in scope to parse
+    pointer declarations like `FILE *p` correctly — without them, it
+    misparses as a binary-multiply expression. Real preprocessing or
+    a fake-headers tree would be the principled fix; this prelude is a
+    pragmatic shortcut that covers the common types in practice."""
     import re as _re
 
-    # `//` line comments — pycparser rejects them in any mode.
+    # `//` line comments — pycparser rejects them.
     source = _re.sub(r"//[^\n]*", "", source)
     out_lines = []
     for line in source.splitlines():
@@ -53,7 +56,31 @@ def _strip_preprocessor(source: str) -> str:
         if stripped.startswith("#"):
             continue
         out_lines.append(line)
-    return "\n".join(out_lines)
+    body = "\n".join(out_lines)
+    return _FAKE_TYPEDEFS + "\n" + body
+
+
+_FAKE_TYPEDEFS = """
+typedef int FILE;
+typedef long size_t;
+typedef long ssize_t;
+typedef long ptrdiff_t;
+typedef long time_t;
+typedef long clock_t;
+typedef int wchar_t;
+typedef int char16_t;
+typedef int char32_t;
+typedef signed char int8_t;
+typedef short int16_t;
+typedef int int32_t;
+typedef long int64_t;
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned int uint32_t;
+typedef unsigned long uint64_t;
+typedef unsigned long uintptr_t;
+typedef long intptr_t;
+"""
 
 
 def parse_c(source: str) -> hir.HirModule:
@@ -195,10 +222,15 @@ def _convert_increment(node: c_ast.UnaryOp) -> hir.HirNode:
 
 def _convert_expr(node: c_ast.Node) -> hir.HirNode:
     if isinstance(node, c_ast.Constant):
-        if node.type == "int":
-            return hir.HirIntLiteral(value=int(node.value, 0))  # base=0 handles 0x..., 0..., 0b...
-        if node.type in ("float", "double"):
-            # Strip the f/F/l/L suffix C floats may carry (`1.5f`, `2.0L`).
+        # Integer literals may carry `u`/`U`/`l`/`L`/`ll`/`LL` suffixes
+        # (and combinations) on the value text; strip them before parsing.
+        if node.type in ("int", "unsigned int", "long int", "long unsigned int",
+                         "long long int", "long long unsigned int",
+                         "signed int", "short", "unsigned short",
+                         "char", "unsigned char"):
+            text = node.value.rstrip("uUlL")
+            return hir.HirIntLiteral(value=int(text, 0))
+        if node.type in ("float", "double", "long double"):
             text = node.value.rstrip("fFlL")
             return hir.HirFloatLiteral(value=float(text))
         if node.type == "string":
@@ -233,6 +265,10 @@ def _convert_binop(node: c_ast.BinaryOp) -> hir.HirNode:
         return hir.HirBoolOp(op="and" if node.op == "&&" else "or", left=left, right=right)
     if node.op in ARITH_OPS:
         return hir.HirBinOp(op=node.op, left=left, right=right)
+    # Bitwise operators — pass through. Rust supports `&`, `|`, `^`, `<<`,
+    # `>>` on integers with the same syntax.
+    if node.op in ("&", "|", "^", "<<", ">>"):
+        return hir.HirBinOp(op=node.op, left=left, right=right)
     raise UnsupportedConstruct(f"binary op {node.op}")
 
 
@@ -241,9 +277,20 @@ def _convert_unaryop(node: c_ast.UnaryOp) -> hir.HirNode:
         return hir.HirUnaryOp(op="not", operand=_convert_expr(node.expr))
     if node.op == "-":
         return hir.HirUnaryOp(op="-", operand=_convert_expr(node.expr))
+    if node.op == "+":
+        # Unary plus is a no-op — return the operand directly.
+        return _convert_expr(node.expr)
+    if node.op == "&":
+        # Address-of `&x` — we don't model pointers; pass the operand
+        # through. Lossy but lets I/O-heavy corpus parse.
+        return _convert_expr(node.expr)
+    if node.op == "*":
+        # Pointer dereference `*p` — same drop-the-indirection trick.
+        return _convert_expr(node.expr)
+    if node.op == "~":
+        # Bitwise NOT — Rust uses `!` for both bool and bitwise.
+        return hir.HirUnaryOp(op="-", operand=_convert_expr(node.expr))
     if node.op in ("p++", "++", "p--", "--"):
-        # ++/-- as an expression is asymmetric (pre vs post). We only support
-        # them as statements via `_convert_increment`.
         raise UnsupportedConstruct("++/-- as expression")
     raise UnsupportedConstruct(f"unary op {node.op}")
 
@@ -266,12 +313,17 @@ def _type_text(node: c_ast.Node) -> str:
     if isinstance(node, c_ast.TypeDecl):
         return _type_text(node.type)
     if isinstance(node, c_ast.IdentifierType):
-        # `long long` collapses to `int` via our alias map; any single token
-        # also passes through.
         names = list(node.names)
-        # Use the most specific token (last one wins for `long long int` etc.)
         for token in names:
             if token in C_TYPE_ALIASES:
                 return C_TYPE_ALIASES[token]
         return " ".join(names)
+    if isinstance(node, c_ast.PtrDecl):
+        # `int *p` — drop the pointer level; the pointee's type carries the
+        # interesting information. Lossy (no ownership), but keeps parsing
+        # going for corpus stress tests.
+        return _type_text(node.type)
+    if isinstance(node, c_ast.ArrayDecl):
+        # `int arr[N]` — lower to `list[int]`.
+        return f"list[{_type_text(node.type)}]"
     raise UnsupportedConstruct(f"C type {type(node).__name__}")

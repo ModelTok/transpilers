@@ -254,9 +254,8 @@ def _convert_expr(node: Node) -> hir.HirNode:
     if kind == "method_invocation":
         return _convert_call(node)
     if kind == "object_creation_expression":
-        # `new T(args)` — lower as a struct init / call. We don't have type
-        # information on T's constructor here so we emit a HirCall and let
-        # later passes resolve it. Lossy but lets corpus parse.
+        # `new T(args)` — lower as a HirCall. Lossy: T might be a class we
+        # haven't modeled, but the parse proceeds.
         type_node = node.child_by_field_name("type")
         args_node = node.child_by_field_name("arguments")
         name = text(type_node) if type_node is not None else "_"
@@ -264,6 +263,27 @@ def _convert_expr(node: Node) -> hir.HirNode:
         if args_node is not None:
             args = [_convert_expr(c) for c in named_children(args_node)]
         return hir.HirCall(func=name, args=args)
+    if kind == "array_creation_expression":
+        # `new int[size]` / `new int[]{1, 2, 3}` — lower to a list literal.
+        # Dimension expressions or initializer literals both pass through;
+        # zero-init `new T[size]` produces an empty list (lossy — sizing is
+        # dropped).
+        dim_kids = [c for c in named_children(node) if c.type == "dimensions_expr"]
+        init_kid = next((c for c in named_children(node) if c.type == "array_initializer"), None)
+        if init_kid is not None:
+            elements = [_convert_expr(c) for c in named_children(init_kid)]
+            return hir.HirList(elements=elements)
+        # Dimension-based: emit empty list; the size is dropped (lossy).
+        return hir.HirList(elements=[])
+    if kind == "cast_expression":
+        # `(int) x` — drop the cast in the IR (the value passes through).
+        kids = named_children(node)
+        # Children: type-node first (sometimes), value last.
+        for c in kids[::-1]:
+            if c.type not in ("type_identifier", "integral_type", "floating_point_type", "boolean_type", "array_type", "generic_type", "void_type"):
+                return _convert_expr(c)
+        if kids:
+            return _convert_expr(kids[-1])
     if kind == "field_access":
         # `obj.field` access.
         obj = node.child_by_field_name("object")
@@ -287,6 +307,11 @@ def _convert_binary(node: Node) -> hir.HirNode:
         return hir.HirBoolOp(op="and" if op == "&&" else "or", left=left, right=right)
     if op in ARITH_OPS:
         return hir.HirBinOp(op=op, left=left, right=right)
+    # Bitwise operators — keep the operator symbol; downstream emitters
+    # render them verbatim in C-family targets. Bitwise on bools is
+    # uncommon but legal Java; we don't special-case it.
+    if op in ("&", "|", "^", "<<", ">>", ">>>"):
+        return hir.HirBinOp(op=op if op != ">>>" else ">>", left=left, right=right)
     raise UnsupportedConstruct(f"java binary op {op!r}")
 
 
