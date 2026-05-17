@@ -5,11 +5,12 @@ Hybrid algorithmic + LLM source-to-source transpiler. Goal: N-to-M across
 
 ## Status
 
-Three source frontends (**Python**, **C**, **C++**) and four targets
-(**Rust**, **Zig**, **C**, **Mojo**) — twelve source-target pairs working
-end-to-end with compiler-verified output. C → C is the round-trip case.
-Full algorithmic + interprocedural type inference for Python; C and C++
-use their native annotations. Fortran and VB sources are stubbed.
+Seven source frontends (**Python**, **C**, **C++**, **Java**, **C#**,
+**TypeScript**, **JavaScript**) and four targets (**Rust**, **Zig**, **C**,
+**Mojo**) — twenty-eight source-target pairs end-to-end with compiler-
+verified output. C → C is the round-trip case. Full algorithmic +
+interprocedural type inference; JS is the inference stress-test (no
+annotations anywhere). Fortran and VB sources remain stubbed.
 
 ## Why hybrid
 
@@ -88,7 +89,9 @@ uv run pytest
 ## Roadmap (rough)
 
 Done:
-- Python / C / C++ frontends (C-like subset for C++ — no classes/templates)
+- Python / C / C++ / Java / C# / TypeScript / JavaScript frontends
+  (C-like subsets for static-typed languages; classes/methods extracted from
+  Java + C# class containers; tree-sitter grammars for the latter four)
 - Rust / Zig / C / Mojo backends
 - Type inference: algorithmic dataflow + interprocedural + LLM fallback
 - String concat with target-specific handling (format!, native, refused)
