@@ -125,6 +125,15 @@ def _lower_assign(node: mir.MirAssign, declared: set[str], mut: set[str]) -> lir
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirBinOp):
+        if _is_string_concat(node):
+            # Runtime string concat in Zig requires an allocator and
+            # std.fmt.allocPrint — a real implementation needs a strategy for
+            # ownership/lifetimes that we haven't designed yet. Raising is the
+            # correct failure mode: surface the gap, don't emit broken code.
+            raise NotImplementedError(
+                "string concatenation in Zig requires allocator-aware emission "
+                "(std.fmt.allocPrint), not yet supported"
+            )
         return lir.ZigBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirCompare):
         return lir.ZigCompare(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
@@ -161,6 +170,14 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
             receiver=_lower_expr(node.args[0]), method="len", args=[], cast_to="i64"
         )
     return lir.ZigCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+
+
+def _is_string_concat(node: mir.MirBinOp) -> bool:
+    return (
+        node.op == "+"
+        and isinstance(getattr(node.left, "ty", None), StrT)
+        and isinstance(getattr(node.right, "ty", None), StrT)
+    )
 
 
 def _zig_type(ty: Type) -> str:

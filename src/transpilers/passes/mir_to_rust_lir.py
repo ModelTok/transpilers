@@ -104,6 +104,9 @@ def _lower_assign(node: mir.MirAssign, declared: set[str], mut: set[str]) -> lir
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirBinOp):
+        if _is_string_concat(node):
+            # Flatten left-leaning chains: `a + b + c` → format!("{}{}{}", a, b, c).
+            return lir.RustFormat(args=_flatten_concat(node))
         return lir.RustBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirCompare):
         return lir.RustCompare(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
@@ -141,6 +144,24 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
     # Default: emit as a direct function call. User-defined functions and
     # unknown builtins land here; signature lookup / LLM mapping is future work.
     return lir.RustCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+
+
+def _is_string_concat(node: mir.MirBinOp) -> bool:
+    return (
+        node.op == "+"
+        and isinstance(getattr(node.left, "ty", None), StrT)
+        and isinstance(getattr(node.right, "ty", None), StrT)
+    )
+
+
+def _flatten_concat(node: mir.MirBinOp) -> list[lir.LirNode]:
+    out: list[lir.LirNode] = []
+    for side in (node.left, node.right):
+        if isinstance(side, mir.MirBinOp) and _is_string_concat(side):
+            out.extend(_flatten_concat(side))
+        else:
+            out.append(_lower_expr(side))
+    return out
 
 
 def _rust_type(ty: Type) -> str:

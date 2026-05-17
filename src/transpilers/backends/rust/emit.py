@@ -87,10 +87,16 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.RustBoolLiteral):
         return "true" if node.value else "false"
     if isinstance(node, lir.RustStringLiteral):
-        # Rust string literal escaping: we preserve as-is for the initial
-        # subset. Tests cover only safe ASCII; richer escaping is a follow-up.
+        # StrT lowers to `String` (owned) for parameters and returns, so
+        # literals must materialize as owned strings too. `String::from(...)`
+        # is unambiguous; for format! arguments it's slightly verbose but
+        # still correct since `format!` accepts Display on either form.
         escaped = node.value.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
+        return f'String::from("{escaped}")'
+    if isinstance(node, lir.RustFormat):
+        template = "{}" * len(node.args)
+        rendered = ", ".join(_emit_expr(a) for a in node.args)
+        return f'format!("{template}", {rendered})'
     if isinstance(node, lir.RustVec):
         items = ", ".join(_emit_expr(e) for e in node.elements)
         return f"vec![{items}]"

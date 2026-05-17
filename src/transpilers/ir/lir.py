@@ -151,6 +151,16 @@ class RustCall(LirNode):
     args: list[LirNode]
 
 
+@dataclass
+class RustFormat(LirNode):
+    """`format!("{}{}...", arg1, arg2, ...)` — produced when MIR binop `+` has
+    two StrT operands. format! accepts both String and &str via Display, so
+    it's the safest emission for string concat regardless of operand
+    ownership."""
+
+    args: list[LirNode]
+
+
 # ---------------- Zig dialect ----------------
 #
 # A separate dialect rather than a shared "C-family LIR": Zig's `var`/`const`
