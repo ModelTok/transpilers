@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from transpilers.backends.c import emit_c
+from transpilers.backends.fortran import emit_fortran
 from transpilers.backends.go import emit_go
 from transpilers.backends.mojo import emit_mojo
 from transpilers.backends.python import emit_python
@@ -36,6 +37,7 @@ from transpilers.passes import (
     hir_to_mir,
     infer_types,
     mir_to_c_lir,
+    mir_to_fortran_lir,
     mir_to_go_lir,
     mir_to_mojo_lir,
     mir_to_python_lir,
@@ -44,6 +46,7 @@ from transpilers.passes import (
 )
 from transpilers.verify import (
     c_compiles,
+    fortran_compiles,
     go_compiles,
     mojo_compiles,
     python_compiles,
@@ -99,6 +102,7 @@ TARGETS = {
     "mojo": (mir_to_mojo_lir, emit_mojo, mojo_compiles),
     "go": (mir_to_go_lir, emit_go, go_compiles),
     "python": (mir_to_python_lir, emit_python, python_compiles),
+    "fortran": (mir_to_fortran_lir, emit_fortran, fortran_compiles),
 }
 
 
