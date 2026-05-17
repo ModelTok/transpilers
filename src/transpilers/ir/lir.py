@@ -835,3 +835,128 @@ class PyAssign(LirNode):
 class PyCall(LirNode):
     func: str
     args: list[LirNode]
+
+
+# ---------------- Fortran dialect ----------------
+#
+# Fortran's emission shape is genuinely different from the C-family dialects:
+#   - Declarations must come before statements (no inline `let` / `var`).
+#   - `function NAME(args) result(r)` returns via assignment to `r`.
+#   - No braces — `end if`, `end do`, `end function` close blocks.
+#   - Operators: `==/!=` work in F95+, but `.and./.or./.not.` are word ops.
+#   - For loops: `do i = start, stop` is inclusive both ends.
+#
+# We carry locals separately from body so the emitter can render the
+# declarations block at function entry.
+
+
+@dataclass
+class FortranModule(LirNode):
+    items: list["FortranFn"] = field(default_factory=list)
+
+
+@dataclass
+class FortranFn(LirNode):
+    name: str
+    params: list[tuple[str, str]]      # (name, fortran_type)
+    return_type: str | None             # None for subroutines / void
+    result_name: str                     # name of the result variable to assign
+    locals: list[tuple[str, str]]      # extra declarations beyond params + result
+    body: list[LirNode]
+
+
+@dataclass
+class FortranAssign(LirNode):
+    """Plain assignment — no declaration form. Declarations live on FortranFn."""
+
+    name: str
+    value: LirNode
+
+
+@dataclass
+class FortranReturn(LirNode):
+    """Bare `return` — for early exit. The result variable carries the value."""
+
+
+@dataclass
+class FortranBinOp(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class FortranCompare(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class FortranBoolOp(LirNode):
+    op: str  # ".and." / ".or."
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class FortranUnary(LirNode):
+    op: str  # ".not." / "-"
+    operand: LirNode
+
+
+@dataclass
+class FortranName(LirNode):
+    name: str
+
+
+@dataclass
+class FortranIntLiteral(LirNode):
+    value: int
+
+
+@dataclass
+class FortranFloatLiteral(LirNode):
+    value: float
+
+
+@dataclass
+class FortranBoolLiteral(LirNode):
+    value: bool
+
+
+@dataclass
+class FortranStringLiteral(LirNode):
+    value: str
+
+
+@dataclass
+class FortranIf(LirNode):
+    test: LirNode
+    body: list[LirNode]
+    orelse: list[LirNode]
+
+
+@dataclass
+class FortranWhile(LirNode):
+    test: LirNode
+    body: list[LirNode]
+
+
+@dataclass
+class FortranForRange(LirNode):
+    """`do <target> = <start>, <stop - 1>[, <step>]` — exclusive stop, since
+    we lower from MIR's exclusive-stop range semantics. The emitter subtracts
+    one literally if both are literal ints; otherwise it emits `stop - 1`."""
+
+    target: str
+    start: LirNode
+    stop: LirNode
+    step: LirNode | None
+    body: list[LirNode]
+
+
+@dataclass
+class FortranCall(LirNode):
+    func: str
+    args: list[LirNode]
