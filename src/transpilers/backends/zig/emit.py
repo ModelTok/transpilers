@@ -15,14 +15,43 @@ INDENT = "    "
 
 
 def emit_zig(module: lir.ZigModule) -> str:
-    return "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
+    return "\n\n".join(_emit_item(item) for item in module.items) + "\n"
 
 
-def _emit_fn(fn: lir.ZigFn) -> str:
-    params = ", ".join(f"{n}: {t}" for n, t in fn.params)
-    header = f"fn {fn.name}({params}) {fn.return_type} {{"
-    body = _emit_block(fn.body, 1)
-    return f"{header}\n{body}\n}}"
+def _emit_item(item: lir.LirNode) -> str:
+    if isinstance(item, lir.ZigStruct):
+        return _emit_struct(item)
+    if isinstance(item, lir.ZigFn):
+        return _emit_fn(item)
+    raise NotImplementedError(f"zig top-level item {type(item).__name__}")
+
+
+def _emit_struct(s: lir.ZigStruct) -> str:
+    lines = [f"const {s.name} = struct {{"]
+    for n, t in s.fields:
+        lines.append(f"{INDENT}{n}: {t},")
+    for m in s.methods:
+        lines.append("")
+        lines.append(_emit_fn(m, depth=1, struct_name=s.name))
+    lines.append("};")
+    return "\n".join(lines)
+
+
+def _emit_fn(fn: lir.ZigFn, *, depth: int = 0, struct_name: str | None = None) -> str:
+    indent = INDENT * depth
+    params = ", ".join(_emit_param(n, t, struct_name) for n, t in fn.params)
+    header = f"{indent}fn {fn.name}({params}) {fn.return_type} {{"
+    body = _emit_block(fn.body, depth + 1)
+    return f"{header}\n{body}\n{indent}}}"
+
+
+def _emit_param(name: str, ty: str, struct_name: str | None) -> str:
+    # Zig method receivers are conventionally written as `self: StructName`
+    # rather than special syntax — but the type comes from the enclosing
+    # struct, not the LIR's param annotation (which carries `self: Point`).
+    if name == "self" and struct_name is not None:
+        return f"self: {struct_name}"
+    return f"{name}: {ty}"
 
 
 def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | None:
@@ -110,6 +139,13 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.ZigArrayLit):
         items = ", ".join(_emit_expr(e) for e in node.elements)
         return f"[_]{node.elem_ty}{{{items}}}"
+    if isinstance(node, lir.ZigFieldAccess):
+        return f"{_emit_expr(node.value)}.{node.field}"
+    # _ZigMethodCall lives in the lowering pass — emit receiver.method(args).
+    from transpilers.passes.mir_to_zig_lir import _ZigMethodCall as _MC
+    if isinstance(node, _MC):
+        args = ", ".join(_emit_expr(a) for a in node.args)
+        return f"{_emit_expr(node.receiver)}.{node.method}({args})"
     if isinstance(node, lir.ZigIndex):
         return f"{_emit_expr(node.value)}[@intCast({_emit_expr(node.index)})]"
     if isinstance(node, lir.ZigMethodCall):

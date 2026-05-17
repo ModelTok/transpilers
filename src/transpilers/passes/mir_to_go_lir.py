@@ -3,11 +3,24 @@
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
-from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, Type, UnknownT
+from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
 
 def mir_to_go_lir(module: mir.MirModule) -> lir.GoModule:
-    return lir.GoModule(items=[_lower_function(fn) for fn in module.functions])
+    items: list[lir.LirNode] = []
+    for s in module.structs:
+        items.append(_lower_struct(s))
+    for fn in module.functions:
+        items.append(_lower_function(fn))
+    return lir.GoModule(items=items)
+
+
+def _lower_struct(s: mir.MirStruct) -> lir.GoStruct:
+    return lir.GoStruct(
+        name=s.name,
+        fields=[(f.name, _go_type(f.ty)) for f in s.fields],
+        methods=[_lower_function(m) for m in s.methods],
+    )
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.GoFn:
@@ -60,6 +73,14 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirFieldAccess):
+        return lir.GoFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirMethodCall):
+        return _GoMethodCall(
+            receiver=_lower_expr(node.receiver),
+            method=node.method,
+            args=[_lower_expr(a) for a in node.args],
+        )
     if isinstance(node, mir.MirBinOp):
         if _is_string_concat(node):
             raise NotImplementedError(
@@ -94,6 +115,13 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     raise NotImplementedError(f"MIR expr {type(node).__name__}")
 
 
+class _GoMethodCall(lir.LirNode):
+    def __init__(self, receiver: lir.LirNode, method: str, args: list[lir.LirNode]) -> None:
+        self.receiver = receiver
+        self.method = method
+        self.args = args
+
+
 def _is_string_concat(node: mir.MirBinOp) -> bool:
     return (
         node.op == "+"
@@ -117,6 +145,8 @@ def _go_type(ty: Type) -> str:
         return ""
     if isinstance(ty, ListT):
         return f"[]{_go_type(ty.elem)}"
+    if isinstance(ty, StructT):
+        return ty.name
     if isinstance(ty, UnknownT):
         raise ValueError(f"unresolved type hole: {ty.hint}")
     raise NotImplementedError(f"type {type(ty).__name__}")

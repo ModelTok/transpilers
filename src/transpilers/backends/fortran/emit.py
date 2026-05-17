@@ -24,8 +24,68 @@ from transpilers.passes.mir_to_fortran_lir import _ReturnAssign
 INDENT = "  "
 
 
+MODULE_NAME = "m"
+
+
 def emit_fortran(module: lir.FortranModule) -> str:
-    return "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
+    types = [item for item in module.items if isinstance(item, lir.FortranType)]
+    fns = [item for item in module.items if isinstance(item, lir.FortranFn)]
+
+    if not types:
+        # No derived types — free functions at file scope are legal Fortran
+        # for `external` subprograms.
+        return "\n\n".join(_emit_fn(fn) for fn in fns) + "\n"
+
+    # Wrap in a synthesized module so derived types are legal (gfortran
+    # rejects them at file scope without a `module`/`program` enclosing
+    # block). Method functions move inside the module's `contains` block.
+    type_blocks = "\n\n".join(_emit_type_decl_only(t) for t in types)
+    method_fns: list[lir.FortranFn] = []
+    for t in types:
+        method_fns.extend(t.methods)
+    method_fns.extend(fns)
+    contains_block = "\n\n".join(_emit_fn(fn) for fn in method_fns)
+    return (
+        f"module {MODULE_NAME}\n"
+        f"{INDENT}implicit none\n\n"
+        f"{type_blocks}\n\n"
+        f"contains\n\n"
+        f"{contains_block}\n\n"
+        f"end module {MODULE_NAME}\n"
+    )
+
+
+def _emit_type_decl_only(t: lir.FortranType) -> str:
+    """Type declaration only (no methods) — used inside a module's
+    pre-`contains` declaration area."""
+    lines = [f"{INDENT}type :: {t.name}"]
+    for n, ty in t.fields:
+        lines.append(f"{INDENT}{INDENT}{ty} :: {n}")
+    lines.append(f"{INDENT}end type {t.name}")
+    return "\n".join(lines)
+
+
+def _emit_item(item: lir.LirNode) -> str:
+    if isinstance(item, lir.FortranType):
+        return _emit_type(item)
+    if isinstance(item, lir.FortranFn):
+        return _emit_fn(item)
+    raise NotImplementedError(f"fortran top-level item {type(item).__name__}")
+
+
+def _emit_type(t: lir.FortranType) -> str:
+    """`type :: Name ... end type Name` followed by free-function methods.
+    Methods land outside the type block since Fortran type-bound procedures
+    need a `contains` block inside the type — that's a follow-on; here we
+    use the simpler free-function form named `Name_method`."""
+    lines = [f"type :: {t.name}"]
+    for n, ty in t.fields:
+        lines.append(f"{INDENT}{ty} :: {n}")
+    lines.append(f"end type {t.name}")
+    if not t.methods:
+        return "\n".join(lines)
+    method_defs = "\n\n".join(_emit_fn(m) for m in t.methods)
+    return "\n".join(lines) + "\n\n" + method_defs
 
 
 def _emit_fn(fn: lir.FortranFn) -> str:
@@ -143,4 +203,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.FortranCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{node.func}({args})"
+    if isinstance(node, lir.FortranFieldAccess):
+        # Fortran uses `%` for derived-type field access.
+        return f"{_emit_expr(node.value)}%{node.field}"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

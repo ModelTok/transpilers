@@ -11,11 +11,28 @@ so all `MirAssign` nodes lower to plain `PyAssign`.
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
-from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, Type, UnknownT
+from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
 
 def mir_to_python_lir(module: mir.MirModule) -> lir.PyModule:
-    return lir.PyModule(items=[_lower_function(fn) for fn in module.functions])
+    items: list[lir.LirNode] = []
+    for s in module.structs:
+        items.append(_lower_class(s))
+    for fn in module.functions:
+        items.append(_lower_function(fn))
+    return lir.PyModule(items=items)
+
+
+def _lower_class(s: mir.MirStruct) -> lir.PyClass:
+    fields: list[tuple[str, str | None]] = []
+    for f in s.fields:
+        ty = _py_type(f.ty)
+        fields.append((f.name, ty if ty else None))
+    return lir.PyClass(
+        name=s.name,
+        fields=fields,
+        methods=[_lower_function(m) for m in s.methods],
+    )
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.PyFn:
@@ -65,6 +82,14 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirFieldAccess):
+        return lir.PyFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirMethodCall):
+        return _PyMethodCall(
+            receiver=_lower_expr(node.receiver),
+            method=node.method,
+            args=[_lower_expr(a) for a in node.args],
+        )
     if isinstance(node, mir.MirBinOp):
         return lir.PyBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirCompare):
@@ -88,6 +113,13 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     raise NotImplementedError(f"MIR expr {type(node).__name__}")
 
 
+class _PyMethodCall(lir.LirNode):
+    def __init__(self, receiver: lir.LirNode, method: str, args: list[lir.LirNode]) -> None:
+        self.receiver = receiver
+        self.method = method
+        self.args = args
+
+
 def _py_type(ty: Type) -> str:
     if isinstance(ty, IntT):
         return "int"
@@ -101,8 +133,8 @@ def _py_type(ty: Type) -> str:
         return "None"
     if isinstance(ty, ListT):
         return f"list[{_py_type(ty.elem)}]"
+    if isinstance(ty, StructT):
+        return ty.name
     if isinstance(ty, UnknownT):
-        # Python tolerates omitted annotations; emit empty marker the emitter
-        # interprets as "no annotation".
         return ""
     raise NotImplementedError(f"type {type(ty).__name__}")

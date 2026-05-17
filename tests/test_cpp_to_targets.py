@@ -216,6 +216,60 @@ def test_cpp_class_to_mojo_struct():
     assert "def sum(self) -> Int:" in out
 
 
+_CLASS_SRC = """
+class Point {
+public:
+    int x;
+    int y;
+    int sum() { return this->x + this->y; }
+};
+"""
+
+
+def _to(target: str) -> str:
+    from transpilers.cli.main import transpile
+    return transpile(textwrap.dedent(_CLASS_SRC).lstrip(), source_lang="cpp", target=target)
+
+
+def test_cpp_class_to_c_struct():
+    out = _to("c")
+    assert "typedef struct {" in out
+    assert "int64_t x;" in out
+    assert "} Point;" in out
+    assert "int64_t Point_sum(Point *self)" in out
+    assert "self->x + self->y" in out
+
+
+def test_cpp_class_to_zig_struct():
+    out = _to("zig")
+    assert "const Point = struct {" in out
+    assert "x: i64," in out
+    assert "fn sum(self: Point) i64" in out
+    assert "self.x + self.y" in out
+
+
+def test_cpp_class_to_go_struct():
+    out = _to("go")
+    assert "type Point struct {" in out
+    assert "func (self *Point) sum() int64" in out
+    assert "self.x + self.y" in out
+
+
+def test_cpp_class_to_python_class():
+    out = _to("python")
+    assert "class Point:" in out
+    assert "x: int" in out
+    assert "def sum(self) -> int:" in out
+
+
+def test_cpp_class_to_fortran_type():
+    out = _to("fortran")
+    assert "type :: Point" in out
+    assert "integer :: x" in out
+    assert "function Point_sum(self) result(result_)" in out
+    assert "self%x + self%y" in out
+
+
 @pytest.mark.skipif(not _has("rustc"), reason="rustc not installed")
 def test_cpp_class_compiles_as_rust():
     out = _rust(

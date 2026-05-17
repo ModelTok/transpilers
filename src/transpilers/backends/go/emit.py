@@ -14,6 +14,11 @@ INDENT = "\t"
 PREAMBLE = "package main\n\n"
 
 
+def _is_go_method_call(node: lir.LirNode) -> bool:
+    from transpilers.passes.mir_to_go_lir import _GoMethodCall as _MC
+    return isinstance(node, _MC)
+
+
 def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | None:
     if not isinstance(value, lir.GoBinOp):
         return None
@@ -25,13 +30,34 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_go(module: lir.GoModule) -> str:
-    return PREAMBLE + "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
+    return PREAMBLE + "\n\n".join(_emit_item(item) for item in module.items) + "\n"
 
 
-def _emit_fn(fn: lir.GoFn) -> str:
-    params = ", ".join(f"{n} {t}" for n, t in fn.params)
+def _emit_item(item: lir.LirNode) -> str:
+    if isinstance(item, lir.GoStruct):
+        return _emit_struct(item)
+    if isinstance(item, lir.GoFn):
+        return _emit_fn(item)
+    raise NotImplementedError(f"go top-level item {type(item).__name__}")
+
+
+def _emit_struct(s: lir.GoStruct) -> str:
+    field_lines = "\n".join(f"{INDENT}{n} {t}" for n, t in s.fields)
+    type_def = f"type {s.name} struct {{\n{field_lines}\n}}"
+    methods = "\n\n".join(_emit_fn(m, receiver_struct=s.name) for m in s.methods)
+    return f"{type_def}\n\n{methods}" if methods else type_def
+
+
+def _emit_fn(fn: lir.GoFn, *, receiver_struct: str | None = None) -> str:
+    if receiver_struct is not None and fn.params and fn.params[0][0] == "self":
+        receiver = f"(self *{receiver_struct}) "
+        rest = fn.params[1:]
+    else:
+        receiver = ""
+        rest = fn.params
+    params = ", ".join(f"{n} {t}" for n, t in rest)
     ret = f" {fn.return_type}" if fn.return_type else ""
-    header = f"func {fn.name}({params}){ret} {{"
+    header = f"func {receiver}{fn.name}({params}){ret} {{"
     body = _emit_block(fn.body, 1)
     return f"{header}\n{body}\n}}"
 
@@ -105,4 +131,10 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.GoCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{node.func}({args})"
+    if isinstance(node, lir.GoFieldAccess):
+        return f"{_emit_expr(node.value)}.{node.field}"
+    from transpilers.passes.mir_to_go_lir import _GoMethodCall as _MC
+    if isinstance(node, _MC):
+        args = ", ".join(_emit_expr(a) for a in node.args)
+        return f"{_emit_expr(node.receiver)}.{node.method}({args})"
     raise NotImplementedError(f"LIR node {type(node).__name__}")
