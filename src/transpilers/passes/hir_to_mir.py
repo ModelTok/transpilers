@@ -36,12 +36,30 @@ PYTHON_TYPE_MAP: dict[str, Type] = {
 # hir_to_mir so type-annotation resolution can recognize `Point` as
 # StructT("Point") rather than UnknownT.
 _KNOWN_STRUCTS: set[str] = set()
+_STRUCT_FIELD_NAMES: dict[str, list[str]] = {}
+_STRUCT_FIELD_TYPES: dict[str, dict[str, Type]] = {}
+
+
+def _default_init_for(ty: Type) -> mir.MirNode:
+    if isinstance(ty, IntT):
+        return mir.MirIntLiteral(value=0, ty=IntT())
+    if isinstance(ty, FloatT):
+        return mir.MirFloatLiteral(value=0.0, ty=FloatT())
+    if isinstance(ty, BoolT):
+        return mir.MirBoolLiteral(value=False, ty=BoolT())
+    if isinstance(ty, StrT):
+        return mir.MirStringLiteral(value="", ty=StrT())
+    # Unknown / struct / list defaults aren't expressible as one literal;
+    # fall back to int 0 (common case).
+    return mir.MirIntLiteral(value=0, ty=IntT())
 
 
 def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
     functions: list[mir.MirFunction] = []
     structs: list[mir.MirStruct] = []
     _KNOWN_STRUCTS.clear()
+    _STRUCT_FIELD_NAMES.clear()
+    _STRUCT_FIELD_TYPES.clear()
     # First pass: register struct names so methods and fields can reference
     # them in their annotations.
     for node in module.body:
@@ -58,6 +76,8 @@ def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
 def _lower_struct(s: hir.HirStruct) -> mir.MirStruct:
     fields = [mir.MirParam(name=f.name, ty=_resolve_annotation(f.annotation)) for f in s.fields]
     methods = [_lower_function(m) for m in s.methods]
+    _STRUCT_FIELD_NAMES[s.name] = [f.name for f in fields]
+    _STRUCT_FIELD_TYPES[s.name] = {f.name: f.ty for f in fields}
     return mir.MirStruct(name=s.name, fields=fields, methods=methods)
 
 
@@ -72,6 +92,12 @@ def _lower_function(fn: hir.HirFunction) -> mir.MirFunction:
 def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
     if isinstance(node, hir.HirReturn):
         return mir.MirReturn(value=_lower_expr(node.value, env) if node.value else None)
+    if isinstance(node, hir.HirFieldAssign):
+        return mir.MirFieldAssign(
+            obj=_lower_expr(node.obj, env),
+            field=node.field,
+            value=_lower_expr(node.value, env),
+        )
     if isinstance(node, hir.HirAssign):
         value = _lower_expr(node.value, env)
         ann_ty = _resolve_annotation(node.annotation) if node.annotation else None
@@ -166,6 +192,21 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
             receiver=_lower_expr(node.receiver, env),
             method=node.method,
             args=[_lower_expr(a, env) for a in node.args],
+        )
+    if isinstance(node, hir.HirStructInit):
+        # Pair positional ctor args with the struct's declared field names so
+        # every target's emitter can render named-field form when it wants.
+        field_names = _STRUCT_FIELD_NAMES.get(node.name, [])
+        field_types = _STRUCT_FIELD_TYPES.get(node.name, {})
+        lowered_args = [_lower_expr(a, env) for a in node.args]
+        pairs: list[tuple[str, mir.MirNode]] = []
+        for i, fname in enumerate(field_names):
+            if i < len(lowered_args):
+                pairs.append((fname, lowered_args[i]))
+            else:
+                pairs.append((fname, _default_init_for(field_types.get(fname, UnknownT()))))
+        return mir.MirStructInit(
+            name=node.name, field_values=pairs, ty=StructT(name=node.name)
         )
     raise NotImplementedError(f"HIR expr {type(node).__name__}")
 

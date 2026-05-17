@@ -95,12 +95,13 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         ann = f": {node.ty}" if node.ty else ""
         return f"{pad}let {mut}{node.name}{ann} = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustReassign):
-        # Pattern-match `x = x <op> value` → `x <op>= value` for idiomatic Rust.
         aug = _augmented_form(node.name, node.value)
         if aug is not None:
             op, rhs = aug
             return f"{pad}{node.name} {op}= {_emit_expr(rhs)};"
         return f"{pad}{node.name} = {_emit_expr(node.value)};"
+    if isinstance(node, lir.RustFieldAssign):
+        return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustIf):
         head = f"{pad}if {_emit_expr(node.test)} {{"
         body = _emit_block(node.body, depth + 1)
@@ -166,6 +167,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return f"vec![{items}]"
     if isinstance(node, lir.RustFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
+    if isinstance(node, lir.RustStructInit):
+        body = ", ".join(f"{n}: {_emit_expr(v)}" for n, v in node.field_values)
+        return f"{node.name} {{ {body} }}"
     if isinstance(node, lir.RustIndex):
         return f"{_emit_expr(node.value)}[{_emit_expr(node.index)} as usize]"
     if isinstance(node, lir.RustMethodCall):

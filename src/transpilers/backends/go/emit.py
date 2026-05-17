@@ -75,6 +75,8 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         # Note: Go statements have no trailing semicolons; emit doesn't add them.
     if isinstance(node, lir.GoReassign):
         return f"{pad}{node.name} = {_emit_expr(node.value)}"
+    if isinstance(node, lir.GoFieldAssign):
+        return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)}"
     if isinstance(node, lir.GoIf):
         head = f"{pad}if {_emit_expr(node.test)} {{"
         body = _emit_block(node.body, depth + 1)
@@ -133,6 +135,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return f"{node.func}({args})"
     if isinstance(node, lir.GoFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
+    if isinstance(node, lir.GoStructInit):
+        body = ", ".join(f"{n}: {_emit_expr(v)}" for n, v in node.field_values)
+        return f"{node.name}{{{body}}}"
     from transpilers.passes.mir_to_go_lir import _GoMethodCall as _MC
     if isinstance(node, _MC):
         args = ", ".join(_emit_expr(a) for a in node.args)

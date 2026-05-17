@@ -81,6 +81,8 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
             op, rhs = aug
             return f"{pad}{node.name} {op}= {_emit_expr(rhs)}"
         return f"{pad}{node.name} = {_emit_expr(node.value)}"
+    if isinstance(node, lir.MojoFieldAssign):
+        return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)}"
     if isinstance(node, lir.MojoIf):
         head = f"{pad}if {_emit_expr(node.test)}:"
         body = _emit_block(node.body, depth + 1) or (pad + INDENT + "pass")
@@ -137,6 +139,11 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return f"[{items}]"
     if isinstance(node, lir.MojoFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
+    if isinstance(node, lir.MojoStructInit):
+        # @fieldwise_init synthesizes a positional constructor in declaration
+        # order; emit as `Point(0, 0)`.
+        args = ", ".join(_emit_expr(v) for _, v in node.field_values)
+        return f"{node.name}({args})"
     if isinstance(node, lir.MojoIndex):
         return f"{_emit_expr(node.value)}[{_emit_expr(node.index)}]"
     if isinstance(node, lir.MojoCall):

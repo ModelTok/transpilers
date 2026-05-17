@@ -63,6 +63,11 @@ def _scan_assigns(nodes: list[mir.MirNode], counts: dict[str, int], aug: set[str
             counts[n.target] = counts.get(n.target, 0) + 1
             if n.augmented_op is not None:
                 aug.add(n.target)
+        elif isinstance(n, mir.MirFieldAssign):
+            # A field assignment mutates the receiver — force `mut` on the
+            # backing local. Heuristic: receiver is a MirName.
+            if isinstance(n.obj, mir.MirName):
+                aug.add(n.obj.name)
         elif isinstance(n, mir.MirIf):
             _scan_assigns(n.body, counts, aug)
             _scan_assigns(n.orelse, counts, aug)
@@ -77,6 +82,10 @@ def _scan_assigns(nodes: list[mir.MirNode], counts: dict[str, int], aug: set[str
 def _lower_stmt(node: mir.MirNode, declared: set[str], mut: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.RustReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirFieldAssign):
+        return lir.RustFieldAssign(
+            obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)
+        )
     if isinstance(node, mir.MirAssign):
         return _lower_assign(node, declared, mut)
     if isinstance(node, mir.MirIf):
@@ -122,6 +131,11 @@ def _lower_assign(node: mir.MirAssign, declared: set[str], mut: set[str]) -> lir
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirFieldAccess):
         return lir.RustFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirStructInit):
+        return lir.RustStructInit(
+            name=node.name,
+            field_values=[(n, _lower_expr(v)) for n, v in node.field_values],
+        )
     if isinstance(node, mir.MirMethodCall):
         return lir.RustMethodCall(
             receiver=_lower_expr(node.receiver),

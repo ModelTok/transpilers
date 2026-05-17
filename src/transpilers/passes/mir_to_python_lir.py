@@ -46,6 +46,10 @@ def _lower_function(fn: mir.MirFunction) -> lir.PyFn:
 def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.PyReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirFieldAssign):
+        return lir.PyFieldAssign(
+            obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)
+        )
     if isinstance(node, mir.MirAssign):
         return _lower_assign(node, declared)
     if isinstance(node, mir.MirIf):
@@ -110,6 +114,13 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.PyStringLiteral(value=node.value)
     if isinstance(node, mir.MirCall):
         return lir.PyCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+    if isinstance(node, mir.MirFieldAccess):
+        return lir.PyFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirStructInit):
+        return lir.PyStructInit(
+            name=node.name,
+            field_values=[(n, _lower_expr(v)) for n, v in node.field_values],
+        )
     raise NotImplementedError(f"MIR expr {type(node).__name__}")
 
 

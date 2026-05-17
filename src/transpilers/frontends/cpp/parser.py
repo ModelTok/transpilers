@@ -61,6 +61,12 @@ def parse_cpp(source: str) -> hir.HirModule:
         options=ci.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
     )
     _check_diagnostics(tu)
+    _KNOWN_STRUCT_NAMES.clear()
+    # First pass: record struct/class names so VAR_DECLs later resolve to
+    # HirStructInit instead of integer-default HirAssign.
+    for c in tu.cursor.get_children():
+        if _from_input(c) and c.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
+            _KNOWN_STRUCT_NAMES.add(c.spelling)
     body: list[hir.HirNode] = []
     for c in tu.cursor.get_children():
         if not _from_input(c):
@@ -189,8 +195,34 @@ def _convert_stmt(cursor: ci.Cursor) -> list[hir.HirNode]:
 def _convert_var_decl(cursor: ci.Cursor) -> hir.HirNode:
     annotation = _type_text(cursor.type)
     kids = list(cursor.get_children())
+    if annotation in _KNOWN_STRUCT_NAMES:
+        # `Point p;` (no kids) → zero-init StructInit.
+        # `Point p(1, 2);` → libclang emits a CALL_EXPR with the ctor args.
+        # `Point p{1, 2};` (uniform init) → INIT_LIST_EXPR.
+        if not kids:
+            init: hir.HirNode = hir.HirStructInit(name=annotation, args=[])
+        else:
+            ctor = kids[-1]
+            args: list[hir.HirNode] = []
+            if ctor.kind in (ci.CursorKind.CALL_EXPR, ci.CursorKind.INIT_LIST_EXPR):
+                for c in ctor.get_children():
+                    if c.kind == ci.CursorKind.TYPE_REF:
+                        continue
+                    if c.kind == ci.CursorKind.UNEXPOSED_EXPR:
+                        inner = list(c.get_children())
+                        if len(inner) == 1:
+                            args.append(_convert_expr(inner[0]))
+                            continue
+                    args.append(_convert_expr(c))
+            init = hir.HirStructInit(name=annotation, args=args)
+        return hir.HirAssign(target=cursor.spelling, value=init, annotation=annotation)
     init = _convert_expr(kids[-1]) if kids else hir.HirIntLiteral(value=0)
     return hir.HirAssign(target=cursor.spelling, value=init, annotation=annotation)
+
+
+# Names of structs/classes parsed in the current translation unit. Populated
+# in parse_cpp before walking function bodies.
+_KNOWN_STRUCT_NAMES: set[str] = set()
 
 
 def _convert_if(cursor: ci.Cursor) -> hir.HirNode:
@@ -318,14 +350,18 @@ def _convert_binop(cursor: ci.Cursor) -> hir.HirNode:
 
 def _convert_assignment_stmt(cursor: ci.Cursor) -> hir.HirNode:
     """A BINARY_OPERATOR (or COMPOUND_ASSIGNMENT_OPERATOR) at statement position
-    that uses `=` / `+=` / `-=` / etc."""
+    using `=` / `+=` / `-=` / etc. Field assignments (`obj.field = v`)
+    branch to HirFieldAssign; plain identifier assignments emit HirAssign."""
     op = _binop_token(cursor)
     if op not in ASSIGN_OPS:
-        # Bare expression statement — rare in our subset; raise to surface it.
         raise UnsupportedConstruct(f"expression statement with op {op!r}")
     kids = list(cursor.get_children())
     lhs = kids[0]
     rhs = _convert_expr(kids[1])
+    if lhs.kind == CursorKind.MEMBER_REF_EXPR and op == "=":
+        lhs_kids = list(lhs.get_children())
+        obj = _convert_expr(lhs_kids[0]) if lhs_kids else hir.HirName(name="self")
+        return hir.HirFieldAssign(obj=obj, field=lhs.spelling, value=rhs)
     target = _decl_name(lhs)
     if target is None:
         raise UnsupportedConstruct(f"assignment target {lhs.kind.name}")
@@ -366,6 +402,16 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     if not kids:
         raise UnsupportedConstruct("call with no callee")
     callee = kids[0]
+    # `obj.method(args)` arrives as CALL_EXPR whose callee is MEMBER_REF_EXPR.
+    if callee.kind == CursorKind.MEMBER_REF_EXPR:
+        callee_kids = list(callee.get_children())
+        receiver = (
+            _convert_expr(callee_kids[0])
+            if callee_kids
+            else hir.HirName(name="self")
+        )
+        args = [_convert_expr(a) for a in kids[1:]]
+        return hir.HirMethodCall(receiver=receiver, method=callee.spelling, args=args)
     name = _decl_name(callee) or callee.spelling
     if not name:
         raise UnsupportedConstruct(f"call target {callee.kind.name}")
@@ -452,4 +498,8 @@ def _type_text(t: ci.Type) -> str:
         return "bool"
     if kind == ci.TypeKind.VOID:
         return "None"
+    # Struct/class types: pass the bare name through so HIR→MIR resolves it
+    # against the struct registry (HirStruct names land in StructT(name)).
+    if kind == ci.TypeKind.RECORD:
+        return cleaned
     raise UnsupportedConstruct(f"C++ type {spelling!r} (kind={kind.name})")

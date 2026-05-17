@@ -178,3 +178,21 @@ class MirMethodCall(MirNode):
     method: str
     args: list[MirNode]
     ty: Type = field(default_factory=UnknownT)
+
+
+@dataclass
+class MirFieldAssign(MirNode):
+    obj: MirNode
+    field: str
+    value: MirNode
+
+
+@dataclass
+class MirStructInit(MirNode):
+    """`Point { x: 0, y: 0 }`-shaped construction. `field_values` carries
+    `(field_name, value)` pairs in the struct's field declaration order, so
+    every target's emitter can render the named form or unwrap to positional."""
+
+    name: str
+    field_values: list[tuple[str, MirNode]]
+    ty: Type = field(default_factory=UnknownT)

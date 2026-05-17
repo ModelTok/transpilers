@@ -22,7 +22,9 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_python(module: lir.PyModule) -> str:
-    return "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    has_class = any(isinstance(item, lir.PyClass) for item in module.items)
+    preamble = "from dataclasses import dataclass\n\n\n" if has_class else ""
+    return preamble + "\n\n".join(_emit_item(item) for item in module.items) + "\n"
 
 
 def _emit_item(item: lir.LirNode) -> str:
@@ -34,12 +36,16 @@ def _emit_item(item: lir.LirNode) -> str:
 
 
 def _emit_class(c: lir.PyClass) -> str:
-    lines = [f"class {c.name}:"]
+    """`@dataclass` gives the class a positional __init__ matching the field
+    order, so `Point(0, 0)` works at runtime without a hand-written ctor."""
+    lines = ["@dataclass", f"class {c.name}:"]
     if not c.fields and not c.methods:
         lines.append(INDENT + "pass")
         return "\n".join(lines)
     for name, ty in c.fields:
-        ann = f": {ty}" if ty else ""
+        # @dataclass requires annotations on fields; default to `int` when
+        # we lack a type rather than emitting a bare name.
+        ann = f": {ty}" if ty else ": int"
         lines.append(f"{INDENT}{name}{ann}")
     for m in c.methods:
         lines.append("")
@@ -72,14 +78,14 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         return f"{pad}return {_emit_expr(node.value)}" if node.value else f"{pad}return"
     if isinstance(node, lir.PyAssign):
         ann = f": {node.ty}" if node.ty else ""
-        # Idiomatic Python: collapse `x = x + v` to `x += v` when not a
-        # first-occurrence (no annotation).
         if not node.ty:
             aug = _augmented_form(node.name, node.value)
             if aug is not None:
                 op, rhs = aug
                 return f"{pad}{node.name} {op}= {_emit_expr(rhs)}"
         return f"{pad}{node.name}{ann} = {_emit_expr(node.value)}"
+    if isinstance(node, lir.PyFieldAssign):
+        return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)}"
     if isinstance(node, lir.PyIf):
         head = f"{pad}if {_emit_expr(node.test)}:"
         body = _emit_block(node.body, depth + 1) or (pad + INDENT + "pass")
@@ -134,6 +140,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return f"{node.func}({args})"
     if isinstance(node, lir.PyFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
+    if isinstance(node, lir.PyStructInit):
+        args = ", ".join(_emit_expr(v) for _, v in node.field_values)
+        return f"{node.name}({args})"
     from transpilers.passes.mir_to_python_lir import _PyMethodCall as _MC
     if isinstance(node, _MC):
         args = ", ".join(_emit_expr(a) for a in node.args)

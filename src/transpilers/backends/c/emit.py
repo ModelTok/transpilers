@@ -73,6 +73,9 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
             op, rhs = aug
             return f"{pad}{node.name} {op}= {_emit_expr(rhs)};"
         return f"{pad}{node.name} = {_emit_expr(node.value)};"
+    if isinstance(node, lir.CFieldAssign):
+        sep = "->" if node.via_pointer else "."
+        return f"{pad}{_emit_expr(node.obj)}{sep}{node.field} = {_emit_expr(node.value)};"
     if isinstance(node, lir.CIf):
         head = f"{pad}if ({_emit_expr(node.test)}) {{"
         body = _emit_block(node.body, depth + 1)
@@ -134,6 +137,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.CFieldAccess):
         sep = "->" if node.via_pointer else "."
         return f"{_emit_expr(node.value)}{sep}{node.field}"
+    if isinstance(node, lir.CStructInit):
+        body = ", ".join(f".{n} = {_emit_expr(v)}" for n, v in node.field_values)
+        return f"({node.name}){{{body}}}"
     from transpilers.passes.mir_to_c_lir import _AddressOf as _AO
     if isinstance(node, _AO):
         return f"&{_emit_expr(node.value)}"

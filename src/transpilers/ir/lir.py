@@ -181,6 +181,114 @@ class RustFieldAccess(LirNode):
 
 
 @dataclass
+class RustFieldAssign(LirNode):
+    obj: LirNode
+    field: str
+    value: LirNode
+
+
+@dataclass
+class RustStructInit(LirNode):
+    """`Point { x: 0, y: 0 }`."""
+
+    name: str
+    field_values: list[tuple[str, LirNode]]
+
+
+@dataclass
+class ZigFieldAssign(LirNode):
+    obj: LirNode
+    field: str
+    value: LirNode
+
+
+@dataclass
+class ZigStructInit(LirNode):
+    """`Point{ .x = 0, .y = 0 }`."""
+
+    name: str
+    field_values: list[tuple[str, LirNode]]
+
+
+@dataclass
+class CFieldAssign(LirNode):
+    obj: LirNode
+    field: str
+    value: LirNode
+    via_pointer: bool = False  # `.` for value, `->` for pointer
+
+
+@dataclass
+class CStructInit(LirNode):
+    """`(Point){ .x = 0, .y = 0 }` — compound literal."""
+
+    name: str
+    field_values: list[tuple[str, LirNode]]
+
+
+@dataclass
+class GoFieldAssign(LirNode):
+    obj: LirNode
+    field: str
+    value: LirNode
+
+
+@dataclass
+class GoStructInit(LirNode):
+    """`Point{x: 0, y: 0}`."""
+
+    name: str
+    field_values: list[tuple[str, LirNode]]
+
+
+@dataclass
+class MojoFieldAssign(LirNode):
+    obj: LirNode
+    field: str
+    value: LirNode
+
+
+@dataclass
+class MojoStructInit(LirNode):
+    """`Point(0, 0)` — positional via @fieldwise_init."""
+
+    name: str
+    field_values: list[tuple[str, LirNode]]
+
+
+@dataclass
+class PyFieldAssign(LirNode):
+    obj: LirNode
+    field: str
+    value: LirNode
+
+
+@dataclass
+class PyStructInit(LirNode):
+    """`Point(0, 0)` — positional. Requires the class to be a @dataclass or
+    expose a fieldwise __init__; we emit the call form regardless and let
+    target verification surface the issue."""
+
+    name: str
+    field_values: list[tuple[str, LirNode]]
+
+
+@dataclass
+class FortranFieldAssign(LirNode):
+    obj: LirNode
+    field: str
+    value: LirNode
+
+
+@dataclass
+class FortranStructInit(LirNode):
+    """`Point(0, 0)` — Fortran derived-type structure constructor."""
+
+    name: str
+    field_values: list[tuple[str, LirNode]]
+
+
+@dataclass
 class RustFormat(LirNode):
     """`format!("{}{}...", arg1, arg2, ...)` — produced when MIR binop `+` has
     two StrT operands. format! accepts both String and &str via Display, so
