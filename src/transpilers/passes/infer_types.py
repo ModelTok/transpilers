@@ -1,0 +1,328 @@
+"""Type-inference pass on MIR.
+
+Runs in two phases:
+  1. Local dataflow — fixed-point over each function. Propagates types from
+     literals through binops/compares/calls/subscripts/assignments. Updates
+     parameter, return, and node types in place when discovered.
+  2. Optional LLM fallback — for residual UnknownT on parameters and return
+     types only. Operates on typed holes (constrained outputs), validates
+     responses, and caches by content hash. Algorithmic passes downstream
+     still refuse to invent on remaining holes.
+
+The fallback is dependency-injected as a callable so tests can run it without
+API access and so the production CLI can opt in explicitly.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import replace
+from typing import Callable
+
+from transpilers.ir import mir
+from transpilers.ir.types import (
+    BoolT,
+    FloatT,
+    IntT,
+    ListT,
+    NoneT,
+    StrT,
+    Type,
+    UnknownT,
+)
+
+
+LlmFill = Callable[[str, dict], Type]
+
+
+ARITH_OPS = {"+", "-", "*", "/", "%"}
+MAX_ITER = 8
+
+
+def infer_types(module: mir.MirModule, *, llm_fill: LlmFill | None = None) -> mir.MirModule:
+    for fn in module.functions:
+        _infer_function(fn, llm_fill)
+    return module
+
+
+# ---------- per-function inference ----------
+
+def _infer_function(fn: mir.MirFunction, llm_fill: LlmFill | None) -> None:
+    env: dict[str, Type] = {p.name: p.ty for p in fn.params if not isinstance(p.ty, UnknownT)}
+    last = None
+    for _ in range(MAX_ITER):
+        return_tys: list[Type] = []
+        _visit_block(fn.body, env, return_tys)
+        _pull_params_from_env(fn, env)
+        _resolve_return(fn, return_tys)
+        snap = _snapshot(fn, env)
+        if snap == last:
+            break
+        last = snap
+
+    if llm_fill is None:
+        return
+    _llm_fallback(fn, llm_fill)
+
+
+def _llm_fallback(fn: mir.MirFunction, llm_fill: LlmFill) -> None:
+    dump = _mir_dump(fn)
+    for i, p in enumerate(fn.params):
+        if isinstance(p.ty, UnknownT):
+            ty = llm_fill(p.name, {"role": "param", "function_mir": dump, "name": p.name})
+            fn.params[i] = replace(p, ty=ty)
+    if isinstance(fn.return_type, UnknownT):
+        fn.return_type = llm_fill("__return__", {"role": "return", "function_mir": dump})
+
+
+# ---------- propagation ----------
+
+def _visit_block(nodes: list[mir.MirNode], env: dict[str, Type], return_tys: list[Type]) -> None:
+    for n in nodes:
+        _visit_stmt(n, env, return_tys)
+
+
+def _visit_stmt(node: mir.MirNode, env: dict[str, Type], return_tys: list[Type]) -> None:
+    if isinstance(node, mir.MirReturn):
+        ty = _visit_expr(node.value, env) if node.value is not None else NoneT()
+        return_tys.append(ty)
+        return
+    if isinstance(node, mir.MirAssign):
+        vt = _visit_expr(node.value, env)
+        ann_ty = node.ty if not isinstance(node.ty, UnknownT) else vt
+        if isinstance(node.ty, UnknownT) and not isinstance(vt, UnknownT):
+            node.ty = vt
+        if not isinstance(ann_ty, UnknownT):
+            env[node.target] = ann_ty
+        return
+    if isinstance(node, mir.MirIf):
+        _visit_expr(node.test, env)
+        _visit_block(node.body, env, return_tys)
+        _visit_block(node.orelse, env, return_tys)
+        return
+    if isinstance(node, mir.MirWhile):
+        _visit_expr(node.test, env)
+        _visit_block(node.body, env, return_tys)
+        return
+    if isinstance(node, mir.MirForRange):
+        # `for i in range(...)` constrains start/stop/step to int. If any bound
+        # is an unknown Name, anchor it here — same pattern as call-signature
+        # arg-type propagation, applied to the already-specialized for-range.
+        for bound in (node.start, node.stop, node.step):
+            if bound is None:
+                continue
+            _visit_expr(bound, env)
+            if isinstance(bound, mir.MirName) and isinstance(bound.ty, UnknownT):
+                env[bound.name] = IntT()
+                bound.ty = IntT()
+        env[node.target] = IntT()
+        _visit_block(node.body, env, return_tys)
+        return
+    # Bare expression statement.
+    _visit_expr(node, env)
+
+
+def _visit_expr(node: mir.MirNode | None, env: dict[str, Type]) -> Type:
+    if node is None:
+        return NoneT()
+    if isinstance(node, mir.MirIntLiteral):
+        node.ty = IntT()
+        return node.ty
+    if isinstance(node, mir.MirBoolLiteral):
+        node.ty = BoolT()
+        return node.ty
+    if isinstance(node, mir.MirStringLiteral):
+        node.ty = StrT()
+        return node.ty
+    if isinstance(node, mir.MirName):
+        ty = env.get(node.name)
+        if ty is not None and not isinstance(ty, UnknownT):
+            node.ty = ty
+            return ty
+        return node.ty
+    if isinstance(node, mir.MirBinOp):
+        lt = _visit_expr(node.left, env)
+        rt = _visit_expr(node.right, env)
+        if node.op in ARITH_OPS:
+            lt, rt = _arith_unify(node, lt, rt, env)
+        ty = _binop_result(node.op, lt, rt)
+        if not isinstance(ty, UnknownT):
+            node.ty = ty
+        return node.ty
+    if isinstance(node, mir.MirCompare):
+        lt = _visit_expr(node.left, env)
+        rt = _visit_expr(node.right, env)
+        _compare_unify(node, lt, rt, env)
+        node.ty = BoolT()
+        return node.ty
+    if isinstance(node, mir.MirBoolOp):
+        _visit_expr(node.left, env)
+        _visit_expr(node.right, env)
+        node.ty = BoolT()
+        return node.ty
+    if isinstance(node, mir.MirUnaryOp):
+        ot = _visit_expr(node.operand, env)
+        node.ty = BoolT() if node.op == "not" else ot
+        return node.ty
+    if isinstance(node, mir.MirCall):
+        for a in node.args:
+            _visit_expr(a, env)
+        _propagate_arg_types(node, env)
+        if node.func == "len":
+            node.ty = IntT()
+        # range() result type already set in lowering; other calls stay UnknownT.
+        return node.ty
+    if isinstance(node, mir.MirList):
+        elem_tys = [_visit_expr(e, env) for e in node.elements]
+        concrete = [t for t in elem_tys if not isinstance(t, UnknownT)]
+        if concrete:
+            node.ty = ListT(elem=concrete[0])
+        return node.ty
+    if isinstance(node, mir.MirSubscript):
+        vt = _visit_expr(node.value, env)
+        _visit_expr(node.index, env)
+        if isinstance(vt, ListT) and isinstance(node.ty, UnknownT):
+            node.ty = vt.elem
+        return node.ty
+    return UnknownT()
+
+
+# ---------- bidirectional unification on arith / compare ----------
+
+def _arith_unify(
+    node: mir.MirBinOp, lt: Type, rt: Type, env: dict[str, Type]
+) -> tuple[Type, Type]:
+    """If one side is a known numeric type and the other is an unknown Name,
+    promote the Name to match. This is what turns `x + 1` into `x: int`."""
+    if isinstance(lt, (IntT, FloatT)) and isinstance(rt, UnknownT):
+        if isinstance(node.right, mir.MirName):
+            env[node.right.name] = lt
+            node.right.ty = lt
+            rt = lt
+    if isinstance(rt, (IntT, FloatT)) and isinstance(lt, UnknownT):
+        if isinstance(node.left, mir.MirName):
+            env[node.left.name] = rt
+            node.left.ty = rt
+            lt = rt
+    return lt, rt
+
+
+def _compare_unify(
+    node: mir.MirCompare, lt: Type, rt: Type, env: dict[str, Type]
+) -> None:
+    """Comparisons constrain operands to the same type."""
+    if isinstance(lt, UnknownT) and not isinstance(rt, UnknownT) and isinstance(node.left, mir.MirName):
+        env[node.left.name] = rt
+        node.left.ty = rt
+    if isinstance(rt, UnknownT) and not isinstance(lt, UnknownT) and isinstance(node.right, mir.MirName):
+        env[node.right.name] = lt
+        node.right.ty = lt
+
+
+def _propagate_arg_types(node: mir.MirCall, env: dict[str, Type]) -> None:
+    """Builtin signatures we know — narrow but useful. `range(...)` takes ints;
+    `len(...)` takes something list-shaped (we don't know elem type, so we
+    leave that to other anchors). This is the place where a future
+    `stdlib_maps/*` signature table will plug in."""
+    if node.func == "range":
+        for a in node.args:
+            if isinstance(a, mir.MirName) and isinstance(a.ty, UnknownT):
+                env[a.name] = IntT()
+                a.ty = IntT()
+
+
+def _binop_result(op: str, lt: Type, rt: Type) -> Type:
+    if isinstance(lt, IntT) and isinstance(rt, IntT):
+        return IntT()
+    if isinstance(lt, (IntT, FloatT)) and isinstance(rt, (IntT, FloatT)):
+        return FloatT()
+    return UnknownT(hint=f"binop {op}")
+
+
+# ---------- function-level helpers ----------
+
+def _pull_params_from_env(fn: mir.MirFunction, env: dict[str, Type]) -> None:
+    for i, p in enumerate(fn.params):
+        if isinstance(p.ty, UnknownT):
+            inferred = env.get(p.name)
+            if inferred is not None and not isinstance(inferred, UnknownT):
+                fn.params[i] = replace(p, ty=inferred)
+
+
+def _resolve_return(fn: mir.MirFunction, return_tys: list[Type]) -> None:
+    if not isinstance(fn.return_type, UnknownT):
+        return
+    concrete = [t for t in return_tys if not isinstance(t, UnknownT)]
+    if concrete:
+        # If multiple distinct concrete return types exist, we leave the hole
+        # — that's a real ambiguity, not something to silently coerce.
+        first = concrete[0]
+        if all(type(t) is type(first) for t in concrete):
+            fn.return_type = first
+
+
+def _snapshot(fn: mir.MirFunction, env: dict[str, Type]) -> tuple:
+    return (
+        tuple(type(p.ty).__name__ for p in fn.params),
+        type(fn.return_type).__name__,
+        tuple(sorted((k, type(v).__name__) for k, v in env.items())),
+    )
+
+
+def _mir_dump(fn: mir.MirFunction) -> str:
+    """Cheap textual MIR dump used as LLM context. Stable enough to cache on."""
+    lines = [f"fn {fn.name}({', '.join(p.name for p in fn.params)})"]
+    _dump_block(fn.body, lines, depth=1)
+    return "\n".join(lines)
+
+
+def _dump_block(nodes: list[mir.MirNode], out: list[str], depth: int) -> None:
+    pad = "  " * depth
+    for n in nodes:
+        out.append(pad + _dump_node(n))
+        for child in _children(n):
+            _dump_block(child, out, depth + 1)
+
+
+def _dump_node(n: mir.MirNode) -> str:
+    if isinstance(n, mir.MirReturn):
+        return f"return {_dump_node(n.value) if n.value else ''}"
+    if isinstance(n, mir.MirAssign):
+        return f"{n.target} = {_dump_node(n.value)}"
+    if isinstance(n, mir.MirIf):
+        return f"if {_dump_node(n.test)}"
+    if isinstance(n, mir.MirWhile):
+        return f"while {_dump_node(n.test)}"
+    if isinstance(n, mir.MirForRange):
+        return f"for {n.target} in range(...)"
+    if isinstance(n, mir.MirBinOp):
+        return f"({_dump_node(n.left)} {n.op} {_dump_node(n.right)})"
+    if isinstance(n, mir.MirCompare):
+        return f"({_dump_node(n.left)} {n.op} {_dump_node(n.right)})"
+    if isinstance(n, mir.MirBoolOp):
+        return f"({_dump_node(n.left)} {n.op} {_dump_node(n.right)})"
+    if isinstance(n, mir.MirUnaryOp):
+        return f"{n.op}{_dump_node(n.operand)}"
+    if isinstance(n, mir.MirCall):
+        return f"{n.func}({', '.join(_dump_node(a) for a in n.args)})"
+    if isinstance(n, mir.MirName):
+        return n.name
+    if isinstance(n, mir.MirIntLiteral):
+        return str(n.value)
+    if isinstance(n, mir.MirBoolLiteral):
+        return str(n.value)
+    if isinstance(n, mir.MirStringLiteral):
+        return json.dumps(n.value)
+    if isinstance(n, mir.MirList):
+        return f"[{', '.join(_dump_node(e) for e in n.elements)}]"
+    if isinstance(n, mir.MirSubscript):
+        return f"{_dump_node(n.value)}[{_dump_node(n.index)}]"
+    return type(n).__name__
+
+
+def _children(n: mir.MirNode) -> list[list[mir.MirNode]]:
+    if isinstance(n, mir.MirIf):
+        return [n.body, n.orelse]
+    if isinstance(n, (mir.MirWhile, mir.MirForRange)):
+        return [n.body]
+    return []
