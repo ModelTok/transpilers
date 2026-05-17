@@ -14,11 +14,28 @@ algorithmic.
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
-from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, Type, UnknownT
+from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
 
 def mir_to_rust_lir(module: mir.MirModule) -> lir.RustModule:
-    return lir.RustModule(items=[_lower_function(fn) for fn in module.functions])
+    items: list[lir.LirNode] = []
+    for struct in module.structs:
+        items.append(_lower_struct_def(struct))
+        items.append(_lower_struct_impl(struct))
+    for fn in module.functions:
+        items.append(_lower_function(fn))
+    return lir.RustModule(items=items)
+
+
+def _lower_struct_def(s: mir.MirStruct) -> lir.RustStruct:
+    return lir.RustStruct(
+        name=s.name,
+        fields=[(f.name, _rust_type(f.ty)) for f in s.fields],
+    )
+
+
+def _lower_struct_impl(s: mir.MirStruct) -> lir.RustImpl:
+    return lir.RustImpl(struct_name=s.name, methods=[_lower_function(m) for m in s.methods])
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.RustFn:
@@ -103,6 +120,14 @@ def _lower_assign(node: mir.MirAssign, declared: set[str], mut: set[str]) -> lir
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirFieldAccess):
+        return lir.RustFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirMethodCall):
+        return lir.RustMethodCall(
+            receiver=_lower_expr(node.receiver),
+            method=node.method,
+            args=[_lower_expr(a) for a in node.args],
+        )
     if isinstance(node, mir.MirBinOp):
         if _is_string_concat(node):
             # Flatten left-leaning chains: `a + b + c` → format!("{}{}{}", a, b, c).
@@ -179,6 +204,8 @@ def _rust_type(ty: Type) -> str:
         return "()"
     if isinstance(ty, ListT):
         return f"Vec<{_rust_type(ty.elem)}>"
+    if isinstance(ty, StructT):
+        return ty.name
     if isinstance(ty, UnknownT):
         raise ValueError(f"unresolved type hole: {ty.hint}")
     raise NotImplementedError(f"type {type(ty).__name__}")

@@ -52,6 +52,15 @@ class RangeT(Type):
 
 
 @dataclass(frozen=True)
+class StructT(Type):
+    """User-defined struct/class type. The name resolves to a HirStruct /
+    target-specific struct emission. We don't store the field list here —
+    that's looked up via the module's struct registry."""
+
+    name: str
+
+
+@dataclass(frozen=True)
 class UnknownT(Type):
     """A typed hole. LLM passes are allowed to fill these; algorithmic passes must not invent."""
 

@@ -37,17 +37,46 @@ def _format_float(value: float) -> str:
 
 
 def emit_rust(module: lir.RustModule) -> str:
-    return "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
+    return "\n\n".join(_emit_item(item) for item in module.items) + "\n"
 
 
-def _emit_fn(fn: lir.RustFn) -> str:
-    params = ", ".join(f"{n}: {t}" for n, t in fn.params)
-    # Drop `-> ()` for unit-returning fns — both forms are legal Rust but the
-    # bare form is more idiomatic.
+def _emit_item(item: lir.LirNode) -> str:
+    if isinstance(item, lir.RustStruct):
+        return _emit_struct(item)
+    if isinstance(item, lir.RustImpl):
+        return _emit_impl(item)
+    if isinstance(item, lir.RustFn):
+        return _emit_fn(item)
+    raise NotImplementedError(f"rust top-level item {type(item).__name__}")
+
+
+def _emit_struct(s: lir.RustStruct) -> str:
+    field_lines = ",\n".join(f"{INDENT}{n}: {t}" for n, t in s.fields)
+    return f"struct {s.name} {{\n{field_lines},\n}}"
+
+
+def _emit_impl(impl: lir.RustImpl) -> str:
+    body = "\n\n".join(_emit_fn(m, depth=1) for m in impl.methods)
+    return f"impl {impl.struct_name} {{\n{body}\n}}"
+
+
+def _emit_fn(fn: lir.RustFn, *, depth: int = 0) -> str:
+    indent = INDENT * depth
+    params = ", ".join(_emit_param(n, t) for n, t in fn.params)
+    # Drop `-> ()` for unit-returning fns.
     ret = "" if fn.return_type == "()" else f" -> {fn.return_type}"
-    header = f"fn {fn.name}({params}){ret} {{"
-    body = _emit_block(fn.body, 1)
-    return f"{header}\n{body}\n}}"
+    header = f"{indent}fn {fn.name}({params}){ret} {{"
+    body = _emit_block(fn.body, depth + 1)
+    return f"{header}\n{body}\n{indent}}}"
+
+
+def _emit_param(name: str, ty: str) -> str:
+    # Convention: a parameter named `self` is the method receiver — emit as
+    # `&self` (immutable borrow) regardless of the declared type. Method
+    # mutation would need `&mut self`, which we don't yet model.
+    if name == "self":
+        return "&self"
+    return f"{name}: {ty}"
 
 
 def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
@@ -135,6 +164,8 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.RustVec):
         items = ", ".join(_emit_expr(e) for e in node.elements)
         return f"vec![{items}]"
+    if isinstance(node, lir.RustFieldAccess):
+        return f"{_emit_expr(node.value)}.{node.field}"
     if isinstance(node, lir.RustIndex):
         return f"{_emit_expr(node.value)}[{_emit_expr(node.index)} as usize]"
     if isinstance(node, lir.RustMethodCall):

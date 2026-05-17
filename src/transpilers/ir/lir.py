@@ -19,7 +19,8 @@ class LirNode:
 
 @dataclass
 class RustModule(LirNode):
-    items: list["RustFn"] = field(default_factory=list)
+    items: list[LirNode] = field(default_factory=list)
+    # `items` holds RustFn / RustStruct / RustImpl in source order.
 
 
 @dataclass
@@ -159,6 +160,24 @@ class RustMethodCall(LirNode):
 class RustCall(LirNode):
     func: str
     args: list[LirNode]
+
+
+@dataclass
+class RustStruct(LirNode):
+    name: str
+    fields: list[tuple[str, str]]   # (field_name, rust_type)
+
+
+@dataclass
+class RustImpl(LirNode):
+    struct_name: str
+    methods: list["RustFn"]
+
+
+@dataclass
+class RustFieldAccess(LirNode):
+    value: LirNode
+    field: str
 
 
 @dataclass
@@ -461,8 +480,21 @@ class CCall(LirNode):
 
 
 @dataclass
+class MojoStruct(LirNode):
+    name: str
+    fields: list[tuple[str, str]]
+    methods: list["MojoFn"]
+
+
+@dataclass
+class MojoFieldAccess(LirNode):
+    value: LirNode
+    field: str
+
+
+@dataclass
 class MojoModule(LirNode):
-    items: list["MojoFn"] = field(default_factory=list)
+    items: list[LirNode] = field(default_factory=list)
 
 
 @dataclass

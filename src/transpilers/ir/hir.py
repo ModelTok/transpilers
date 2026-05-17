@@ -136,3 +136,35 @@ class HirList(HirNode):
 class HirSubscript(HirNode):
     value: HirNode
     index: HirNode
+
+
+@dataclass
+class HirStruct(HirNode):
+    """A user-defined struct / class.
+
+    `fields` carry types (HIR annotation strings). `methods` are full
+    HirFunction nodes whose first parameter is `self` with the struct's
+    own type as annotation. The frontend wires this up; downstream passes
+    can treat methods as plain functions.
+    """
+
+    name: str
+    fields: list["HirParam"]
+    methods: list["HirFunction"]
+
+
+@dataclass
+class HirFieldAccess(HirNode):
+    """`obj.field` — read."""
+
+    value: HirNode
+    field: str
+
+
+@dataclass
+class HirMethodCall(HirNode):
+    """`obj.method(args)`."""
+
+    receiver: HirNode
+    method: str
+    args: list[HirNode]

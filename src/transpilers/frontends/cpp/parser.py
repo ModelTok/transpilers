@@ -68,11 +68,58 @@ def parse_cpp(source: str) -> hir.HirModule:
         if c.kind == CursorKind.FUNCTION_DECL and c.is_definition():
             body.append(_convert_function(c))
             continue
+        if c.kind == CursorKind.CLASS_DECL or c.kind == CursorKind.STRUCT_DECL:
+            body.append(_convert_class(c))
+            continue
         if c.kind in (CursorKind.FUNCTION_DECL,):
-            # Forward declaration — skip silently.
             continue
         raise UnsupportedConstruct(f"top-level {c.kind.name}")
     return hir.HirModule(source_lang="cpp", body=body)
+
+
+def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
+    """Subset: public fields (`int x;`), public methods. No constructors,
+    destructors, inheritance, templates, operator overloads, references.
+    Members under `private:` / `protected:` are refused so we don't silently
+    expose internal API."""
+    name = cursor.spelling
+    fields: list[hir.HirParam] = []
+    methods: list[hir.HirFunction] = []
+    for c in cursor.get_children():
+        if c.kind == ci.CursorKind.CXX_ACCESS_SPEC_DECL:
+            # `public:` / `private:` / `protected:` markers. Only public is
+            # currently supported.
+            continue
+        if c.kind == ci.CursorKind.FIELD_DECL:
+            fields.append(hir.HirParam(name=c.spelling, annotation=_type_text(c.type)))
+            continue
+        if c.kind == ci.CursorKind.CXX_METHOD and c.is_definition():
+            methods.append(_convert_method(c, struct_name=name))
+            continue
+        if c.kind in (ci.CursorKind.CXX_METHOD, ci.CursorKind.CONSTRUCTOR, ci.CursorKind.DESTRUCTOR):
+            # Declared-but-not-defined methods and ctors/dtors: skip silently
+            # rather than raising — Ghidra and many C++ headers ship these.
+            continue
+        if c.kind == ci.CursorKind.CXX_BASE_SPECIFIER:
+            raise UnsupportedConstruct(f"C++ inheritance for class {name!r} not yet supported")
+        raise UnsupportedConstruct(f"class member {c.kind.name}")
+    return hir.HirStruct(name=name, fields=fields, methods=methods)
+
+
+def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
+    params: list[hir.HirParam] = [hir.HirParam(name="self", annotation=struct_name)]
+    body: list[hir.HirNode] = []
+    for c in cursor.get_children():
+        if c.kind == CursorKind.PARM_DECL:
+            params.append(hir.HirParam(name=c.spelling, annotation=_type_text(c.type)))
+        elif c.kind == CursorKind.COMPOUND_STMT:
+            body = _convert_compound(c)
+    return hir.HirFunction(
+        name=cursor.spelling,
+        params=params,
+        return_annotation=_type_text(cursor.result_type),
+        body=body,
+    )
 
 
 def _check_diagnostics(tu: ci.TranslationUnit) -> None:
@@ -228,6 +275,18 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
         return _convert_binop(cursor)
     if kind == CursorKind.UNARY_OPERATOR:
         return _convert_unary_expr(cursor)
+    if kind == CursorKind.MEMBER_REF_EXPR:
+        # `obj.field` or `this->field` — the LHS object is the only child.
+        kids = list(cursor.get_children())
+        # Inside a method body, libclang sometimes elides the implicit `this`;
+        # in that case there's no child and we treat as a self-reference.
+        if not kids:
+            return hir.HirFieldAccess(value=hir.HirName(name="self"), field=cursor.spelling)
+        return hir.HirFieldAccess(value=_convert_expr(kids[0]), field=cursor.spelling)
+    if kind == CursorKind.CXX_THIS_EXPR:
+        # `this` → `self` in our HIR vocabulary; the method-conversion sets
+        # the first parameter to `self`.
+        return hir.HirName(name="self")
     if kind == CursorKind.CALL_EXPR:
         return _convert_call(cursor)
     if kind == CursorKind.COMPOUND_ASSIGNMENT_OPERATOR:
