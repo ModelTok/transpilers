@@ -32,10 +32,11 @@ from transpilers.frontends.javascript import parse_javascript
 from transpilers.frontends.python import parse_python
 from transpilers.frontends.typescript import parse_typescript
 from transpilers.frontends.vb import parse_vb
-from transpilers.llm import LlmClient, make_llm_inferencer
+from transpilers.llm import LlmClient, make_llm_inferencer, make_llm_renamer
 from transpilers.passes import (
     hir_to_mir,
     infer_types,
+    llm_rename,
     mir_to_c_lir,
     mir_to_fortran_lir,
     mir_to_go_lir,
@@ -106,12 +107,21 @@ TARGETS = {
 }
 
 
-def transpile(source: str, *, source_lang: str = "python", target: str = "rust", llm_fill=None) -> str:
+def transpile(
+    source: str,
+    *,
+    source_lang: str = "python",
+    target: str = "rust",
+    llm_fill=None,
+    llm_rename_fill=None,
+) -> str:
     parse = FRONTENDS[source_lang]
     lower, emit, _ = TARGETS[target]
     hir_mod = parse(source)
     mir_mod = hir_to_mir(hir_mod)
     infer_types(mir_mod, llm_fill=llm_fill)
+    if llm_rename_fill is not None:
+        llm_rename(mir_mod, llm_fill=llm_rename_fill)
     return emit(lower(mir_mod))
 
 
@@ -193,6 +203,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="when algorithmic inference can't resolve a hole, ask the LLM (requires ANTHROPIC_API_KEY)",
     )
+    parser.add_argument(
+        "--llm-rename",
+        action="store_true",
+        help="ask the LLM to rename opaque locals (Ghidra `local_10` etc.); requires ANTHROPIC_API_KEY",
+    )
     args = parser.parse_args(argv)
 
     source_lang = args.source_lang or EXT_TO_SOURCE.get(args.source.suffix)
@@ -215,8 +230,18 @@ def main(argv: list[str] | None = None) -> int:
     else:
         src_input = args.source.read_text()
 
-    llm_fill = make_llm_inferencer(LlmClient()) if args.infer_with_llm else None
-    out = transpile(src_input, source_lang=source_lang, target=args.target, llm_fill=llm_fill)
+    # Both LLM-augmented passes share a single client so they hit the same
+    # on-disk cache. Lazy-construct so non-LLM runs never touch credentials.
+    client = LlmClient() if (args.infer_with_llm or args.llm_rename) else None
+    llm_fill = make_llm_inferencer(client) if (client and args.infer_with_llm) else None
+    rename_fill = make_llm_renamer(client) if (client and args.llm_rename) else None
+    out = transpile(
+        src_input,
+        source_lang=source_lang,
+        target=args.target,
+        llm_fill=llm_fill,
+        llm_rename_fill=rename_fill,
+    )
     sys.stdout.write(out)
 
     if args.verify:
