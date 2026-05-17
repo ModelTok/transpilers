@@ -15,26 +15,41 @@ import sys
 from pathlib import Path
 
 from transpilers.backends.c import emit_c
+from transpilers.backends.go import emit_go
 from transpilers.backends.mojo import emit_mojo
+from transpilers.backends.python import emit_python
 from transpilers.backends.rust import emit_rust
 from transpilers.backends.zig import emit_zig
+from transpilers.frontends.asm import parse_asm
 from transpilers.frontends.c import parse_c
 from transpilers.frontends.cpp import parse_cpp
 from transpilers.frontends.csharp import parse_csharp
+from transpilers.frontends.fortran import parse_fortran
+from transpilers.frontends.go import parse_go
 from transpilers.frontends.java import parse_java
 from transpilers.frontends.javascript import parse_javascript
 from transpilers.frontends.python import parse_python
 from transpilers.frontends.typescript import parse_typescript
+from transpilers.frontends.vb import parse_vb
 from transpilers.llm import LlmClient, make_llm_inferencer
 from transpilers.passes import (
     hir_to_mir,
     infer_types,
     mir_to_c_lir,
+    mir_to_go_lir,
     mir_to_mojo_lir,
+    mir_to_python_lir,
     mir_to_rust_lir,
     mir_to_zig_lir,
 )
-from transpilers.verify import c_compiles, mojo_compiles, rust_compiles, zig_compiles
+from transpilers.verify import (
+    c_compiles,
+    go_compiles,
+    mojo_compiles,
+    python_compiles,
+    rust_compiles,
+    zig_compiles,
+)
 
 
 FRONTENDS = {
@@ -45,6 +60,10 @@ FRONTENDS = {
     "csharp": parse_csharp,
     "typescript": parse_typescript,
     "javascript": parse_javascript,
+    "fortran": parse_fortran,
+    "go": parse_go,
+    "vb": parse_vb,
+    "asm": parse_asm,
 }
 
 EXT_TO_SOURCE = {
@@ -61,6 +80,16 @@ EXT_TO_SOURCE = {
     ".ts": "typescript",
     ".js": "javascript",
     ".mjs": "javascript",
+    ".f90": "fortran",
+    ".f95": "fortran",
+    ".f03": "fortran",
+    ".f": "fortran",
+    ".go": "go",
+    ".vb": "vb",
+    ".vbs": "vb",
+    ".asm": "asm",
+    ".s": "asm",
+    ".S": "asm",
 }
 
 TARGETS = {
@@ -68,6 +97,8 @@ TARGETS = {
     "zig": (mir_to_zig_lir, emit_zig, zig_compiles),
     "c": (mir_to_c_lir, emit_c, c_compiles),
     "mojo": (mir_to_mojo_lir, emit_mojo, mojo_compiles),
+    "go": (mir_to_go_lir, emit_go, go_compiles),
+    "python": (mir_to_python_lir, emit_python, python_compiles),
 }
 
 

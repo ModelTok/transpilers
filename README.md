@@ -5,12 +5,14 @@ Hybrid algorithmic + LLM source-to-source transpiler. Goal: N-to-M across
 
 ## Status
 
-Seven source frontends (**Python**, **C**, **C++**, **Java**, **C#**,
-**TypeScript**, **JavaScript**) and four targets (**Rust**, **Zig**, **C**,
-**Mojo**) — twenty-eight source-target pairs end-to-end with compiler-
-verified output. C → C is the round-trip case. Full algorithmic +
-interprocedural type inference; JS is the inference stress-test (no
-annotations anywhere). Fortran and VB sources remain stubbed.
+Ten source frontends (**Python**, **C**, **C++**, **Java**, **C#**,
+**TypeScript**, **JavaScript**, **Fortran**, **Go**, **Visual Basic**) and
+six targets (**Rust**, **Zig**, **C**, **Mojo**, **Go**, **Python**) — sixty
+working source-target pairs end-to-end with compiler-verified output. C → C
+and Python → Python are round-trip cases. Full algorithmic + interprocedural
+type inference; JS is the inference stress-test (no annotations anywhere).
+Assembly is a stub frontend that surfaces the architectural reason it
+doesn't fit a typed source-to-source IR.
 
 ## Why hybrid
 

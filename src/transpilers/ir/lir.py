@@ -572,3 +572,231 @@ class MojoMethodCall(LirNode):
     method: str
     args: list[LirNode]
     paren: bool = True
+
+
+# ---------------- Go dialect ----------------
+#
+# Go is brace-based, statically typed, with `var name type = value` and
+# `name := value` short-declarations. No `mut`/`const`; everything's mutable.
+# Native `for init; cond; update {}` matches our MIR for-range nicely.
+
+
+@dataclass
+class GoModule(LirNode):
+    items: list["GoFn"] = field(default_factory=list)
+
+
+@dataclass
+class GoFn(LirNode):
+    name: str
+    params: list[tuple[str, str]]
+    return_type: str
+    body: list[LirNode]
+
+
+@dataclass
+class GoReturn(LirNode):
+    value: LirNode | None
+
+
+@dataclass
+class GoBinOp(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class GoCompare(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class GoBoolOp(LirNode):
+    op: str  # "&&" / "||"
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class GoUnary(LirNode):
+    op: str
+    operand: LirNode
+
+
+@dataclass
+class GoName(LirNode):
+    name: str
+
+
+@dataclass
+class GoIntLiteral(LirNode):
+    value: int
+
+
+@dataclass
+class GoBoolLiteral(LirNode):
+    value: bool
+
+
+@dataclass
+class GoStringLiteral(LirNode):
+    value: str
+
+
+@dataclass
+class GoIf(LirNode):
+    test: LirNode
+    body: list[LirNode]
+    orelse: list[LirNode]
+
+
+@dataclass
+class GoWhile(LirNode):
+    """Go has no `while` — emit as `for cond { ... }`."""
+
+    test: LirNode
+    body: list[LirNode]
+
+
+@dataclass
+class GoForRange(LirNode):
+    target: str
+    start: LirNode
+    stop: LirNode
+    step: LirNode | None
+    body: list[LirNode]
+
+
+@dataclass
+class GoDecl(LirNode):
+    """`var <name> <ty> = <value>`."""
+
+    name: str
+    ty: str
+    value: LirNode
+
+
+@dataclass
+class GoReassign(LirNode):
+    name: str
+    value: LirNode
+
+
+@dataclass
+class GoCall(LirNode):
+    func: str
+    args: list[LirNode]
+
+
+# ---------------- Python dialect ----------------
+#
+# Python is Mojo-like in surface syntax (indented, `def`, no braces) but uses
+# `def` without explicit-typing required and reads `int`/`float`/`bool`/`str`
+# for type hints. Closest to Mojo of the supported targets, but distinct
+# enough that conflating them is a footgun.
+
+
+@dataclass
+class PyModule(LirNode):
+    items: list["PyFn"] = field(default_factory=list)
+
+
+@dataclass
+class PyFn(LirNode):
+    name: str
+    params: list[tuple[str, str]]
+    return_type: str
+    body: list[LirNode]
+
+
+@dataclass
+class PyReturn(LirNode):
+    value: LirNode | None
+
+
+@dataclass
+class PyBinOp(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class PyCompare(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class PyBoolOp(LirNode):
+    op: str  # "and" / "or"
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class PyUnary(LirNode):
+    op: str  # "not" / "-"
+    operand: LirNode
+
+
+@dataclass
+class PyName(LirNode):
+    name: str
+
+
+@dataclass
+class PyIntLiteral(LirNode):
+    value: int
+
+
+@dataclass
+class PyBoolLiteral(LirNode):
+    value: bool
+
+
+@dataclass
+class PyStringLiteral(LirNode):
+    value: str
+
+
+@dataclass
+class PyIf(LirNode):
+    test: LirNode
+    body: list[LirNode]
+    orelse: list[LirNode]
+
+
+@dataclass
+class PyWhile(LirNode):
+    test: LirNode
+    body: list[LirNode]
+
+
+@dataclass
+class PyForRange(LirNode):
+    target: str
+    start: LirNode
+    stop: LirNode
+    step: LirNode | None
+    body: list[LirNode]
+
+
+@dataclass
+class PyAssign(LirNode):
+    """Python doesn't distinguish declaration from reassignment; first use
+    counts. We still carry the type annotation when known."""
+
+    name: str
+    ty: str | None
+    value: LirNode
+
+
+@dataclass
+class PyCall(LirNode):
+    func: str
+    args: list[LirNode]
