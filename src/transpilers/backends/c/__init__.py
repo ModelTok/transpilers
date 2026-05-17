@@ -1,1 +1,3 @@
-"""C backend. Not yet implemented."""
+from .emit import emit_c
+
+__all__ = ["emit_c"]

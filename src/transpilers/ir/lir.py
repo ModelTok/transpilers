@@ -303,3 +303,129 @@ class ZigMethodCall(LirNode):
 class ZigCall(LirNode):
     func: str
     args: list[LirNode]
+
+
+# ---------------- C dialect ----------------
+#
+# C and Rust LIR look superficially similar but differ in real ways:
+# declarations are type-prefixed rather than `let`-keyword, there's no
+# `mut`/`const` split (everything's mutable), there's no `format!`, and
+# strings need an allocator for concat. Keeping a separate dialect avoids
+# polluting Rust emission with C-shaped concerns.
+
+
+@dataclass
+class CModule(LirNode):
+    items: list["CFn"] = field(default_factory=list)
+
+
+@dataclass
+class CFn(LirNode):
+    name: str
+    params: list[tuple[str, str]]
+    return_type: str
+    body: list[LirNode]
+
+
+@dataclass
+class CReturn(LirNode):
+    value: LirNode | None
+
+
+@dataclass
+class CBinOp(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class CCompare(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class CBoolOp(LirNode):
+    op: str  # "&&" / "||"
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class CUnary(LirNode):
+    op: str
+    operand: LirNode
+
+
+@dataclass
+class CName(LirNode):
+    name: str
+
+
+@dataclass
+class CIntLiteral(LirNode):
+    value: int
+
+
+@dataclass
+class CBoolLiteral(LirNode):
+    value: bool
+
+
+@dataclass
+class CStringLiteral(LirNode):
+    value: str
+
+
+@dataclass
+class CIf(LirNode):
+    test: LirNode
+    body: list[LirNode]
+    orelse: list[LirNode]
+
+
+@dataclass
+class CWhile(LirNode):
+    test: LirNode
+    body: list[LirNode]
+
+
+@dataclass
+class CForRange(LirNode):
+    """C-style `for (int64_t i = start; i < stop; i++)`. step != 1 emits the
+    explicit step expression."""
+
+    target: str
+    start: LirNode
+    stop: LirNode
+    step: LirNode | None
+    body: list[LirNode]
+
+
+@dataclass
+class CDecl(LirNode):
+    """`<ty> <name> = <value>;` — single-line declaration with initializer."""
+
+    name: str
+    ty: str
+    value: LirNode
+
+
+@dataclass
+class CReassign(LirNode):
+    name: str
+    value: LirNode
+
+
+@dataclass
+class CIndex(LirNode):
+    value: LirNode
+    index: LirNode
+
+
+@dataclass
+class CCall(LirNode):
+    func: str
+    args: list[LirNode]
