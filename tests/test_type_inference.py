@@ -175,3 +175,92 @@ def test_llm_response_validator_accepts_lattice():
     for raw, expected_kind in cases.items():
         result = _parse_type(raw)
         assert isinstance(result, expected_kind), raw
+
+
+# ---------- interprocedural ----------
+
+def test_callee_signature_shapes_caller_return():
+    """Forward propagation: caller's `return add_one(5)` picks up that
+    add_one's inferred return is int, so caller's return is int."""
+    out = _t(
+        """
+        def add_one(x):
+            return x + 1
+
+        def call_it():
+            return add_one(5)
+        """
+    )
+    assert "fn add_one(x: i64) -> i64" in out
+    assert "fn call_it() -> i64" in out
+
+
+def test_caller_arg_anchors_callee_param():
+    """Backward propagation: `f` has nothing local to anchor its param, but a
+    caller passes 5 — that pins `f`'s param to int."""
+    out = _t(
+        """
+        def f(a):
+            return a
+
+        def g():
+            return f(5)
+        """
+    )
+    assert "fn f(a: i64) -> i64" in out
+    assert "fn g() -> i64" in out
+
+
+def test_recursion_converges():
+    """Self-call resolves via fixed point: the `n - 1` arith anchors `n`, the
+    `return 1` anchors return type, the recursive call then propagates."""
+    out = _t(
+        """
+        def fact(n):
+            if n <= 1:
+                return 1
+            return n * fact(n - 1)
+        """
+    )
+    assert "fn fact(n: i64) -> i64" in out
+
+
+def test_chain_of_calls_propagates_types():
+    """A → B → C with no internal anchors anywhere — the only concrete type is
+    the literal at the bottom of the chain; backward propagation walks it up."""
+    out = _t(
+        """
+        def c(x):
+            return x
+
+        def b(x):
+            return c(x)
+
+        def a():
+            return b(7)
+        """
+    )
+    assert "fn c(x: i64) -> i64" in out
+    assert "fn b(x: i64) -> i64" in out
+    assert "fn a() -> i64" in out
+
+
+def test_caller_callee_pair_compiles():
+    """End-to-end: emitted Rust must actually compile."""
+    import shutil
+
+    if shutil.which("rustc") is None:
+        pytest.skip("rustc not installed")
+    from transpilers.verify import rust_compiles
+
+    out = _t(
+        """
+        def add_one(x):
+            return x + 1
+
+        def call_it():
+            return add_one(5)
+        """
+    )
+    result = rust_compiles(out)
+    assert result.ok, result.stderr

@@ -1,10 +1,15 @@
 """Type-inference pass on MIR.
 
-Runs in two phases:
-  1. Local dataflow — fixed-point over each function. Propagates types from
+Runs in three phases:
+  1. Local dataflow — fixed-point per function. Propagates types from
      literals through binops/compares/calls/subscripts/assignments. Updates
      parameter, return, and node types in place when discovered.
-  2. Optional LLM fallback — for residual UnknownT on parameters and return
+  2. Interprocedural — fixed-point at the module level. Each MirCall consults
+     a function-name → MirFunction map: forward (callee signature shapes the
+     call's result type and anchors arg Names) and backward (concrete arg
+     types at the call site fill UnknownT parameter slots on the callee).
+     Re-runs local inference after each propagation round.
+  3. Optional LLM fallback — for residual UnknownT on parameters and return
      types only. Operates on typed holes (constrained outputs), validates
      responses, and caches by content hash. Algorithmic passes downstream
      still refuse to invent on remaining holes.
@@ -33,26 +38,52 @@ from transpilers.ir.types import (
 
 
 LlmFill = Callable[[str, dict], Type]
+FnMap = dict[str, mir.MirFunction]
 
 
 ARITH_OPS = {"+", "-", "*", "/", "%"}
 MAX_ITER = 8
+MAX_MODULE_ITER = 6
 
 
 def infer_types(module: mir.MirModule, *, llm_fill: LlmFill | None = None) -> mir.MirModule:
-    for fn in module.functions:
-        _infer_function(fn, llm_fill)
+    fn_map: FnMap = {fn.name: fn for fn in module.functions}
+    last = None
+    for _ in range(MAX_MODULE_ITER):
+        for fn in module.functions:
+            _infer_function(fn, fn_map=fn_map)
+        for fn in module.functions:
+            _backward_propagate(fn.body, fn_map)
+        snap = _module_snapshot(module)
+        if snap == last:
+            break
+        last = snap
+
+    if llm_fill is not None:
+        for fn in module.functions:
+            _llm_fallback(fn, llm_fill)
     return module
+
+
+def _module_snapshot(module: mir.MirModule) -> tuple:
+    return tuple(
+        (
+            fn.name,
+            tuple(type(p.ty).__name__ for p in fn.params),
+            type(fn.return_type).__name__,
+        )
+        for fn in module.functions
+    )
 
 
 # ---------- per-function inference ----------
 
-def _infer_function(fn: mir.MirFunction, llm_fill: LlmFill | None) -> None:
+def _infer_function(fn: mir.MirFunction, *, fn_map: FnMap | None = None) -> None:
     env: dict[str, Type] = {p.name: p.ty for p in fn.params if not isinstance(p.ty, UnknownT)}
     last = None
     for _ in range(MAX_ITER):
         return_tys: list[Type] = []
-        _visit_block(fn.body, env, return_tys)
+        _visit_block(fn.body, env, return_tys, fn_map)
         _pull_params_from_env(fn, env)
         _resolve_return(fn, return_tys)
         snap = _snapshot(fn, env)
@@ -60,9 +91,76 @@ def _infer_function(fn: mir.MirFunction, llm_fill: LlmFill | None) -> None:
             break
         last = snap
 
-    if llm_fill is None:
+
+# ---------- interprocedural backward pass ----------
+
+def _backward_propagate(nodes: list[mir.MirNode], fn_map: FnMap) -> None:
+    """Walk every MirCall in `nodes` (recursively) and push concrete arg types
+    from the call site back to the callee's UnknownT parameters."""
+    for n in nodes:
+        _backward_in(n, fn_map)
+
+
+def _backward_in(node: mir.MirNode, fn_map: FnMap) -> None:
+    if isinstance(node, mir.MirCall):
+        callee = fn_map.get(node.func)
+        if callee is not None:
+            for i, arg in enumerate(node.args):
+                if i >= len(callee.params):
+                    break
+                arg_ty = getattr(arg, "ty", UnknownT())
+                if isinstance(callee.params[i].ty, UnknownT) and not isinstance(arg_ty, UnknownT):
+                    callee.params[i] = replace(callee.params[i], ty=arg_ty)
+        for a in node.args:
+            _backward_in(a, fn_map)
         return
-    _llm_fallback(fn, llm_fill)
+    if isinstance(node, mir.MirReturn):
+        if node.value is not None:
+            _backward_in(node.value, fn_map)
+        return
+    if isinstance(node, mir.MirAssign):
+        _backward_in(node.value, fn_map)
+        return
+    if isinstance(node, mir.MirIf):
+        _backward_in(node.test, fn_map)
+        _backward_propagate(node.body, fn_map)
+        _backward_propagate(node.orelse, fn_map)
+        return
+    if isinstance(node, mir.MirWhile):
+        _backward_in(node.test, fn_map)
+        _backward_propagate(node.body, fn_map)
+        return
+    if isinstance(node, mir.MirForRange):
+        _backward_in(node.start, fn_map)
+        _backward_in(node.stop, fn_map)
+        if node.step is not None:
+            _backward_in(node.step, fn_map)
+        _backward_propagate(node.body, fn_map)
+        return
+    if isinstance(node, mir.MirBinOp):
+        _backward_in(node.left, fn_map)
+        _backward_in(node.right, fn_map)
+        return
+    if isinstance(node, mir.MirCompare):
+        _backward_in(node.left, fn_map)
+        _backward_in(node.right, fn_map)
+        return
+    if isinstance(node, mir.MirBoolOp):
+        _backward_in(node.left, fn_map)
+        _backward_in(node.right, fn_map)
+        return
+    if isinstance(node, mir.MirUnaryOp):
+        _backward_in(node.operand, fn_map)
+        return
+    if isinstance(node, mir.MirList):
+        for e in node.elements:
+            _backward_in(e, fn_map)
+        return
+    if isinstance(node, mir.MirSubscript):
+        _backward_in(node.value, fn_map)
+        _backward_in(node.index, fn_map)
+        return
+    # MirName, literals, etc. — no calls to find.
 
 
 def _llm_fallback(fn: mir.MirFunction, llm_fill: LlmFill) -> None:
@@ -77,18 +175,22 @@ def _llm_fallback(fn: mir.MirFunction, llm_fill: LlmFill) -> None:
 
 # ---------- propagation ----------
 
-def _visit_block(nodes: list[mir.MirNode], env: dict[str, Type], return_tys: list[Type]) -> None:
+def _visit_block(
+    nodes: list[mir.MirNode], env: dict[str, Type], return_tys: list[Type], fn_map: FnMap | None
+) -> None:
     for n in nodes:
-        _visit_stmt(n, env, return_tys)
+        _visit_stmt(n, env, return_tys, fn_map)
 
 
-def _visit_stmt(node: mir.MirNode, env: dict[str, Type], return_tys: list[Type]) -> None:
+def _visit_stmt(
+    node: mir.MirNode, env: dict[str, Type], return_tys: list[Type], fn_map: FnMap | None
+) -> None:
     if isinstance(node, mir.MirReturn):
-        ty = _visit_expr(node.value, env) if node.value is not None else NoneT()
+        ty = _visit_expr(node.value, env, fn_map) if node.value is not None else NoneT()
         return_tys.append(ty)
         return
     if isinstance(node, mir.MirAssign):
-        vt = _visit_expr(node.value, env)
+        vt = _visit_expr(node.value, env, fn_map)
         ann_ty = node.ty if not isinstance(node.ty, UnknownT) else vt
         if isinstance(node.ty, UnknownT) and not isinstance(vt, UnknownT):
             node.ty = vt
@@ -96,13 +198,13 @@ def _visit_stmt(node: mir.MirNode, env: dict[str, Type], return_tys: list[Type])
             env[node.target] = ann_ty
         return
     if isinstance(node, mir.MirIf):
-        _visit_expr(node.test, env)
-        _visit_block(node.body, env, return_tys)
-        _visit_block(node.orelse, env, return_tys)
+        _visit_expr(node.test, env, fn_map)
+        _visit_block(node.body, env, return_tys, fn_map)
+        _visit_block(node.orelse, env, return_tys, fn_map)
         return
     if isinstance(node, mir.MirWhile):
-        _visit_expr(node.test, env)
-        _visit_block(node.body, env, return_tys)
+        _visit_expr(node.test, env, fn_map)
+        _visit_block(node.body, env, return_tys, fn_map)
         return
     if isinstance(node, mir.MirForRange):
         # `for i in range(...)` constrains start/stop/step to int. If any bound
@@ -111,18 +213,18 @@ def _visit_stmt(node: mir.MirNode, env: dict[str, Type], return_tys: list[Type])
         for bound in (node.start, node.stop, node.step):
             if bound is None:
                 continue
-            _visit_expr(bound, env)
+            _visit_expr(bound, env, fn_map)
             if isinstance(bound, mir.MirName) and isinstance(bound.ty, UnknownT):
                 env[bound.name] = IntT()
                 bound.ty = IntT()
         env[node.target] = IntT()
-        _visit_block(node.body, env, return_tys)
+        _visit_block(node.body, env, return_tys, fn_map)
         return
     # Bare expression statement.
-    _visit_expr(node, env)
+    _visit_expr(node, env, fn_map)
 
 
-def _visit_expr(node: mir.MirNode | None, env: dict[str, Type]) -> Type:
+def _visit_expr(node: mir.MirNode | None, env: dict[str, Type], fn_map: FnMap | None = None) -> Type:
     if node is None:
         return NoneT()
     if isinstance(node, mir.MirIntLiteral):
@@ -141,8 +243,8 @@ def _visit_expr(node: mir.MirNode | None, env: dict[str, Type]) -> Type:
             return ty
         return node.ty
     if isinstance(node, mir.MirBinOp):
-        lt = _visit_expr(node.left, env)
-        rt = _visit_expr(node.right, env)
+        lt = _visit_expr(node.left, env, fn_map)
+        rt = _visit_expr(node.right, env, fn_map)
         if node.op in ARITH_OPS:
             lt, rt = _arith_unify(node, lt, rt, env)
         ty = _binop_result(node.op, lt, rt)
@@ -150,41 +252,65 @@ def _visit_expr(node: mir.MirNode | None, env: dict[str, Type]) -> Type:
             node.ty = ty
         return node.ty
     if isinstance(node, mir.MirCompare):
-        lt = _visit_expr(node.left, env)
-        rt = _visit_expr(node.right, env)
+        lt = _visit_expr(node.left, env, fn_map)
+        rt = _visit_expr(node.right, env, fn_map)
         _compare_unify(node, lt, rt, env)
         node.ty = BoolT()
         return node.ty
     if isinstance(node, mir.MirBoolOp):
-        _visit_expr(node.left, env)
-        _visit_expr(node.right, env)
+        _visit_expr(node.left, env, fn_map)
+        _visit_expr(node.right, env, fn_map)
         node.ty = BoolT()
         return node.ty
     if isinstance(node, mir.MirUnaryOp):
-        ot = _visit_expr(node.operand, env)
+        ot = _visit_expr(node.operand, env, fn_map)
         node.ty = BoolT() if node.op == "not" else ot
         return node.ty
     if isinstance(node, mir.MirCall):
         for a in node.args:
-            _visit_expr(a, env)
+            _visit_expr(a, env, fn_map)
         _propagate_arg_types(node, env)
+        _propagate_from_callee(node, env, fn_map)
         if node.func == "len":
             node.ty = IntT()
         # range() result type already set in lowering; other calls stay UnknownT.
         return node.ty
     if isinstance(node, mir.MirList):
-        elem_tys = [_visit_expr(e, env) for e in node.elements]
+        elem_tys = [_visit_expr(e, env, fn_map) for e in node.elements]
         concrete = [t for t in elem_tys if not isinstance(t, UnknownT)]
         if concrete:
             node.ty = ListT(elem=concrete[0])
         return node.ty
     if isinstance(node, mir.MirSubscript):
-        vt = _visit_expr(node.value, env)
-        _visit_expr(node.index, env)
+        vt = _visit_expr(node.value, env, fn_map)
+        _visit_expr(node.index, env, fn_map)
         if isinstance(vt, ListT) and isinstance(node.ty, UnknownT):
             node.ty = vt.elem
         return node.ty
     return UnknownT()
+
+
+def _propagate_from_callee(node: mir.MirCall, env: dict[str, Type], fn_map: FnMap | None) -> None:
+    """Forward direction of interprocedural propagation: pull the callee's
+    known signature into the call site. Anchors unknown Name args to the
+    callee's param types and types the call expression by the callee's return
+    type."""
+    if fn_map is None:
+        return
+    callee = fn_map.get(node.func)
+    if callee is None:
+        return
+    for i, arg in enumerate(node.args):
+        if i >= len(callee.params):
+            break
+        param_ty = callee.params[i].ty
+        if isinstance(param_ty, UnknownT):
+            continue
+        if isinstance(arg, mir.MirName) and isinstance(arg.ty, UnknownT):
+            env[arg.name] = param_ty
+            arg.ty = param_ty
+    if not isinstance(callee.return_type, UnknownT) and isinstance(node.ty, UnknownT):
+        node.ty = callee.return_type
 
 
 # ---------- bidirectional unification on arith / compare ----------
