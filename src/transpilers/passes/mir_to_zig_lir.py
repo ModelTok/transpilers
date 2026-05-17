@@ -199,15 +199,47 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
 
 
 def _lower_call(node: mir.MirCall) -> lir.LirNode:
+    args = [_lower_expr(a) for a in node.args]
     if node.func == "len":
-        if len(node.args) != 1:
+        if len(args) != 1:
             raise ValueError("len() takes exactly one argument")
-        # Zig slices expose `.len` as a property (no parens). We model it as a
-        # zero-arg method call and let the emitter drop the parens.
-        return lir.ZigMethodCall(
-            receiver=_lower_expr(node.args[0]), method="len", args=[], cast_to="i64"
+        return lir.ZigMethodCall(receiver=args[0], method="len", args=[], cast_to="i64")
+    # Stdlib mapping. Zig has @abs/@min/@max as builtins (prefixed with `@`).
+    # Print goes through std.debug.print with a format string and tuple.
+    if node.func in ("print", "println"):
+        # `std.debug.print("{}\n", .{<args>})`. The trailing newline matches
+        # Python's print default and Rust's println!.
+        template = " ".join("{}" for _ in args) + "\n"
+        # Encode the call as a regular ZigCall whose first arg is a string
+        # literal and second arg is a synthetic ".{a, b, c}" tuple expression.
+        # Emitter sees the special name and renders the tuple form.
+        return lir.ZigCall(
+            func="std.debug.print",
+            args=[lir.ZigStringLiteral(value=template), _ZigTuple(args)],
         )
-    return lir.ZigCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+    if node.func == "abs" and len(args) == 1:
+        return lir.ZigCall(func="@abs", args=args)
+    if node.func == "min" and len(args) == 2:
+        return lir.ZigCall(func="@min", args=args)
+    if node.func == "max" and len(args) == 2:
+        return lir.ZigCall(func="@max", args=args)
+    if node.func == "int" and len(args) == 1:
+        # Cast-to-int — Zig requires explicit @as for type assertions.
+        return lir.ZigCall(func="@as", args=[lir.ZigName(name="i64"), args[0]])
+    if node.func == "float" and len(args) == 1:
+        return lir.ZigCall(func="@floatFromInt", args=args)
+    if node.func == "bool" and len(args) == 1:
+        return lir.ZigCompare(op="!=", left=args[0], right=lir.ZigIntLiteral(value=0))
+    return lir.ZigCall(func=node.func, args=args)
+
+
+class _ZigTuple(lir.LirNode):
+    """`.{a, b, c}` — Zig anonymous struct literal used as the args
+    parameter of std.debug.print. Not a public LIR shape; emitter
+    renders specially."""
+
+    def __init__(self, elements: list[lir.LirNode]) -> None:
+        self.elements = elements
 
 
 class _ZigMethodCall(lir.LirNode):

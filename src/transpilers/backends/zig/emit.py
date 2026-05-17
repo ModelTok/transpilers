@@ -14,8 +14,22 @@ from transpilers.passes.mir_to_zig_lir import _ZigBlock
 INDENT = "    "
 
 
+def _zig_string_escape(s: str) -> str:
+    return (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+        .replace("\r", "\\r")
+    )
+
+
 def emit_zig(module: lir.ZigModule) -> str:
-    return "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    body = "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    # If any emission references `std.`, prepend the std import.
+    if "std." in body:
+        body = 'const std = @import("std");\n\n' + body
+    return body
 
 
 def _emit_item(item: lir.LirNode) -> str:
@@ -136,7 +150,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.ZigBoolLiteral):
         return "true" if node.value else "false"
     if isinstance(node, lir.ZigStringLiteral):
-        escaped = node.value.replace("\\", "\\\\").replace('"', '\\"')
+        escaped = _zig_string_escape(node.value)
         return f'"{escaped}"'
     if isinstance(node, lir.ZigArrayLit):
         items = ", ".join(_emit_expr(e) for e in node.elements)
@@ -162,6 +176,15 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         call = f"{_emit_expr(node.receiver)}.{node.method}({args})"
         return f"@as({node.cast_to}, @intCast({call}))" if node.cast_to else call
     if isinstance(node, lir.ZigCall):
-        args = ", ".join(_emit_expr(a) for a in node.args)
-        return f"{node.func}({args})"
+        # Special-case the (string, tuple) shape for std.debug.print so we
+        # emit `.{a, b, c}` for the tuple arg instead of a normal call.
+        from transpilers.passes.mir_to_zig_lir import _ZigTuple
+        rendered_args: list[str] = []
+        for a in node.args:
+            if isinstance(a, _ZigTuple):
+                inner = ", ".join(_emit_expr(e) for e in a.elements)
+                rendered_args.append(f".{{ {inner} }}")
+            else:
+                rendered_args.append(_emit_expr(a))
+        return f"{node.func}({', '.join(rendered_args)})"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

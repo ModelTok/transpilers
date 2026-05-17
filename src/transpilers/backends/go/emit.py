@@ -138,8 +138,13 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.GoStructInit):
         body = ", ".join(f"{n}: {_emit_expr(v)}" for n, v in node.field_values)
         return f"{node.name}{{{body}}}"
-    from transpilers.passes.mir_to_go_lir import _GoMethodCall as _MC
+    from transpilers.passes.mir_to_go_lir import _GoMethodCall as _MC, _GoIfExpr
     if isinstance(node, _MC):
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{_emit_expr(node.receiver)}.{node.method}({args})"
+    if isinstance(node, _GoIfExpr):
+        return (
+            f"func() int64 {{ if {_emit_expr(node.test)} {{ return {_emit_expr(node.then_)} }}; "
+            f"return {_emit_expr(node.else_)} }}()"
+        )
     raise NotImplementedError(f"LIR node {type(node).__name__}")
