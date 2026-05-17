@@ -14,6 +14,16 @@ INDENT = "\t"
 PREAMBLE = "package main\n\n"
 
 
+def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | None:
+    if not isinstance(value, lir.GoBinOp):
+        return None
+    if not (isinstance(value.left, lir.GoName) and value.left.name == name):
+        return None
+    if value.op not in ("+", "-", "*", "/", "%"):
+        return None
+    return value.op, value.right
+
+
 def emit_go(module: lir.GoModule) -> str:
     return PREAMBLE + "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
 
@@ -36,6 +46,7 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         return f"{pad}return {_emit_expr(node.value)}" if node.value else f"{pad}return"
     if isinstance(node, lir.GoDecl):
         return f"{pad}var {node.name} {node.ty} = {_emit_expr(node.value)}"
+        # Note: Go statements have no trailing semicolons; emit doesn't add them.
     if isinstance(node, lir.GoReassign):
         return f"{pad}{node.name} = {_emit_expr(node.value)}"
     if isinstance(node, lir.GoIf):
@@ -83,6 +94,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return node.name
     if isinstance(node, lir.GoIntLiteral):
         return str(node.value)
+    if isinstance(node, lir.GoFloatLiteral):
+        text = repr(node.value)
+        return text if "." in text or "e" in text else text + ".0"
     if isinstance(node, lir.GoBoolLiteral):
         return "true" if node.value else "false"
     if isinstance(node, lir.GoStringLiteral):

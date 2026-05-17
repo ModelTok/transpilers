@@ -220,6 +220,8 @@ def _convert_expr(node: Node) -> hir.HirNode:
     kind = node.type
     if kind == "integer_literal":
         return hir.HirIntLiteral(value=int(text(node).rstrip("uUlL").replace("_", ""), 0))
+    if kind == "real_literal":
+        return hir.HirFloatLiteral(value=float(text(node).rstrip("fFdDmM").replace("_", "")))
     if kind == "boolean_literal":
         return hir.HirBoolLiteral(value=text(node) == "true")
     if kind == "string_literal":

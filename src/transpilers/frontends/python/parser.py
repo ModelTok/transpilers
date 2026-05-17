@@ -120,6 +120,9 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
     if isinstance(node, cst.Integer):
         return hir.HirIntLiteral(value=int(node.value))
 
+    if isinstance(node, cst.Float):
+        return hir.HirFloatLiteral(value=float(node.value))
+
     if isinstance(node, cst.SimpleString):
         return hir.HirStringLiteral(value=_unquote(node.value))
 

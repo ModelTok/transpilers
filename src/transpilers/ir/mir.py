@@ -61,6 +61,12 @@ class MirIntLiteral(MirNode):
 
 
 @dataclass
+class MirFloatLiteral(MirNode):
+    value: float
+    ty: Type = field(default_factory=UnknownT)
+
+
+@dataclass
 class MirBoolLiteral(MirNode):
     value: bool
     ty: Type = field(default_factory=UnknownT)

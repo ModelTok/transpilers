@@ -174,10 +174,9 @@ def _convert_expr(node: c_ast.Node) -> hir.HirNode:
         if node.type == "int":
             return hir.HirIntLiteral(value=int(node.value, 0))  # base=0 handles 0x..., 0..., 0b...
         if node.type in ("float", "double"):
-            # We don't have a float-literal HIR node yet; integer-like floats
-            # round-trip as ints. A proper float literal node is a small
-            # follow-on; out of scope for the first C slice.
-            raise UnsupportedConstruct(f"float literal {node.value}")
+            # Strip the f/F/l/L suffix C floats may carry (`1.5f`, `2.0L`).
+            text = node.value.rstrip("fFlL")
+            return hir.HirFloatLiteral(value=float(text))
         if node.type == "string":
             return hir.HirStringLiteral(value=node.value[1:-1])
         raise UnsupportedConstruct(f"constant type {node.type}")

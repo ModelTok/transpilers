@@ -50,7 +50,17 @@ class RustName(LirNode):
 @dataclass
 class RustIntLiteral(LirNode):
     value: int
-    suffix: str = "i64"
+    # Suffix is optional now — emitter elides it when the surrounding context
+    # makes the type unambiguous (a typed `let mut x: i64 = 1;`, a binop
+    # with a typed operand, an arg to a typed fn, etc.). Lowering sets this
+    # when it can't prove the suffix is redundant.
+    suffix: str | None = None
+
+
+@dataclass
+class RustFloatLiteral(LirNode):
+    value: float
+    suffix: str | None = None
 
 
 @dataclass
@@ -226,6 +236,11 @@ class ZigIntLiteral(LirNode):
 
 
 @dataclass
+class ZigFloatLiteral(LirNode):
+    value: float
+
+
+@dataclass
 class ZigBoolLiteral(LirNode):
     value: bool
 
@@ -370,6 +385,11 @@ class CIntLiteral(LirNode):
 
 
 @dataclass
+class CFloatLiteral(LirNode):
+    value: float
+
+
+@dataclass
 class CBoolLiteral(LirNode):
     value: bool
 
@@ -493,6 +513,11 @@ class MojoName(LirNode):
 @dataclass
 class MojoIntLiteral(LirNode):
     value: int
+
+
+@dataclass
+class MojoFloatLiteral(LirNode):
+    value: float
 
 
 @dataclass
@@ -637,6 +662,11 @@ class GoIntLiteral(LirNode):
 
 
 @dataclass
+class GoFloatLiteral(LirNode):
+    value: float
+
+
+@dataclass
 class GoBoolLiteral(LirNode):
     value: bool
 
@@ -752,6 +782,11 @@ class PyName(LirNode):
 @dataclass
 class PyIntLiteral(LirNode):
     value: int
+
+
+@dataclass
+class PyFloatLiteral(LirNode):
+    value: float
 
 
 @dataclass

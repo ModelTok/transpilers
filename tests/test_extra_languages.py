@@ -53,7 +53,7 @@ def test_fortran_do_iter_loop():
         end function
         """,
     )
-    assert "for i in 0i64..n - 1i64 + 1i64" in out
+    assert "for i in 0..n - 1 + 1" in out
 
 
 def test_fortran_result_var_pre_declared():
@@ -72,8 +72,8 @@ def test_fortran_result_var_pre_declared():
         end function
         """,
     )
-    # The synthesized `let mut r: i64 = 0i64;` lands at function-scope.
-    assert "let mut r: i64 = 0i64;" in out
+    # The synthesized `let mut r: i64 = 0;` lands at function-scope.
+    assert "let mut r: i64 = 0;" in out
     assert "r = a;" in out
     assert "r = b;" in out
 
@@ -128,9 +128,9 @@ def test_go_short_var_declaration():
         }
         """,
     )
-    assert "let mut total: i64 = 0i64;" in out
+    assert "let mut total: i64 = 0;" in out
     assert "while i < n {" in out
-    assert "i = i + 1i64;" in out
+    assert "i += 1;" in out
 
 
 def test_go_while_via_for_cond():
@@ -247,7 +247,8 @@ def test_python_target_first_assignment_carries_annotation():
     # First-occurrence annotation present, second not.
     lines = [line.strip() for line in out.splitlines()]
     assert "x: int = 0" in lines
-    assert "x = x + n" in lines
+    # Aug-assign emission: `x = x + n` collapses to `x += n` in idiomatic Python.
+    assert "x += n" in lines
 
 
 # ---------- VB ----------
@@ -297,7 +298,7 @@ def test_vb_for_to_inclusive_endpoint():
         End Function
         """,
     )
-    assert "for i in 0i64..n - 1i64 + 1i64 {" in out
+    assert "for i in 0..n - 1 + 1 {" in out
 
 
 # ---------- Assembly via Ghidra ----------

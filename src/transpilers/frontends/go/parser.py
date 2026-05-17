@@ -275,6 +275,8 @@ def _convert_expr(node: Node) -> hir.HirNode:
     if kind == "int_literal":
         raw = text(node).replace("_", "")
         return hir.HirIntLiteral(value=int(raw, 0))
+    if kind == "float_literal":
+        return hir.HirFloatLiteral(value=float(text(node).replace("_", "")))
     if kind == "interpreted_string_literal":
         raw = text(node)
         return hir.HirStringLiteral(value=raw[1:-1])

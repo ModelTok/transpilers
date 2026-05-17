@@ -11,6 +11,16 @@ from transpilers.ir import lir
 INDENT = "    "
 
 
+def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | None:
+    if not isinstance(value, lir.MojoBinOp):
+        return None
+    if not (isinstance(value.left, lir.MojoName) and value.left.name == name):
+        return None
+    if value.op not in ("+", "-", "*", "/", "%"):
+        return None
+    return value.op, value.right
+
+
 def emit_mojo(module: lir.MojoModule) -> str:
     return "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
 
@@ -36,6 +46,10 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         ann = f": {node.ty}" if node.ty else ""
         return f"{pad}var {node.name}{ann} = {_emit_expr(node.value)}"
     if isinstance(node, lir.MojoReassign):
+        aug = _augmented_form(node.name, node.value)
+        if aug is not None:
+            op, rhs = aug
+            return f"{pad}{node.name} {op}= {_emit_expr(rhs)}"
         return f"{pad}{node.name} = {_emit_expr(node.value)}"
     if isinstance(node, lir.MojoIf):
         head = f"{pad}if {_emit_expr(node.test)}:"
@@ -80,6 +94,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return node.name
     if isinstance(node, lir.MojoIntLiteral):
         return str(node.value)
+    if isinstance(node, lir.MojoFloatLiteral):
+        text = repr(node.value)
+        return text if "." in text or "e" in text else text + ".0"
     if isinstance(node, lir.MojoBoolLiteral):
         return "True" if node.value else "False"
     if isinstance(node, lir.MojoStringLiteral):

@@ -98,12 +98,31 @@ def _convert_function(node: Node) -> hir.HirFunction:
     # `result(...)`. Other backends (Rust/Zig/C/Mojo) need an explicit
     # declaration before the variable can be assigned in a branch — otherwise
     # `if (cond) { r = a } else { r = b }` introduces `r` in branch scope
-    # only. Synthesize an initializer at the top of the body.
-    result_init = _default_value_for(return_annotation)
-    body: list[hir.HirNode] = [
-        hir.HirAssign(target=result_name, value=result_init, annotation=return_annotation)
-    ]
-    locals_seen = set(param_names) | {result_name}
+    # only.
+    #
+    # Optimization: if the first user statement is an unconditional `r = ...`,
+    # let that assignment be the declaration — no synthesized init needed.
+    # This drops the double-init noise Ghidra-output Fortran used to show.
+    first_user_stmt = body_statements[0] if body_statements else None
+    first_assigns_result = (
+        first_user_stmt is not None
+        and first_user_stmt.type == "assignment_statement"
+        and first_user_stmt.child_by_field_name("left") is not None
+        and first_user_stmt.child_by_field_name("left").text.decode("utf-8") == result_name
+    )
+
+    body: list[hir.HirNode]
+    if first_assigns_result:
+        body = []
+        locals_seen = set(param_names)  # result_name picks up annotation on first user assign
+    else:
+        result_init = _default_value_for(return_annotation)
+        body = [hir.HirAssign(target=result_name, value=result_init, annotation=return_annotation)]
+        locals_seen = set(param_names) | {result_name}
+
+    # Stash return annotation in var_types so the first user assign carries it.
+    if first_assigns_result and return_annotation is not None:
+        var_types.setdefault(result_name, return_annotation)
     body.extend(_convert_block(body_statements, locals_seen=locals_seen, var_types=var_types))
     # Implicit return of the result variable.
     body.append(hir.HirReturn(value=hir.HirName(name=result_name)))
@@ -255,8 +274,11 @@ def _convert_expr(node: Node) -> hir.HirNode:
     kind = node.type
     if kind == "number_literal":
         raw = text(node).replace("_", "")
-        if "." in raw or "e" in raw.lower():
-            raise UnsupportedConstruct(f"fortran float literal {raw}")
+        # Fortran allows `1.5_dp` (kind suffix already stripped above) and
+        # exponent forms `1.5e0`, `1d-3`.
+        if "." in raw or "e" in raw.lower() or "d" in raw.lower():
+            normalized = raw.lower().replace("d", "e")
+            return hir.HirFloatLiteral(value=float(normalized))
         return hir.HirIntLiteral(value=int(raw, 0))
     if kind == "boolean_literal" or kind == "logical_literal":
         return hir.HirBoolLiteral(value=".true." in text(node).lower())

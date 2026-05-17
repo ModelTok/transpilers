@@ -227,7 +227,7 @@ def _convert_expr(node: Node) -> hir.HirNode:
     if kind == "number":
         raw = text(node)
         if "." in raw or "e" in raw or "E" in raw:
-            raise UnsupportedConstruct(f"ts float literal {raw} (no HirFloatLiteral yet)")
+            return hir.HirFloatLiteral(value=float(raw))
         return hir.HirIntLiteral(value=int(raw, 0))
     if kind == "true":
         return hir.HirBoolLiteral(value=True)

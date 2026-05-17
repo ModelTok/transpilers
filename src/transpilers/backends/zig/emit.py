@@ -25,6 +25,16 @@ def _emit_fn(fn: lir.ZigFn) -> str:
     return f"{header}\n{body}\n}}"
 
 
+def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | None:
+    if not isinstance(value, lir.ZigBinOp):
+        return None
+    if not (isinstance(value.left, lir.ZigName) and value.left.name == name):
+        return None
+    if value.op not in ("+", "-", "*", "/", "%"):
+        return None
+    return value.op, value.right
+
+
 def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
     lines: list[str] = []
     for n in nodes:
@@ -45,6 +55,10 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         ann = f": {node.ty}" if node.ty else ""
         return f"{pad}{keyword} {node.name}{ann} = {_emit_expr(node.value)};"
     if isinstance(node, lir.ZigReassign):
+        aug = _augmented_form(node.name, node.value)
+        if aug is not None:
+            op, rhs = aug
+            return f"{pad}{node.name} {op}= {_emit_expr(rhs)};"
         return f"{pad}{node.name} = {_emit_expr(node.value)};"
     if isinstance(node, lir.ZigIf):
         head = f"{pad}if ({_emit_expr(node.test)}) {{"
@@ -85,6 +99,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return node.name
     if isinstance(node, lir.ZigIntLiteral):
         return str(node.value)
+    if isinstance(node, lir.ZigFloatLiteral):
+        text = repr(node.value)
+        return text if "." in text or "e" in text else text + ".0"
     if isinstance(node, lir.ZigBoolLiteral):
         return "true" if node.value else "false"
     if isinstance(node, lir.ZigStringLiteral):

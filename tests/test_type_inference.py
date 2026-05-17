@@ -32,7 +32,7 @@ def test_param_inferred_from_int_literal_binop():
         """
     )
     assert "fn add_one(x: i64) -> i64" in out
-    assert "return x + 1i64;" in out
+    assert "return x + 1;" in out
 
 
 def test_local_var_inferred_from_literal_assignment():
@@ -56,7 +56,7 @@ def test_param_inferred_via_comparison():
         """
     )
     assert "fn positive(x: i64) -> bool" in out
-    assert "x > 0i64" in out
+    assert "x > 0" in out
 
 
 def test_for_range_target_typed_automatically():
@@ -70,7 +70,7 @@ def test_for_range_target_typed_automatically():
         """
     )
     assert "fn f(n: i64) -> i64" in out
-    assert "for i in 0i64..n" in out
+    assert "for i in 0..n" in out
 
 
 def test_range_arg_anchors_unannotated_param():
