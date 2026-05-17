@@ -50,7 +50,14 @@ def parse_fortran(source: str) -> hir.HirModule:
         if c.type == "function":
             body.append(_convert_function(c))
             continue
-        if c.type in ("subroutine", "module", "program"):
+        if c.type == "program":
+            # Skip the program wrapper — its body uses Fortran I/O that
+            # doesn't translate; surface only function defs nested inside.
+            for inner in named_children(c):
+                if inner.type == "function":
+                    body.append(_convert_function(inner))
+            continue
+        if c.type in ("subroutine", "module"):
             raise UnsupportedConstruct(f"fortran top-level {c.type}")
         if c.type in ("comment",):
             continue

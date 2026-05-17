@@ -217,8 +217,20 @@ def _lower_call(node: hir.HirCall, env: dict[str, Type]) -> mir.MirNode:
         return mir.MirCall(func="len", args=args, ty=IntT())
     if node.func == "range":
         return mir.MirCall(func="range", args=args, ty=RangeT())
-    # User-defined or unknown builtin — type stays unknown; later passes
-    # (signature lookup, LLM mapping) fill it.
+    # Common builtins across source languages — assign a plausible return
+    # type so call results flow through inference rather than blocking on
+    # UnknownT. Heuristic, not exhaustive; the stdlib_maps/ tables are the
+    # long-term home for richer mappings.
+    if node.func in ("int", "abs", "min", "max", "sum", "ord", "id", "hash"):
+        return mir.MirCall(func=node.func, args=args, ty=IntT())
+    if node.func in ("float", "round"):
+        return mir.MirCall(func=node.func, args=args, ty=FloatT())
+    if node.func == "bool":
+        return mir.MirCall(func=node.func, args=args, ty=BoolT())
+    if node.func in ("str", "repr", "format"):
+        return mir.MirCall(func=node.func, args=args, ty=StrT())
+    if node.func in ("print", "println"):
+        return mir.MirCall(func=node.func, args=args, ty=NoneT())
     return mir.MirCall(func=node.func, args=args, ty=UnknownT(hint=f"call {node.func}"))
 
 

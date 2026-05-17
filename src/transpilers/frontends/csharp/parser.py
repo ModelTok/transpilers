@@ -48,14 +48,23 @@ def parse_csharp(source: str) -> hir.HirModule:
         if c.type == "class_declaration":
             body.extend(_extract_methods(c))
             continue
-        if c.type in ("using_directive", "namespace_declaration", "file_scoped_namespace_declaration", "comment"):
+        if c.type in (
+            "using_directive", "global_using_directive",
+            "namespace_declaration", "file_scoped_namespace_declaration",
+            "comment", "extern_alias_directive",
+        ):
             if c.type.endswith("namespace_declaration"):
-                # Walk into namespace body and pick up classes inside.
                 body_node = c.child_by_field_name("body")
                 if body_node is not None:
                     for inner in named_children(body_node):
                         if inner.type == "class_declaration":
                             body.extend(_extract_methods(inner))
+            continue
+        # C# top-level statements (the "minimal" program model): wrap in a
+        # synthetic main() so the rest of the pipeline sees a function.
+        # Skip silently for now if it doesn't fit our pattern; surfacing it
+        # would require lifting all top-level statements into a synthetic fn.
+        if c.type in ("global_statement",):
             continue
         raise UnsupportedConstruct(f"top-level {c.type}")
     return hir.HirModule(source_lang="csharp", body=body)

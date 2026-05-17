@@ -50,12 +50,18 @@ def parse_typescript(source: str) -> hir.HirModule:
         if c.type == "function_declaration":
             body.append(_convert_function(c))
             continue
-        if c.type in ("comment", "import_statement", "export_statement"):
-            # Walk into export wrappers for the function inside.
+        if c.type in ("comment", "import_statement", "export_statement", "hash_bang_line"):
             if c.type == "export_statement":
                 for inner in named_children(c):
                     if inner.type == "function_declaration":
                         body.append(_convert_function(inner))
+            continue
+        # Top-level non-function statements — script style. Skip.
+        if c.type in (
+            "expression_statement", "lexical_declaration", "variable_declaration",
+            "for_statement", "if_statement", "while_statement", "block_statement",
+            "type_alias_declaration", "interface_declaration",
+        ):
             continue
         raise UnsupportedConstruct(f"top-level {c.type}")
     return hir.HirModule(source_lang="typescript", body=body)
