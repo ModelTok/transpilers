@@ -11,11 +11,24 @@ Differences worth noting:
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
-from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, Type, UnknownT
+from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
 
 def mir_to_zig_lir(module: mir.MirModule) -> lir.ZigModule:
-    return lir.ZigModule(items=[_lower_function(fn) for fn in module.functions])
+    items: list[lir.LirNode] = []
+    for s in module.structs:
+        items.append(_lower_struct(s))
+    for fn in module.functions:
+        items.append(_lower_function(fn))
+    return lir.ZigModule(items=items)
+
+
+def _lower_struct(s: mir.MirStruct) -> lir.ZigStruct:
+    return lir.ZigStruct(
+        name=s.name,
+        fields=[(f.name, _zig_type(f.ty)) for f in s.fields],
+        methods=[_lower_function(m) for m in s.methods],
+    )
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.ZigFn:
@@ -124,6 +137,17 @@ def _lower_assign(node: mir.MirAssign, declared: set[str], mut: set[str]) -> lir
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirFieldAccess):
+        return lir.ZigFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirMethodCall):
+        # Zig method calls land as `receiver.method(args)` — same emission
+        # as a regular method call since the receiver is implicit in Zig's
+        # `pub fn method(self: T, ...)` declarations.
+        return _ZigMethodCall(
+            receiver=_lower_expr(node.receiver),
+            method=node.method,
+            args=[_lower_expr(a) for a in node.args],
+        )
     if isinstance(node, mir.MirBinOp):
         if _is_string_concat(node):
             # Runtime string concat in Zig requires an allocator and
@@ -174,6 +198,17 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
     return lir.ZigCall(func=node.func, args=[_lower_expr(a) for a in node.args])
 
 
+class _ZigMethodCall(lir.LirNode):
+    """Local carrier for receiver.method(args) emission. Same shape as
+    ZigMethodCall but distinguishable from the `.len`-style property
+    access that the existing ZigMethodCall handles."""
+
+    def __init__(self, receiver: lir.LirNode, method: str, args: list[lir.LirNode]) -> None:
+        self.receiver = receiver
+        self.method = method
+        self.args = args
+
+
 def _is_string_concat(node: mir.MirBinOp) -> bool:
     return (
         node.op == "+"
@@ -195,6 +230,8 @@ def _zig_type(ty: Type) -> str:
         return "void"
     if isinstance(ty, ListT):
         return f"[]const {_zig_type(ty.elem)}"
+    if isinstance(ty, StructT):
+        return ty.name
     if isinstance(ty, UnknownT):
         raise ValueError(f"unresolved type hole: {ty.hint}")
     raise NotImplementedError(f"type {type(ty).__name__}")

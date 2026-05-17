@@ -12,14 +12,34 @@ Two responsibilities not seen in the other backends:
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
-from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, Type, UnknownT
+from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
 
 RESULT_VAR = "result_"  # synthesized to avoid clashing with user identifiers
 
 
 def mir_to_fortran_lir(module: mir.MirModule) -> lir.FortranModule:
-    return lir.FortranModule(items=[_lower_function(fn) for fn in module.functions])
+    items: list[lir.LirNode] = []
+    for s in module.structs:
+        items.append(_lower_struct(s))
+    for fn in module.functions:
+        items.append(_lower_function(fn))
+    return lir.FortranModule(items=items)
+
+
+def _lower_struct(s: mir.MirStruct) -> lir.FortranType:
+    """Methods are emitted as free functions in the module — Fortran needs
+    `type :: Name ... end type Name` + free `function name_method(self, ...)`."""
+    methods: list[lir.FortranFn] = []
+    for m in s.methods:
+        lowered = _lower_function(m)
+        lowered.name = f"{s.name}_{lowered.name}"
+        methods.append(lowered)
+    return lir.FortranType(
+        name=s.name,
+        fields=[(f.name, _fortran_type(f.ty)) for f in s.fields],
+        methods=methods,
+    )
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.FortranFn:
@@ -114,6 +134,18 @@ class _ReturnAssign(lir.LirNode):
 # ---------- expressions ----------
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirFieldAccess):
+        return lir.FortranFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirMethodCall):
+        recv_ty = getattr(node.receiver, "ty", UnknownT())
+        if not isinstance(recv_ty, StructT):
+            raise NotImplementedError(
+                f"fortran method call on receiver with type {recv_ty}"
+            )
+        return lir.FortranCall(
+            func=f"{recv_ty.name}_{node.method}",
+            args=[_lower_expr(node.receiver)] + [_lower_expr(a) for a in node.args],
+        )
     if isinstance(node, mir.MirBinOp):
         if _is_string_concat(node):
             raise NotImplementedError(
@@ -167,8 +199,9 @@ def _fortran_type(ty: Type) -> str:
     if isinstance(ty, NoneT):
         return ""
     if isinstance(ty, ListT):
-        # Real Fortran arrays carry shape info we don't yet track in MIR.
         raise NotImplementedError("fortran array emission not yet supported")
+    if isinstance(ty, StructT):
+        return f"type({ty.name})"
     if isinstance(ty, UnknownT):
         raise ValueError(f"unresolved type hole: {ty.hint}")
     raise NotImplementedError(f"type {type(ty).__name__}")

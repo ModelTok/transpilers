@@ -201,7 +201,7 @@ class RustFormat(LirNode):
 
 @dataclass
 class ZigModule(LirNode):
-    items: list["ZigFn"] = field(default_factory=list)
+    items: list[LirNode] = field(default_factory=list)
 
 
 @dataclass
@@ -339,6 +339,19 @@ class ZigCall(LirNode):
     args: list[LirNode]
 
 
+@dataclass
+class ZigStruct(LirNode):
+    name: str
+    fields: list[tuple[str, str]]
+    methods: list["ZigFn"]
+
+
+@dataclass
+class ZigFieldAccess(LirNode):
+    value: LirNode
+    field: str
+
+
 # ---------------- C dialect ----------------
 #
 # C and Rust LIR look superficially similar but differ in real ways:
@@ -350,7 +363,7 @@ class ZigCall(LirNode):
 
 @dataclass
 class CModule(LirNode):
-    items: list["CFn"] = field(default_factory=list)
+    items: list[LirNode] = field(default_factory=list)
 
 
 @dataclass
@@ -468,6 +481,27 @@ class CIndex(LirNode):
 class CCall(LirNode):
     func: str
     args: list[LirNode]
+
+
+@dataclass
+class CStruct(LirNode):
+    """`typedef struct { ... } Name;` — methods emitted as separate
+    free functions named `Name_method` with a `Name *self` first param."""
+
+    name: str
+    fields: list[tuple[str, str]]
+    methods: list["CFn"]
+
+
+@dataclass
+class CFieldAccess(LirNode):
+    """`self->field` (pointer access — C methods take Self*) vs `value.field`
+    on a struct value. We always emit via pointer for method bodies, which is
+    what our current lowering produces."""
+
+    value: LirNode
+    field: str
+    via_pointer: bool = True
 
 
 # ---------------- Mojo dialect ----------------
@@ -640,7 +674,7 @@ class MojoMethodCall(LirNode):
 
 @dataclass
 class GoModule(LirNode):
-    items: list["GoFn"] = field(default_factory=list)
+    items: list[LirNode] = field(default_factory=list)
 
 
 @dataclass
@@ -753,6 +787,19 @@ class GoCall(LirNode):
     args: list[LirNode]
 
 
+@dataclass
+class GoStruct(LirNode):
+    name: str
+    fields: list[tuple[str, str]]
+    methods: list["GoFn"]
+
+
+@dataclass
+class GoFieldAccess(LirNode):
+    value: LirNode
+    field: str
+
+
 # ---------------- Python dialect ----------------
 #
 # Python is Mojo-like in surface syntax (indented, `def`, no braces) but uses
@@ -763,7 +810,7 @@ class GoCall(LirNode):
 
 @dataclass
 class PyModule(LirNode):
-    items: list["PyFn"] = field(default_factory=list)
+    items: list[LirNode] = field(default_factory=list)
 
 
 @dataclass
@@ -869,6 +916,19 @@ class PyCall(LirNode):
     args: list[LirNode]
 
 
+@dataclass
+class PyClass(LirNode):
+    name: str
+    fields: list[tuple[str, str | None]]   # (name, optional type annotation)
+    methods: list["PyFn"]
+
+
+@dataclass
+class PyFieldAccess(LirNode):
+    value: LirNode
+    field: str
+
+
 # ---------------- Fortran dialect ----------------
 #
 # Fortran's emission shape is genuinely different from the C-family dialects:
@@ -884,7 +944,7 @@ class PyCall(LirNode):
 
 @dataclass
 class FortranModule(LirNode):
-    items: list["FortranFn"] = field(default_factory=list)
+    items: list[LirNode] = field(default_factory=list)
 
 
 @dataclass
@@ -992,3 +1052,23 @@ class FortranForRange(LirNode):
 class FortranCall(LirNode):
     func: str
     args: list[LirNode]
+
+
+@dataclass
+class FortranType(LirNode):
+    """`type :: Name ... end type Name` — Fortran user-defined type. Methods
+    aren't bound here (Fortran modules / type-bound procedures need more
+    plumbing than the initial slice carries); they emit as free functions
+    that take a `type(Name)` first parameter."""
+
+    name: str
+    fields: list[tuple[str, str]]
+    methods: list["FortranFn"]
+
+
+@dataclass
+class FortranFieldAccess(LirNode):
+    """`obj%field` — Fortran uses `%` for field access, not `.`."""
+
+    value: LirNode
+    field: str

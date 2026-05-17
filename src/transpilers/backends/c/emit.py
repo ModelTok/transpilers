@@ -24,14 +24,37 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_c(module: lir.CModule) -> str:
-    return PREAMBLE + "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
+    return PREAMBLE + "\n\n".join(_emit_item(item) for item in module.items) + "\n"
 
 
-def _emit_fn(fn: lir.CFn) -> str:
-    params = ", ".join(f"{t} {n}" for n, t in fn.params) or "void"
+def _emit_item(item: lir.LirNode) -> str:
+    if isinstance(item, lir.CStruct):
+        return _emit_struct(item)
+    if isinstance(item, lir.CFn):
+        return _emit_fn(item)
+    raise NotImplementedError(f"c top-level item {type(item).__name__}")
+
+
+def _emit_struct(s: lir.CStruct) -> str:
+    field_lines = "\n".join(f"{INDENT}{t} {n};" for n, t in s.fields)
+    type_def = f"typedef struct {{\n{field_lines}\n}} {s.name};"
+    method_defs = "\n\n".join(_emit_fn(m, self_type=s.name) for m in s.methods)
+    return f"{type_def}\n\n{method_defs}" if method_defs else type_def
+
+
+def _emit_fn(fn: lir.CFn, *, self_type: str | None = None) -> str:
+    params = ", ".join(_emit_param(n, t, self_type) for n, t in fn.params) or "void"
     header = f"{fn.return_type} {fn.name}({params}) {{"
     body = _emit_block(fn.body, 1)
     return f"{header}\n{body}\n}}"
+
+
+def _emit_param(name: str, ty: str, self_type: str | None) -> str:
+    # Methods take `Struct *self`; the LIR carries `(self, "Struct")` so we
+    # rewrite to pointer form here. Other params unchanged.
+    if name == "self" and self_type is not None:
+        return f"{self_type} *self"
+    return f"{ty} {name}"
 
 
 def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
@@ -108,4 +131,10 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.CCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{node.func}({args})"
+    if isinstance(node, lir.CFieldAccess):
+        sep = "->" if node.via_pointer else "."
+        return f"{_emit_expr(node.value)}{sep}{node.field}"
+    from transpilers.passes.mir_to_c_lir import _AddressOf as _AO
+    if isinstance(node, _AO):
+        return f"&{_emit_expr(node.value)}"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

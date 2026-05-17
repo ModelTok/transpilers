@@ -22,15 +22,44 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_python(module: lir.PyModule) -> str:
-    return "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
+    return "\n\n".join(_emit_item(item) for item in module.items) + "\n"
 
 
-def _emit_fn(fn: lir.PyFn) -> str:
-    params = ", ".join(f"{n}: {t}" if t else n for n, t in fn.params)
+def _emit_item(item: lir.LirNode) -> str:
+    if isinstance(item, lir.PyClass):
+        return _emit_class(item)
+    if isinstance(item, lir.PyFn):
+        return _emit_fn(item)
+    raise NotImplementedError(f"python top-level item {type(item).__name__}")
+
+
+def _emit_class(c: lir.PyClass) -> str:
+    lines = [f"class {c.name}:"]
+    if not c.fields and not c.methods:
+        lines.append(INDENT + "pass")
+        return "\n".join(lines)
+    for name, ty in c.fields:
+        ann = f": {ty}" if ty else ""
+        lines.append(f"{INDENT}{name}{ann}")
+    for m in c.methods:
+        lines.append("")
+        lines.append(_emit_fn(m, depth=1))
+    return "\n".join(lines)
+
+
+def _emit_fn(fn: lir.PyFn, *, depth: int = 0) -> str:
+    indent = INDENT * depth
+    params = ", ".join(_emit_param(n, t) for n, t in fn.params)
     ret = f" -> {fn.return_type}" if fn.return_type and fn.return_type != "None" else ""
-    header = f"def {fn.name}({params}){ret}:"
-    body = _emit_block(fn.body, 1) or (INDENT + "pass")
+    header = f"{indent}def {fn.name}({params}){ret}:"
+    body = _emit_block(fn.body, depth + 1) or (indent + INDENT + "pass")
     return f"{header}\n{body}"
+
+
+def _emit_param(name: str, ty: str) -> str:
+    if name == "self":
+        return "self"
+    return f"{name}: {ty}" if ty else name
 
 
 def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
@@ -103,4 +132,10 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.PyCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{node.func}({args})"
+    if isinstance(node, lir.PyFieldAccess):
+        return f"{_emit_expr(node.value)}.{node.field}"
+    from transpilers.passes.mir_to_python_lir import _PyMethodCall as _MC
+    if isinstance(node, _MC):
+        args = ", ".join(_emit_expr(a) for a in node.args)
+        return f"{_emit_expr(node.receiver)}.{node.method}({args})"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

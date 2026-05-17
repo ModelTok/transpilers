@@ -9,11 +9,33 @@ concat raises (would need allocator-aware emission, same as Zig).
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
-from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, Type, UnknownT
+from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
 
 def mir_to_c_lir(module: mir.MirModule) -> lir.CModule:
-    return lir.CModule(items=[_lower_function(fn) for fn in module.functions])
+    items: list[lir.LirNode] = []
+    for s in module.structs:
+        items.append(_lower_struct(s))
+    for fn in module.functions:
+        items.append(_lower_function(fn))
+    return lir.CModule(items=items)
+
+
+def _lower_struct(s: mir.MirStruct) -> lir.CStruct:
+    methods: list[lir.CFn] = []
+    for m in s.methods:
+        # C has no method binding; emit as a free function `Struct_method`
+        # whose first parameter is `Struct *self`. Rename the function so
+        # different structs can have methods of the same name without
+        # colliding.
+        lowered = _lower_function(m)
+        lowered.name = f"{s.name}_{lowered.name}"
+        methods.append(lowered)
+    return lir.CStruct(
+        name=s.name,
+        fields=[(f.name, _c_type(f.ty)) for f in s.fields],
+        methods=methods,
+    )
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.CFn:
@@ -63,6 +85,25 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirFieldAccess):
+        # C method bodies receive `Struct *self`, so `self.x` → `self->x`.
+        # Heuristic: if the receiver is named `self`, use pointer form.
+        via_ptr = isinstance(node.value, mir.MirName) and node.value.name == "self"
+        return lir.CFieldAccess(value=_lower_expr(node.value), field=node.field, via_pointer=via_ptr)
+    if isinstance(node, mir.MirMethodCall):
+        # `obj.method(args)` → `Struct_method(&obj, args)`. We need the
+        # struct name to mangle; pull it from the receiver's type.
+        recv = node.receiver
+        recv_ty = getattr(recv, "ty", UnknownT())
+        if isinstance(recv_ty, StructT):
+            struct_name = recv_ty.name
+            lowered_recv = _lower_expr(recv)
+            return lir.CCall(
+                func=f"{struct_name}_{node.method}",
+                args=[_AddressOf(lowered_recv)] + [_lower_expr(a) for a in node.args],
+            )
+        # Without type info we can't safely mangle; raise rather than guess.
+        raise NotImplementedError(f"C method call on receiver with type {recv_ty}")
     if isinstance(node, mir.MirBinOp):
         if _is_string_concat(node):
             raise NotImplementedError(
@@ -100,6 +141,13 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     raise NotImplementedError(f"MIR expr {type(node).__name__}")
 
 
+class _AddressOf(lir.LirNode):
+    """`&expr` — internal marker emitted by C method-call lowering."""
+
+    def __init__(self, value: lir.LirNode) -> None:
+        self.value = value
+
+
 def _is_string_concat(node: mir.MirBinOp) -> bool:
     return (
         node.op == "+"
@@ -121,9 +169,9 @@ def _c_type(ty: Type) -> str:
     if isinstance(ty, NoneT):
         return "void"
     if isinstance(ty, ListT):
-        # Bare C has no slice type; a real implementation would carry a
-        # (ptr, len) pair. Out of scope for the initial backend.
         raise NotImplementedError("list / slice types in C require a length-carrying struct")
+    if isinstance(ty, StructT):
+        return ty.name
     if isinstance(ty, UnknownT):
         raise ValueError(f"unresolved type hole: {ty.hint}")
     raise NotImplementedError(f"type {type(ty).__name__}")
