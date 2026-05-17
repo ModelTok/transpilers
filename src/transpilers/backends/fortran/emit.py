@@ -204,6 +204,10 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{node.func}({args})"
     if isinstance(node, lir.FortranFieldAccess):
-        # Fortran uses `%` for derived-type field access.
         return f"{_emit_expr(node.value)}%{node.field}"
+    if isinstance(node, lir.FortranStructInit):
+        # Fortran derived-type ctor — positional, takes values in field
+        # declaration order.
+        args = ", ".join(_emit_expr(v) for _, v in node.field_values)
+        return f"{node.name}({args})"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

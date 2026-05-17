@@ -85,11 +85,16 @@ def _collect_locals(nodes: list[mir.MirNode], out: dict[str, Type], exclude: set
 # ---------- statements ----------
 
 def _lower_stmt(node: mir.MirNode, result_name: str) -> lir.LirNode:
+    if isinstance(node, mir.MirFieldAssign):
+        # Fortran field assignment: `obj%field = value` — emit as a plain
+        # FortranAssign with the path baked into `name`.
+        return lir.FortranAssign(
+            name=_emit_field_path(node.obj, node.field),
+            value=_lower_expr(node.value),
+        )
     if isinstance(node, mir.MirReturn):
         if node.value is None or not result_name:
             return lir.FortranReturn()
-        # `return <expr>` desugars to `result_ = <expr>; return`. Emit a
-        # synthetic block via _ReturnAssign — the emitter expands it inline.
         return _ReturnAssign(result_name=result_name, value=_lower_expr(node.value))
     if isinstance(node, mir.MirAssign):
         if node.augmented_op is not None:
@@ -172,7 +177,23 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.FortranStringLiteral(value=node.value)
     if isinstance(node, mir.MirCall):
         return lir.FortranCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+    if isinstance(node, mir.MirFieldAccess):
+        return lir.FortranFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirStructInit):
+        return lir.FortranStructInit(
+            name=node.name,
+            field_values=[(n, _lower_expr(v)) for n, v in node.field_values],
+        )
     raise NotImplementedError(f"fortran MIR expr {type(node).__name__}")
+
+
+def _emit_field_path(obj: mir.MirNode, field: str) -> str:
+    """Build a `obj%field` path string for assignment-LHS use."""
+    if isinstance(obj, mir.MirName):
+        return f"{obj.name}%{field}"
+    if isinstance(obj, mir.MirFieldAccess):
+        return f"{_emit_field_path(obj.value, obj.field)}%{field}"
+    raise NotImplementedError(f"fortran field-assign on {type(obj).__name__}")
 
 
 def _is_string_concat(node: mir.MirBinOp) -> bool:

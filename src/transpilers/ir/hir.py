@@ -168,3 +168,21 @@ class HirMethodCall(HirNode):
     receiver: HirNode
     method: str
     args: list[HirNode]
+
+
+@dataclass
+class HirFieldAssign(HirNode):
+    """`obj.field = value` — write to a struct field."""
+
+    obj: HirNode
+    field: str
+    value: HirNode
+
+
+@dataclass
+class HirStructInit(HirNode):
+    """Constructor-style struct creation. `args` correspond to the struct's
+    fields in declaration order (positional). Empty args means zero-init."""
+
+    name: str
+    args: list[HirNode]

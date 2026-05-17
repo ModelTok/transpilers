@@ -53,6 +53,9 @@ def _scan(nodes: list[mir.MirNode], counts: dict[str, int], aug: set[str]) -> No
             counts[n.target] = counts.get(n.target, 0) + 1
             if n.augmented_op is not None:
                 aug.add(n.target)
+        elif isinstance(n, mir.MirFieldAssign):
+            if isinstance(n.obj, mir.MirName):
+                aug.add(n.obj.name)
         elif isinstance(n, mir.MirIf):
             _scan(n.body, counts, aug)
             _scan(n.orelse, counts, aug)
@@ -65,6 +68,10 @@ def _scan(nodes: list[mir.MirNode], counts: dict[str, int], aug: set[str]) -> No
 def _lower_stmt(node: mir.MirNode, declared: set[str], mut: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.ZigReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirFieldAssign):
+        return lir.ZigFieldAssign(
+            obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)
+        )
     if isinstance(node, mir.MirAssign):
         return _lower_assign(node, declared, mut)
     if isinstance(node, mir.MirIf):
@@ -139,6 +146,11 @@ def _lower_assign(node: mir.MirAssign, declared: set[str], mut: set[str]) -> lir
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirFieldAccess):
         return lir.ZigFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirStructInit):
+        return lir.ZigStructInit(
+            name=node.name,
+            field_values=[(n, _lower_expr(v)) for n, v in node.field_values],
+        )
     if isinstance(node, mir.MirMethodCall):
         # Zig method calls land as `receiver.method(args)` — same emission
         # as a regular method call since the receiver is implicit in Zig's

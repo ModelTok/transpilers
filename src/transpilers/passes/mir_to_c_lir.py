@@ -49,6 +49,17 @@ def _lower_function(fn: mir.MirFunction) -> lir.CFn:
 def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.CReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirFieldAssign):
+        # `p.x = value` uses `.` (value access). When `obj` is `self` inside
+        # a method body, the receiver is a pointer so we'd use `->` — handled
+        # by the same heuristic as field-access reads.
+        via_ptr = isinstance(node.obj, mir.MirName) and node.obj.name == "self"
+        return lir.CFieldAssign(
+            obj=_lower_expr(node.obj),
+            field=node.field,
+            value=_lower_expr(node.value),
+            via_pointer=via_ptr,
+        )
     if isinstance(node, mir.MirAssign):
         return _lower_assign(node, declared)
     if isinstance(node, mir.MirIf):
@@ -86,10 +97,13 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirFieldAccess):
-        # C method bodies receive `Struct *self`, so `self.x` → `self->x`.
-        # Heuristic: if the receiver is named `self`, use pointer form.
         via_ptr = isinstance(node.value, mir.MirName) and node.value.name == "self"
         return lir.CFieldAccess(value=_lower_expr(node.value), field=node.field, via_pointer=via_ptr)
+    if isinstance(node, mir.MirStructInit):
+        return lir.CStructInit(
+            name=node.name,
+            field_values=[(n, _lower_expr(v)) for n, v in node.field_values],
+        )
     if isinstance(node, mir.MirMethodCall):
         # `obj.method(args)` → `Struct_method(&obj, args)`. We need the
         # struct name to mangle; pull it from the receiver's type.

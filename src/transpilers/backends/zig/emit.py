@@ -89,6 +89,8 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
             op, rhs = aug
             return f"{pad}{node.name} {op}= {_emit_expr(rhs)};"
         return f"{pad}{node.name} = {_emit_expr(node.value)};"
+    if isinstance(node, lir.ZigFieldAssign):
+        return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)};"
     if isinstance(node, lir.ZigIf):
         head = f"{pad}if ({_emit_expr(node.test)}) {{"
         body = _emit_block(node.body, depth + 1)
@@ -141,6 +143,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return f"[_]{node.elem_ty}{{{items}}}"
     if isinstance(node, lir.ZigFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
+    if isinstance(node, lir.ZigStructInit):
+        body = ", ".join(f".{n} = {_emit_expr(v)}" for n, v in node.field_values)
+        return f"{node.name}{{ {body} }}"
     # _ZigMethodCall lives in the lowering pass — emit receiver.method(args).
     from transpilers.passes.mir_to_zig_lir import _ZigMethodCall as _MC
     if isinstance(node, _MC):
