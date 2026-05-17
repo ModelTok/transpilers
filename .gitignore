@@ -8,3 +8,4 @@ build/
 *.egg-info/
 src/transpilers/llm/cache/*
 !src/transpilers/llm/cache/.gitkeep
+.direnv/
