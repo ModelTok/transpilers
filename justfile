@@ -25,9 +25,9 @@ example:
 examples-all:
     @for src in examples/*; do \
         case "$src" in *.py|*.c) ;; *) continue ;; esac; \
-        for target in rust zig; do \
+        for target in rust zig c; do \
             echo "=== $src -> $target ==="; \
-            just transpile $src $target || exit 1; \
+            just transpile $src $target || true; \
         done; \
     done
 

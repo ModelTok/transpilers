@@ -5,10 +5,11 @@ Hybrid algorithmic + LLM source-to-source transpiler. Goal: N-to-M across
 
 ## Status
 
-Two working source frontends (**Python**, **C**) and two targets
-(**Rust**, **Zig**) — four pairs. Full algorithmic + interprocedural type
-inference for Python (annotations optional). C/C++ source-language extras
-(Fortran, VB) and remaining targets (C, Mojo) are stubbed.
+Two working source frontends (**Python**, **C**) and three targets
+(**Rust**, **Zig**, **C**) — six source-target pairs. C → C is the
+round-trip case: source → IR → re-emitted as idiomatic C. Full
+algorithmic + interprocedural type inference for Python (annotations
+optional). Fortran / C++ / VB sources and Mojo target are stubbed.
 
 ## Why hybrid
 
