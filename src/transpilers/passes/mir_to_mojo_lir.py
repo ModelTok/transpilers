@@ -11,11 +11,24 @@ the format!() detour Rust needs.
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
-from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, Type, UnknownT
+from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
 
 def mir_to_mojo_lir(module: mir.MirModule) -> lir.MojoModule:
-    return lir.MojoModule(items=[_lower_function(fn) for fn in module.functions])
+    items: list[lir.LirNode] = []
+    for struct in module.structs:
+        items.append(_lower_struct(struct))
+    for fn in module.functions:
+        items.append(_lower_function(fn))
+    return lir.MojoModule(items=items)
+
+
+def _lower_struct(s: mir.MirStruct) -> lir.MojoStruct:
+    return lir.MojoStruct(
+        name=s.name,
+        fields=[(f.name, _mojo_type(f.ty)) for f in s.fields],
+        methods=[_lower_function(m) for m in s.methods],
+    )
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.MojoFn:
@@ -68,6 +81,14 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirFieldAccess):
+        return lir.MojoFieldAccess(value=_lower_expr(node.value), field=node.field)
+    if isinstance(node, mir.MirMethodCall):
+        return lir.MojoMethodCall(
+            receiver=_lower_expr(node.receiver),
+            method=node.method,
+            args=[_lower_expr(a) for a in node.args],
+        )
     if isinstance(node, mir.MirBinOp):
         return lir.MojoBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirCompare):
@@ -124,6 +145,8 @@ def _mojo_type(ty: Type) -> str:
         return "None"
     if isinstance(ty, ListT):
         return f"List[{_mojo_type(ty.elem)}]"
+    if isinstance(ty, StructT):
+        return ty.name
     if isinstance(ty, UnknownT):
         raise ValueError(f"unresolved type hole: {ty.hint}")
     raise NotImplementedError(f"type {type(ty).__name__}")

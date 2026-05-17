@@ -171,16 +171,75 @@ def test_cpp_to_c_compiles():
     assert result.ok, result.stderr
 
 
+# ---------- classes ----------
+
+def test_cpp_class_to_rust_struct_impl():
+    out = _rust(
+        """
+        class Point {
+        public:
+            int x;
+            int y;
+
+            int sum() {
+                return this->x + this->y;
+            }
+        };
+        """
+    )
+    assert "struct Point {" in out
+    assert "x: i64," in out
+    assert "y: i64," in out
+    assert "impl Point {" in out
+    assert "fn sum(&self) -> i64" in out
+    assert "self.x + self.y" in out
+
+
+def test_cpp_class_to_mojo_struct():
+    out = _mojo(
+        """
+        class Point {
+        public:
+            int x;
+            int y;
+
+            int sum() {
+                return this->x + this->y;
+            }
+        };
+        """
+    )
+    assert "@fieldwise_init" in out
+    assert "struct Point(Copyable, Movable):" in out
+    assert "var x: Int" in out
+    assert "var y: Int" in out
+    assert "def sum(self) -> Int:" in out
+
+
+@pytest.mark.skipif(not _has("rustc"), reason="rustc not installed")
+def test_cpp_class_compiles_as_rust():
+    out = _rust(
+        """
+        class Point {
+        public:
+            int x;
+            int y;
+            int sum() { return this->x + this->y; }
+            int scale(int factor) { return this->x * factor + this->y * factor; }
+        };
+        """
+    )
+    result = rust_compiles(out)
+    assert result.ok, result.stderr
+
+
 # ---------- refusals ----------
-
-def test_cpp_classes_refused():
-    """Classes aren't modeled — refuse rather than silently drop the body.
-    The actual surfacing happens via libclang parse errors or the top-level
-    cursor kind check; either is acceptable as long as we don't emit code."""
-    with pytest.raises(Exception):
-        _rust("class Point { public: int x; int y; };")
-
 
 def test_cpp_template_refused():
     with pytest.raises(Exception):
         _rust("template<typename T> T add(T a, T b) { return a + b; }")
+
+
+def test_cpp_class_inheritance_refused():
+    with pytest.raises(Exception):
+        _rust("class Base { public: int x; }; class D : public Base { public: int y; };")

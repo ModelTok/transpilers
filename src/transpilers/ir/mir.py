@@ -19,6 +19,7 @@ class MirNode:
 @dataclass
 class MirModule(MirNode):
     functions: list["MirFunction"] = field(default_factory=list)
+    structs: list["MirStruct"] = field(default_factory=list)
 
 
 @dataclass
@@ -151,4 +152,29 @@ class MirList(MirNode):
 class MirSubscript(MirNode):
     value: MirNode
     index: MirNode
+    ty: Type = field(default_factory=UnknownT)
+
+
+@dataclass
+class MirStruct(MirNode):
+    """A user-defined struct/class. Fields and methods carry resolved types.
+    Lowering targets pick struct + impl-style shape per language."""
+
+    name: str
+    fields: list["MirParam"]
+    methods: list["MirFunction"]
+
+
+@dataclass
+class MirFieldAccess(MirNode):
+    value: MirNode
+    field: str
+    ty: Type = field(default_factory=UnknownT)
+
+
+@dataclass
+class MirMethodCall(MirNode):
+    receiver: MirNode
+    method: str
+    args: list[MirNode]
     ty: Type = field(default_factory=UnknownT)

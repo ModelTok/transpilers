@@ -17,6 +17,7 @@ from transpilers.ir.types import (
     NoneT,
     RangeT,
     StrT,
+    StructT,
     Type,
     UnknownT,
 )
@@ -31,12 +32,33 @@ PYTHON_TYPE_MAP: dict[str, Type] = {
 }
 
 
+# Module-level registry of user-defined struct names. Populated during
+# hir_to_mir so type-annotation resolution can recognize `Point` as
+# StructT("Point") rather than UnknownT.
+_KNOWN_STRUCTS: set[str] = set()
+
+
 def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
     functions: list[mir.MirFunction] = []
+    structs: list[mir.MirStruct] = []
+    _KNOWN_STRUCTS.clear()
+    # First pass: register struct names so methods and fields can reference
+    # them in their annotations.
+    for node in module.body:
+        if isinstance(node, hir.HirStruct):
+            _KNOWN_STRUCTS.add(node.name)
     for node in module.body:
         if isinstance(node, hir.HirFunction):
             functions.append(_lower_function(node))
-    return mir.MirModule(functions=functions)
+        elif isinstance(node, hir.HirStruct):
+            structs.append(_lower_struct(node))
+    return mir.MirModule(functions=functions, structs=structs)
+
+
+def _lower_struct(s: hir.HirStruct) -> mir.MirStruct:
+    fields = [mir.MirParam(name=f.name, ty=_resolve_annotation(f.annotation)) for f in s.fields]
+    methods = [_lower_function(m) for m in s.methods]
+    return mir.MirStruct(name=s.name, fields=fields, methods=methods)
 
 
 def _lower_function(fn: hir.HirFunction) -> mir.MirFunction:
@@ -133,6 +155,18 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         value_ty = _type_of(value)
         ty: Type = value_ty.elem if isinstance(value_ty, ListT) else UnknownT(hint="subscript on non-list")
         return mir.MirSubscript(value=value, index=index, ty=ty)
+    if isinstance(node, hir.HirFieldAccess):
+        # Type of a field access stays Unknown for now — a field-resolution
+        # pass would look up the struct's field types. Out of scope for the
+        # minimal struct slice; the LIR emitters handle Unknown by leaving
+        # the field bare and letting target inference work.
+        return mir.MirFieldAccess(value=_lower_expr(node.value, env), field=node.field)
+    if isinstance(node, hir.HirMethodCall):
+        return mir.MirMethodCall(
+            receiver=_lower_expr(node.receiver, env),
+            method=node.method,
+            args=[_lower_expr(a, env) for a in node.args],
+        )
     raise NotImplementedError(f"HIR expr {type(node).__name__}")
 
 
@@ -155,6 +189,8 @@ def _resolve_annotation(ann: str | None) -> Type:
     if ann.startswith("list[") and ann.endswith("]"):
         inner = ann[len("list[") : -1]
         return ListT(elem=_resolve_annotation(inner))
+    if ann in _KNOWN_STRUCTS:
+        return StructT(name=ann)
     return UnknownT(hint=f"unknown annotation {ann!r}")
 
 

@@ -22,15 +22,45 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_mojo(module: lir.MojoModule) -> str:
-    return "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
+    return "\n\n".join(_emit_item(item) for item in module.items) + "\n"
 
 
-def _emit_fn(fn: lir.MojoFn) -> str:
-    params = ", ".join(f"{n}: {t}" for n, t in fn.params)
+def _emit_item(item: lir.LirNode) -> str:
+    if isinstance(item, lir.MojoStruct):
+        return _emit_struct(item)
+    if isinstance(item, lir.MojoFn):
+        return _emit_fn(item)
+    raise NotImplementedError(f"mojo top-level item {type(item).__name__}")
+
+
+def _emit_struct(s: lir.MojoStruct) -> str:
+    """`@fieldwise_init` + `Copyable, Movable` conformance gives the struct
+    a usable constructor and value semantics in current Mojo."""
+    lines = ["@fieldwise_init", f"struct {s.name}(Copyable, Movable):"]
+    if not s.fields and not s.methods:
+        lines.append(INDENT + "pass")
+        return "\n".join(lines)
+    for name, ty in s.fields:
+        lines.append(f"{INDENT}var {name}: {ty}")
+    for m in s.methods:
+        lines.append("")
+        lines.append(_emit_fn(m, depth=1))
+    return "\n".join(lines)
+
+
+def _emit_fn(fn: lir.MojoFn, *, depth: int = 0) -> str:
+    indent = INDENT * depth
+    params = ", ".join(_emit_param(n, t) for n, t in fn.params)
     ret = f" -> {fn.return_type}" if fn.return_type != "None" else ""
-    header = f"def {fn.name}({params}){ret}:"
-    body = _emit_block(fn.body, 1) or (INDENT + "pass")
+    header = f"{indent}def {fn.name}({params}){ret}:"
+    body = _emit_block(fn.body, depth + 1) or (indent + INDENT + "pass")
     return f"{header}\n{body}"
+
+
+def _emit_param(name: str, ty: str) -> str:
+    if name == "self":
+        return "self"
+    return f"{name}: {ty}"
 
 
 def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
@@ -105,6 +135,8 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.MojoList):
         items = ", ".join(_emit_expr(e) for e in node.elements)
         return f"[{items}]"
+    if isinstance(node, lir.MojoFieldAccess):
+        return f"{_emit_expr(node.value)}.{node.field}"
     if isinstance(node, lir.MojoIndex):
         return f"{_emit_expr(node.value)}[{_emit_expr(node.index)}]"
     if isinstance(node, lir.MojoCall):
