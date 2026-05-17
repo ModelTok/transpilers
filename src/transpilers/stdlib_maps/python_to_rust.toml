@@ -1,0 +1,7 @@
+# Python stdlib/builtin -> Rust equivalent.
+# Promoted LLM proposals land here. Format intentionally minimal — extend as needed.
+#
+# [[mapping]]
+# source = "len"
+# target = "len"
+# notes = "Python len() over list -> Rust slice::len(); arity preserved."
