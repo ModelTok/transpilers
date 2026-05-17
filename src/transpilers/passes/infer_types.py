@@ -397,11 +397,18 @@ def _resolve_return(fn: mir.MirFunction, return_tys: list[Type]) -> None:
         return
     concrete = [t for t in return_tys if not isinstance(t, UnknownT)]
     if concrete:
-        # If multiple distinct concrete return types exist, we leave the hole
-        # — that's a real ambiguity, not something to silently coerce.
+        # Multiple distinct concrete return types would be a real ambiguity;
+        # leave the hole in that case.
         first = concrete[0]
         if all(type(t) is type(first) for t in concrete):
             fn.return_type = first
+            return
+    # No concrete return found. If the function has no explicit return at
+    # all (or every return is bare `return`), default to NoneT — implicit
+    # None is the universal Python convention and matches `void` in other
+    # languages.
+    if not return_tys or all(isinstance(t, NoneT) for t in return_tys):
+        fn.return_type = NoneT()
 
 
 def _snapshot(fn: mir.MirFunction, env: dict[str, Type]) -> tuple:

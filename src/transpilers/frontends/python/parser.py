@@ -190,18 +190,23 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
         return hir.HirSubscript(value=_convert(node.value), index=_convert(idx))
 
     if isinstance(node, cst.With):
-        # `with cm() as name:` — context-manager semantics aren't modeled.
-        # Lower as the body alone, letting the cleanup side-effect drop. The
-        # `as <name>` binding becomes unresolved if used inside the body;
-        # callers that need true `with` semantics should rewrite first.
+        # `with cm() as name: body` lowers to `name = cm(); body`. Context-
+        # manager cleanup is dropped, but the `as` binding flows through so
+        # the body actually parses with the variable in scope.
         if isinstance(node.body, cst.IndentedBlock):
-            stmts = [_convert(s) for s in node.body.body]
-            # We need to return a single HirNode here; wrap by returning the
-            # first statement and emitting the rest as a synthetic block —
-            # but our HIR doesn't have a block node. Instead, hoist into
-            # surrounding context via a marker class the function-body walker
-            # flattens.
-            return _WithBlock(stmts=stmts)
+            prelude: list[hir.HirNode] = []
+            for item in node.items:
+                ctx_expr = _convert(item.item)
+                if item.asname is not None:
+                    target = item.asname.name
+                    if isinstance(target, cst.Name):
+                        prelude.append(
+                            hir.HirAssign(target=target.value, value=ctx_expr, annotation=None)
+                        )
+                # No `as`: the context expression is evaluated for side
+                # effect; we drop it.
+            body_stmts = [_convert(s) for s in node.body.body]
+            return _WithBlock(stmts=prelude + body_stmts)
     raise UnsupportedConstruct(f"{type(node).__name__}")
 
 

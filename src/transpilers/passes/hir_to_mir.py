@@ -244,6 +244,12 @@ def _resolve_annotation(ann: str | None) -> Type:
         return ListT(elem=_resolve_annotation(inner))
     if ann in _KNOWN_STRUCTS:
         return StructT(name=ann)
+    # Unknown identifier-shaped annotation looking like a class name
+    # (e.g., third-party `Charset`, `Scanner`) — treat as opaque struct.
+    # Lossy: we don't know the actual layout, but downstream emission can
+    # render the name and let the target's typechecker decide.
+    if ann.isidentifier() and ann[0].isupper():
+        return StructT(name=ann)
     return UnknownT(hint=f"unknown annotation {ann!r}")
 
 
