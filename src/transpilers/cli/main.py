@@ -191,17 +191,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    src_text = args.source.read_text()
     source_lang = args.source_lang or EXT_TO_SOURCE.get(args.source.suffix)
     if source_lang is None:
-        print(
-            f"can't infer source language from {args.source.suffix!r}; pass --source",
-            file=sys.stderr,
-        )
-        return 2
+        # Binaries with no extension fall through here — default to asm so
+        # the staged-Ghidra path picks them up.
+        if not args.source.suffix:
+            source_lang = "asm"
+        else:
+            print(
+                f"can't infer source language from {args.source.suffix!r}; pass --source",
+                file=sys.stderr,
+            )
+            return 2
+
+    # Asm frontend takes a path string (not text content), since the input
+    # may be a non-UTF-8 binary that read_text would reject.
+    if source_lang == "asm":
+        src_input = str(args.source)
+    else:
+        src_input = args.source.read_text()
 
     llm_fill = make_llm_inferencer(LlmClient()) if args.infer_with_llm else None
-    out = transpile(src_text, source_lang=source_lang, target=args.target, llm_fill=llm_fill)
+    out = transpile(src_input, source_lang=source_lang, target=args.target, llm_fill=llm_fill)
     sys.stdout.write(out)
 
     if args.verify:

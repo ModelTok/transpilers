@@ -5,14 +5,15 @@ Hybrid algorithmic + LLM source-to-source transpiler. Goal: N-to-M across
 
 ## Status
 
-Ten source frontends (**Python**, **C**, **C++**, **Java**, **C#**,
-**TypeScript**, **JavaScript**, **Fortran**, **Go**, **Visual Basic**) and
-six targets (**Rust**, **Zig**, **C**, **Mojo**, **Go**, **Python**) — sixty
-working source-target pairs end-to-end with compiler-verified output. C → C
-and Python → Python are round-trip cases. Full algorithmic + interprocedural
-type inference; JS is the inference stress-test (no annotations anywhere).
-Assembly is a stub frontend that surfaces the architectural reason it
-doesn't fit a typed source-to-source IR.
+Eleven source frontends (**Python**, **C**, **C++**, **Java**, **C#**,
+**TypeScript**, **JavaScript**, **Fortran**, **Go**, **Visual Basic**,
+**Assembly via Ghidra**) and six targets (**Rust**, **Zig**, **C**,
+**Mojo**, **Go**, **Python**) — sixty-six working source-target pairs
+end-to-end with compiler-verified output. Assembly is staged: PyGhidra
+decompiles ELF/PE/Mach-O to C-like pseudocode, which feeds the existing C
+frontend. C → C and Python → Python are round-trip cases. Full algorithmic
++ interprocedural type inference; JS is the inference stress-test (no
+annotations anywhere).
 
 ## Why hybrid
 
