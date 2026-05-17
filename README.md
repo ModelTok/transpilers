@@ -5,10 +5,10 @@ Hybrid algorithmic + LLM source-to-source transpiler. Goal: N-to-M across
 
 ## Status
 
-Two working targets: **Python → Rust** and **Python → Zig**, both with full
-algorithmic + interprocedural type inference (annotations optional). All
-five source frontends except Python are stubbed; C/C++/Mojo backends are
-stubbed.
+Two working source frontends (**Python**, **C**) and two targets
+(**Rust**, **Zig**) — four pairs. Full algorithmic + interprocedural type
+inference for Python (annotations optional). C/C++ source-language extras
+(Fortran, VB) and remaining targets (C, Mojo) are stubbed.
 
 ## Why hybrid
 
@@ -86,9 +86,17 @@ uv run pytest
 
 ## Roadmap (rough)
 
-1. Python → Rust: expand subset (if/while/for, lists, strings, classes, generics)
-2. Type-inference pass for Python (algorithmic dataflow first, LLM hole second)
-3. C → Rust (clang frontend, ownership inference)
-4. Fortran → Rust (start from transpyle fork's parser)
-5. Rust → Zig (validates the LIR family generalizes)
-6. C++, VB frontends; Mojo backend
+Done:
+- Python → Rust subset (if/while/for, lists, strings, bools)
+- Type inference: algorithmic dataflow + interprocedural + LLM fallback
+- Zig backend
+- C frontend (subset)
+- String concat with target-specific handling
+
+Next:
+- Float-literal HIR node + float arithmetic across both targets
+- Classes / structs (Python class → Rust struct / Zig struct)
+- C pointer & array support
+- Fortran frontend (start from transpyle fork's parser)
+- Mojo backend
+- More LLM-augmented passes: idiom rewrites, stdlib mapping

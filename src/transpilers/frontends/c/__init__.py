@@ -1,1 +1,3 @@
-"""C frontend (clang/libclang based). Not yet implemented — see roadmap."""
+from .parser import parse_c
+
+__all__ = ["parse_c"]

@@ -7,6 +7,7 @@ dependencies = [
     "libcst>=1.5",
     "anthropic>=0.40",
     "tree-sitter>=0.23",
+    "pycparser>=2.22",
 ]
 
 [project.scripts]
