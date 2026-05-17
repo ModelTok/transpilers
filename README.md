@@ -64,6 +64,19 @@ src/transpilers/
 
 ## Try it
 
+The project uses `uv` for Python deps, `just` as the task runner, and `direnv`
+for shell activation.
+
+```sh
+direnv allow              # one-time: auto-activates .venv on `cd`
+just setup                # uv sync
+just example              # transpile examples/add.py, verify with rustc
+just test                 # full test suite
+just check                # lint + tests
+```
+
+Without `direnv`/`just`:
+
 ```sh
 uv sync
 uv run transpile examples/add.py --target rust --verify
