@@ -39,13 +39,37 @@ C_TYPE_ALIASES: dict[str, str] = {
 }
 
 
+def _strip_preprocessor(source: str) -> str:
+    """Drop CPP directives (`#include`, `#define`, `#if`, …) and `//` line
+    comments. pycparser is a strict C-grammar parser without the
+    preprocessor; this minimal cleanup lets real-world source parse."""
+    import re as _re
+
+    # `//` line comments — pycparser rejects them in any mode.
+    source = _re.sub(r"//[^\n]*", "", source)
+    out_lines = []
+    for line in source.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue
+        out_lines.append(line)
+    return "\n".join(out_lines)
+
+
 def parse_c(source: str) -> hir.HirModule:
+    source = _strip_preprocessor(source)
     parser = CParser()
     tree = parser.parse(source, filename="<input>")
     body: list[hir.HirNode] = []
     for ext in tree.ext:
         if isinstance(ext, c_ast.FuncDef):
             body.append(_convert_function(ext))
+            continue
+        if isinstance(ext, (c_ast.Decl, c_ast.Typedef)):
+            # Top-level variable / typedef declarations — the transpiler emits
+            # function bodies; globals are dropped. Functions that reference
+            # them will surface as later type errors, which is the honest
+            # signal.
             continue
         raise UnsupportedConstruct(f"top-level {type(ext).__name__}")
     return hir.HirModule(source_lang="c", body=body)

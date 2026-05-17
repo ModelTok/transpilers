@@ -47,7 +47,10 @@ def parse_java(source: str) -> hir.HirModule:
         if c.type == "class_declaration":
             body.extend(_extract_methods(c))
             continue
-        if c.type in ("import_declaration", "package_declaration", "line_comment", "block_comment"):
+        if c.type in (
+            "import_declaration", "package_declaration",
+            "line_comment", "block_comment",
+        ):
             continue
         raise UnsupportedConstruct(f"top-level {c.type}")
     return hir.HirModule(source_lang="java", body=body)
@@ -114,6 +117,18 @@ def _convert_stmt(node: Node) -> list[hir.HirNode]:
     if kind == "block":
         return _convert_block(node)
     if kind in ("line_comment", "block_comment"):
+        return []
+    if kind == "try_statement":
+        # `try { ... } catch (...) { ... }` — exception handling isn't in the
+        # IR. Lower as the try body only, dropping catch/finally clauses.
+        body_node = node.child_by_field_name("body")
+        if body_node is not None:
+            return _convert_block(body_node)
+        return []
+    if kind == "try_with_resources_statement":
+        body_node = node.child_by_field_name("body")
+        if body_node is not None:
+            return _convert_block(body_node)
         return []
     raise UnsupportedConstruct(f"java stmt {kind}")
 
@@ -238,6 +253,27 @@ def _convert_expr(node: Node) -> hir.HirNode:
         raise UnsupportedConstruct("java update at expression position")
     if kind == "method_invocation":
         return _convert_call(node)
+    if kind == "object_creation_expression":
+        # `new T(args)` — lower as a struct init / call. We don't have type
+        # information on T's constructor here so we emit a HirCall and let
+        # later passes resolve it. Lossy but lets corpus parse.
+        type_node = node.child_by_field_name("type")
+        args_node = node.child_by_field_name("arguments")
+        name = text(type_node) if type_node is not None else "_"
+        args: list[hir.HirNode] = []
+        if args_node is not None:
+            args = [_convert_expr(c) for c in named_children(args_node)]
+        return hir.HirCall(func=name, args=args)
+    if kind == "field_access":
+        # `obj.field` access.
+        obj = node.child_by_field_name("object")
+        field = node.child_by_field_name("field")
+        if obj is not None and field is not None:
+            return hir.HirFieldAccess(value=_convert_expr(obj), field=text(field))
+    if kind == "array_access":
+        arr = required_field(node, "array")
+        idx = required_field(node, "index")
+        return hir.HirSubscript(value=_convert_expr(arr), index=_convert_expr(idx))
     raise UnsupportedConstruct(f"java expr {kind}")
 
 
@@ -290,7 +326,6 @@ def _type_text(node: Node) -> str:
         return "None"
     if node.type == "integral_type":
         kids = node.children
-        # The integral kind keyword is the first (and usually only) child.
         keyword = text(kids[0]) if kids else "int"
         return JAVA_TYPE_ALIASES.get(keyword, "int")
     if node.type == "floating_point_type":
@@ -302,4 +337,26 @@ def _type_text(node: Node) -> str:
     if node.type == "type_identifier":
         spelling = text(node)
         return JAVA_TYPE_ALIASES.get(spelling, spelling)
+    if node.type == "array_type":
+        elem = node.child_by_field_name("element")
+        if elem is not None:
+            return f"list[{_type_text(elem)}]"
+        kids = named_children(node)
+        if kids:
+            return f"list[{_type_text(kids[0])}]"
+    if node.type == "generic_type":
+        # `List<Integer>`, `Map<String, Object>` — keep the base type and
+        # try to extract the first type argument. Multi-arg generics collapse
+        # onto the first; lossy but lets parsing proceed.
+        kids = named_children(node)
+        if not kids:
+            raise UnsupportedConstruct("empty generic_type")
+        base = text(kids[0])
+        base = JAVA_TYPE_ALIASES.get(base, base)
+        for sub in kids[1:]:
+            if sub.type == "type_arguments":
+                arg_kids = named_children(sub)
+                if arg_kids:
+                    return f"{base}[{_type_text(arg_kids[0])}]"
+        return base
     raise UnsupportedConstruct(f"java type {node.type}")

@@ -27,8 +27,46 @@ class UnsupportedConstruct(Exception):
 
 def parse_python(source: str) -> hir.HirModule:
     tree = cst.parse_module(source)
-    body = [_convert(stmt) for stmt in tree.body]
+    body: list[hir.HirNode] = []
+    for stmt in tree.body:
+        # Skip top-level constructs that don't translate semantically: imports,
+        # `if __name__ == "__main__"` guards, bare statement-position calls
+        # (script entrypoints), and the shebang/coding comments libcst exposes
+        # as EmptyLine. The pipeline transpiles function definitions; module-
+        # level side effects are dropped here rather than partway through.
+        if isinstance(stmt, cst.SimpleStatementLine):
+            inner = stmt.body
+            if all(isinstance(s, (cst.Import, cst.ImportFrom)) for s in inner):
+                continue
+            if all(isinstance(s, cst.Expr) for s in inner):
+                # Bare function-call statements at module scope: drop.
+                continue
+        if isinstance(stmt, cst.If):
+            # Skip the conventional `if __name__ == "__main__":` guard.
+            if _is_main_guard(stmt):
+                continue
+        try:
+            body.append(_convert(stmt))
+        except UnsupportedConstruct:
+            # Walk inside FunctionDef even if we can't parse module-level
+            # constructs around it. For non-FunctionDef siblings we skip.
+            if isinstance(stmt, cst.FunctionDef):
+                raise
     return hir.HirModule(source_lang="python", body=body)
+
+
+def _is_main_guard(node: cst.If) -> bool:
+    """Detect `if __name__ == "__main__":` — a script-entry idiom we drop."""
+    test = node.test
+    if not isinstance(test, cst.Comparison) or len(test.comparisons) != 1:
+        return False
+    left = test.left
+    target = test.comparisons[0].comparator
+    if not isinstance(left, cst.Name) or left.value != "__name__":
+        return False
+    if not isinstance(target, cst.SimpleString):
+        return False
+    return target.value.strip("\"'") == "__main__"
 
 
 def _convert(node: cst.CSTNode) -> hir.HirNode:
@@ -127,9 +165,20 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
         return hir.HirStringLiteral(value=_unquote(node.value))
 
     if isinstance(node, cst.Call):
-        if not isinstance(node.func, cst.Name):
-            raise UnsupportedConstruct(f"call target {type(node.func).__name__}")
-        return hir.HirCall(func=node.func.value, args=[_convert(a.value) for a in node.args])
+        if isinstance(node.func, cst.Name):
+            return hir.HirCall(func=node.func.value, args=[_convert(a.value) for a in node.args])
+        if isinstance(node.func, cst.Attribute):
+            # `obj.method(args)` — method call.
+            receiver = _convert(node.func.value)
+            return hir.HirMethodCall(
+                receiver=receiver,
+                method=node.func.attr.value,
+                args=[_convert(a.value) for a in node.args],
+            )
+        raise UnsupportedConstruct(f"call target {type(node.func).__name__}")
+    if isinstance(node, cst.Attribute):
+        # `obj.field` access at expression position.
+        return hir.HirFieldAccess(value=_convert(node.value), field=node.attr.value)
 
     if isinstance(node, cst.List):
         return hir.HirList(elements=[_convert(e.value) for e in node.elements])
@@ -140,7 +189,27 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
         idx = node.slice[0].slice.value
         return hir.HirSubscript(value=_convert(node.value), index=_convert(idx))
 
+    if isinstance(node, cst.With):
+        # `with cm() as name:` — context-manager semantics aren't modeled.
+        # Lower as the body alone, letting the cleanup side-effect drop. The
+        # `as <name>` binding becomes unresolved if used inside the body;
+        # callers that need true `with` semantics should rewrite first.
+        if isinstance(node.body, cst.IndentedBlock):
+            stmts = [_convert(s) for s in node.body.body]
+            # We need to return a single HirNode here; wrap by returning the
+            # first statement and emitting the rest as a synthetic block —
+            # but our HIR doesn't have a block node. Instead, hoist into
+            # surrounding context via a marker class the function-body walker
+            # flattens.
+            return _WithBlock(stmts=stmts)
     raise UnsupportedConstruct(f"{type(node).__name__}")
+
+
+class _WithBlock(hir.HirNode):
+    """Private marker — `with` desugars to its body; callers flatten."""
+
+    def __init__(self, stmts: list[hir.HirNode]) -> None:
+        self.stmts = stmts
 
 
 def _convert_function(fn: cst.FunctionDef) -> hir.HirFunction:
@@ -158,7 +227,16 @@ def _convert_param(p: cst.Param) -> hir.HirParam:
 def _convert_block(body: cst.BaseSuite) -> list[hir.HirNode]:
     if not isinstance(body, cst.IndentedBlock):
         raise UnsupportedConstruct("non-indented block")
-    return [_convert(stmt) for stmt in body.body]
+    out: list[hir.HirNode] = []
+    for stmt in body.body:
+        node = _convert(stmt)
+        # `with` desugars to its body — flatten here so the wrapper marker
+        # never reaches downstream passes.
+        if isinstance(node, _WithBlock):
+            out.extend(node.stmts)
+        else:
+            out.append(node)
+    return out
 
 
 def _convert_if(node: cst.If) -> hir.HirIf:

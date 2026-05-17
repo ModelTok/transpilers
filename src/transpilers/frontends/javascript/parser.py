@@ -34,11 +34,19 @@ def parse_javascript(source: str) -> hir.HirModule:
         if c.type == "function_declaration":
             body.append(_convert_function(c))
             continue
-        if c.type in ("comment", "import_statement", "export_statement"):
+        if c.type in ("comment", "import_statement", "export_statement", "hash_bang_line"):
             if c.type == "export_statement":
                 for inner in named_children(c):
                     if inner.type == "function_declaration":
                         body.append(_convert_function(inner))
+            continue
+        # Top-level non-function statements (script entry, `"use strict"`,
+        # bare `let` declarations, expression statements) — skip silently
+        # rather than refusing the whole file.
+        if c.type in (
+            "expression_statement", "lexical_declaration", "variable_declaration",
+            "for_statement", "if_statement", "while_statement", "block_statement",
+        ):
             continue
         raise UnsupportedConstruct(f"top-level {c.type}")
     return hir.HirModule(source_lang="javascript", body=body)

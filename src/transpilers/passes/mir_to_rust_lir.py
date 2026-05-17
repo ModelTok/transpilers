@@ -120,10 +120,18 @@ def _lower_assign(node: mir.MirAssign, declared: set[str], mut: set[str]) -> lir
     if node.target in declared:
         return lir.RustReassign(name=node.target, value=_lower_expr(node.value))
     declared.add(node.target)
+    # When the inferred type is unknown, omit the annotation entirely —
+    # Rust's local type inference picks it up from the initializer's type.
+    try:
+        ty_str = _rust_type(node.ty) if not isinstance(node.ty, UnknownT) else None
+    except ValueError:
+        # Nested unknown (e.g., ListT(elem=UnknownT)) — fall through to
+        # untyped binding rather than failing the whole emission.
+        ty_str = None
     return lir.RustLet(
         name=node.target,
         mutable=node.target in mut,
-        ty=_rust_type(node.ty) if not isinstance(node.ty, UnknownT) else None,
+        ty=ty_str,
         value=_lower_expr(node.value),
     )
 
@@ -217,7 +225,12 @@ def _rust_type(ty: Type) -> str:
     if isinstance(ty, NoneT):
         return "()"
     if isinstance(ty, ListT):
-        return f"Vec<{_rust_type(ty.elem)}>"
+        # Recursive unknown element types fall back to the `_` placeholder
+        # so the surrounding `Vec<_>` can be inferred from initializer.
+        try:
+            return f"Vec<{_rust_type(ty.elem)}>"
+        except ValueError:
+            return "Vec<_>"
     if isinstance(ty, StructT):
         return ty.name
     if isinstance(ty, UnknownT):
