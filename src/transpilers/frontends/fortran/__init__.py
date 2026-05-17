@@ -1,1 +1,3 @@
-"""Fortran frontend (lfortran or transpyle's parser). Not yet implemented."""
+from .parser import parse_fortran
+
+__all__ = ["parse_fortran"]

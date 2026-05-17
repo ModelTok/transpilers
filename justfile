@@ -24,8 +24,8 @@ example:
 # Transpile every example to every supported target
 examples-all:
     @for src in examples/*; do \
-        case "$src" in *.py|*.c|*.cpp|*.java|*.cs|*.ts|*.js) ;; *) continue ;; esac; \
-        for target in rust zig c mojo; do \
+        case "$src" in *.py|*.c|*.cpp|*.java|*.cs|*.ts|*.js|*.f90|*.vb) ;; *) continue ;; esac; \
+        for target in rust zig c mojo go python; do \
             echo "=== $src -> $target ==="; \
             just transpile $src $target || true; \
         done; \

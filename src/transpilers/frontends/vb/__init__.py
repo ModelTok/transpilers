@@ -1,1 +1,3 @@
-"""Visual Basic frontend (Roslyn via dotnet, or hand-rolled). Not yet implemented."""
+from .parser import parse_vb
+
+__all__ = ["parse_vb"]
