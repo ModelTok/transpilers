@@ -165,4 +165,6 @@ def _binop_type(op: str, lt: Type, rt: Type) -> Type:
         return IntT()
     if isinstance(lt, (IntT, FloatT)) and isinstance(rt, (IntT, FloatT)):
         return FloatT()
+    if op == "+" and isinstance(lt, StrT) and isinstance(rt, StrT):
+        return StrT()
     return UnknownT(hint=f"binop {op}")

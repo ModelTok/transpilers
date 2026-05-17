@@ -318,14 +318,16 @@ def _propagate_from_callee(node: mir.MirCall, env: dict[str, Type], fn_map: FnMa
 def _arith_unify(
     node: mir.MirBinOp, lt: Type, rt: Type, env: dict[str, Type]
 ) -> tuple[Type, Type]:
-    """If one side is a known numeric type and the other is an unknown Name,
-    promote the Name to match. This is what turns `x + 1` into `x: int`."""
-    if isinstance(lt, (IntT, FloatT)) and isinstance(rt, UnknownT):
+    """If one side is a known numeric (or, for `+`, string) type and the other
+    is an unknown Name, promote the Name to match. This is what turns `x + 1`
+    into `x: int` and `s + "lit"` into `s: str`."""
+    propagatable = (IntT, FloatT, StrT) if node.op == "+" else (IntT, FloatT)
+    if isinstance(lt, propagatable) and isinstance(rt, UnknownT):
         if isinstance(node.right, mir.MirName):
             env[node.right.name] = lt
             node.right.ty = lt
             rt = lt
-    if isinstance(rt, (IntT, FloatT)) and isinstance(lt, UnknownT):
+    if isinstance(rt, propagatable) and isinstance(lt, UnknownT):
         if isinstance(node.left, mir.MirName):
             env[node.left.name] = rt
             node.left.ty = rt
@@ -362,6 +364,8 @@ def _binop_result(op: str, lt: Type, rt: Type) -> Type:
         return IntT()
     if isinstance(lt, (IntT, FloatT)) and isinstance(rt, (IntT, FloatT)):
         return FloatT()
+    if op == "+" and isinstance(lt, StrT) and isinstance(rt, StrT):
+        return StrT()
     return UnknownT(hint=f"binop {op}")
 
 
