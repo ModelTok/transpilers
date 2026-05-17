@@ -54,3 +54,80 @@ class HirName(HirNode):
 @dataclass
 class HirIntLiteral(HirNode):
     value: int
+
+
+@dataclass
+class HirBoolLiteral(HirNode):
+    value: bool
+
+
+@dataclass
+class HirStringLiteral(HirNode):
+    value: str
+
+
+@dataclass
+class HirCompare(HirNode):
+    op: str
+    left: HirNode
+    right: HirNode
+
+
+@dataclass
+class HirBoolOp(HirNode):
+    op: str  # "and" or "or"
+    left: HirNode
+    right: HirNode
+
+
+@dataclass
+class HirUnaryOp(HirNode):
+    op: str  # "not" or "-"
+    operand: HirNode
+
+
+@dataclass
+class HirIf(HirNode):
+    test: HirNode
+    body: list[HirNode]
+    orelse: list[HirNode]
+
+
+@dataclass
+class HirWhile(HirNode):
+    test: HirNode
+    body: list[HirNode]
+
+
+@dataclass
+class HirFor(HirNode):
+    """Restricted to `for <name> in range(...)` for the initial subset."""
+
+    target: str
+    iter: HirNode
+    body: list[HirNode]
+
+
+@dataclass
+class HirCall(HirNode):
+    func: str
+    args: list[HirNode]
+
+
+@dataclass
+class HirAssign(HirNode):
+    target: str
+    value: HirNode
+    annotation: str | None
+    augmented_op: str | None = None  # "+", "-", "*", "/" for `x += 1` etc.
+
+
+@dataclass
+class HirList(HirNode):
+    elements: list[HirNode]
+
+
+@dataclass
+class HirSubscript(HirNode):
+    value: HirNode
+    index: HirNode
