@@ -40,6 +40,18 @@ class NoneT(Type):
 
 
 @dataclass(frozen=True)
+class ListT(Type):
+    elem: Type
+
+
+@dataclass(frozen=True)
+class RangeT(Type):
+    """The result of Python `range(...)`. Only valid as a for-loop iterator —
+    using a range outside that context is unsupported until we have a real
+    iterator lowering."""
+
+
+@dataclass(frozen=True)
 class UnknownT(Type):
     """A typed hole. LLM passes are allowed to fill these; algorithmic passes must not invent."""
 
