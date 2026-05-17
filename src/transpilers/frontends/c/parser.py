@@ -103,6 +103,9 @@ def _convert_stmt(node: c_ast.Node) -> list[hir.HirNode]:
     if isinstance(node, c_ast.UnaryOp) and node.op in ("p++", "++", "p--", "--"):
         # `i++;` as a statement
         return [_convert_increment(node)]
+    if isinstance(node, c_ast.FuncCall):
+        # Bare call as a statement (`foo(1, 2);`) — value is discarded.
+        return [_convert_expr(node)]
     if isinstance(node, c_ast.Compound):
         # Nested block — flatten. (C scoping is finer-grained than Python's,
         # but for the initial subset we don't model nested scopes.)
