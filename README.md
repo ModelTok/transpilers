@@ -5,11 +5,11 @@ Hybrid algorithmic + LLM source-to-source transpiler. Goal: N-to-M across
 
 ## Status
 
-Two working source frontends (**Python**, **C**) and three targets
-(**Rust**, **Zig**, **C**) — six source-target pairs. C → C is the
-round-trip case: source → IR → re-emitted as idiomatic C. Full
-algorithmic + interprocedural type inference for Python (annotations
-optional). Fortran / C++ / VB sources and Mojo target are stubbed.
+Three source frontends (**Python**, **C**, **C++**) and four targets
+(**Rust**, **Zig**, **C**, **Mojo**) — twelve source-target pairs working
+end-to-end with compiler-verified output. C → C is the round-trip case.
+Full algorithmic + interprocedural type inference for Python; C and C++
+use their native annotations. Fortran and VB sources are stubbed.
 
 ## Why hybrid
 
@@ -88,16 +88,16 @@ uv run pytest
 ## Roadmap (rough)
 
 Done:
-- Python → Rust subset (if/while/for, lists, strings, bools)
+- Python / C / C++ frontends (C-like subset for C++ — no classes/templates)
+- Rust / Zig / C / Mojo backends
 - Type inference: algorithmic dataflow + interprocedural + LLM fallback
-- Zig backend
-- C frontend (subset)
-- String concat with target-specific handling
+- String concat with target-specific handling (format!, native, refused)
+- C-style for loops desugared at frontend → re-emerge native when target wants
 
 Next:
-- Float-literal HIR node + float arithmetic across both targets
-- Classes / structs (Python class → Rust struct / Zig struct)
+- Float-literal HIR/MIR/LIR nodes
+- Classes / structs (Python class → Rust struct / Mojo struct)
 - C pointer & array support
+- C++ classes, references, std::vector
 - Fortran frontend (start from transpyle fork's parser)
-- Mojo backend
 - More LLM-augmented passes: idiom rewrites, stdlib mapping

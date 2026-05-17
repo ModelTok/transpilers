@@ -15,30 +15,46 @@ import sys
 from pathlib import Path
 
 from transpilers.backends.c import emit_c
+from transpilers.backends.mojo import emit_mojo
 from transpilers.backends.rust import emit_rust
 from transpilers.backends.zig import emit_zig
 from transpilers.frontends.c import parse_c
+from transpilers.frontends.cpp import parse_cpp
 from transpilers.frontends.python import parse_python
 from transpilers.llm import LlmClient, make_llm_inferencer
-from transpilers.passes import hir_to_mir, infer_types, mir_to_c_lir, mir_to_rust_lir, mir_to_zig_lir
-from transpilers.verify import c_compiles, rust_compiles, zig_compiles
+from transpilers.passes import (
+    hir_to_mir,
+    infer_types,
+    mir_to_c_lir,
+    mir_to_mojo_lir,
+    mir_to_rust_lir,
+    mir_to_zig_lir,
+)
+from transpilers.verify import c_compiles, mojo_compiles, rust_compiles, zig_compiles
 
 
 FRONTENDS = {
     "python": parse_python,
     "c": parse_c,
+    "cpp": parse_cpp,
 }
 
 EXT_TO_SOURCE = {
     ".py": "python",
     ".c": "c",
     ".h": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".hpp": "cpp",
+    ".hh": "cpp",
 }
 
 TARGETS = {
     "rust": (mir_to_rust_lir, emit_rust, rust_compiles),
     "zig": (mir_to_zig_lir, emit_zig, zig_compiles),
     "c": (mir_to_c_lir, emit_c, c_compiles),
+    "mojo": (mir_to_mojo_lir, emit_mojo, mojo_compiles),
 }
 
 
@@ -74,6 +90,30 @@ def transpile_python_to_c(source: str, *, llm_fill=None) -> str:
 
 def transpile_c_to_c(source: str, *, llm_fill=None) -> str:
     return transpile(source, source_lang="c", target="c", llm_fill=llm_fill)
+
+
+def transpile_python_to_mojo(source: str, *, llm_fill=None) -> str:
+    return transpile(source, source_lang="python", target="mojo", llm_fill=llm_fill)
+
+
+def transpile_c_to_mojo(source: str, *, llm_fill=None) -> str:
+    return transpile(source, source_lang="c", target="mojo", llm_fill=llm_fill)
+
+
+def transpile_cpp_to_mojo(source: str, *, llm_fill=None) -> str:
+    return transpile(source, source_lang="cpp", target="mojo", llm_fill=llm_fill)
+
+
+def transpile_cpp_to_rust(source: str, *, llm_fill=None) -> str:
+    return transpile(source, source_lang="cpp", target="rust", llm_fill=llm_fill)
+
+
+def transpile_cpp_to_zig(source: str, *, llm_fill=None) -> str:
+    return transpile(source, source_lang="cpp", target="zig", llm_fill=llm_fill)
+
+
+def transpile_cpp_to_c(source: str, *, llm_fill=None) -> str:
+    return transpile(source, source_lang="cpp", target="c", llm_fill=llm_fill)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,1 +1,3 @@
-"""Mojo backend. Not yet implemented — var/let/fn distinctions live in a Mojo LIR dialect."""
+from .emit import emit_mojo
+
+__all__ = ["emit_mojo"]

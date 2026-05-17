@@ -429,3 +429,146 @@ class CIndex(LirNode):
 class CCall(LirNode):
     func: str
     args: list[LirNode]
+
+
+# ---------------- Mojo dialect ----------------
+#
+# Mojo is Python-indented, brace-free, and uses `def` (no `fn` keyword in
+# current syntax) with explicit types. Only `var` for bindings — `let` was
+# removed. Types are `Int`, `Float64`, `Bool`, `String`, `List[T]`. Closer
+# to Python LIR shape than to Rust/Zig/C, so its emission story is the
+# inverse: indentation matters, brackets don't.
+
+
+@dataclass
+class MojoModule(LirNode):
+    items: list["MojoFn"] = field(default_factory=list)
+
+
+@dataclass
+class MojoFn(LirNode):
+    name: str
+    params: list[tuple[str, str]]
+    return_type: str
+    body: list[LirNode]
+
+
+@dataclass
+class MojoReturn(LirNode):
+    value: LirNode | None
+
+
+@dataclass
+class MojoBinOp(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class MojoCompare(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class MojoBoolOp(LirNode):
+    op: str  # "and" / "or"
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class MojoUnary(LirNode):
+    op: str  # "not" / "-"
+    operand: LirNode
+
+
+@dataclass
+class MojoName(LirNode):
+    name: str
+
+
+@dataclass
+class MojoIntLiteral(LirNode):
+    value: int
+
+
+@dataclass
+class MojoBoolLiteral(LirNode):
+    value: bool
+
+
+@dataclass
+class MojoStringLiteral(LirNode):
+    value: str
+
+
+@dataclass
+class MojoIf(LirNode):
+    test: LirNode
+    body: list[LirNode]
+    orelse: list[LirNode]
+
+
+@dataclass
+class MojoWhile(LirNode):
+    test: LirNode
+    body: list[LirNode]
+
+
+@dataclass
+class MojoForRange(LirNode):
+    """`for <target> in range(<start>, <stop>[, <step>]):` — Python-style."""
+
+    target: str
+    start: LirNode
+    stop: LirNode
+    step: LirNode | None
+    body: list[LirNode]
+
+
+@dataclass
+class MojoVar(LirNode):
+    """`var <name>: <ty> = <value>` — Mojo has no `let`, only `var`."""
+
+    name: str
+    ty: str | None
+    value: LirNode
+
+
+@dataclass
+class MojoReassign(LirNode):
+    name: str
+    value: LirNode
+
+
+@dataclass
+class MojoList(LirNode):
+    """`[a, b, c]` — bracket literal, types inferred."""
+
+    elements: list[LirNode]
+
+
+@dataclass
+class MojoIndex(LirNode):
+    value: LirNode
+    index: LirNode
+
+
+@dataclass
+class MojoCall(LirNode):
+    func: str
+    args: list[LirNode]
+
+
+@dataclass
+class MojoMethodCall(LirNode):
+    """Property-style `.len` (no parens) for slice length; other zero-arg
+    methods can reuse this."""
+
+    receiver: LirNode
+    method: str
+    args: list[LirNode]
+    paren: bool = True

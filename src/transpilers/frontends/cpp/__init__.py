@@ -1,1 +1,3 @@
-"""C++ frontend (clang/libclang based). Templates monomorphized at HIR->MIR. Not yet implemented."""
+from .parser import parse_cpp
+
+__all__ = ["parse_cpp"]
