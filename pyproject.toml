@@ -9,6 +9,10 @@ dependencies = [
     "tree-sitter>=0.23",
     "pycparser>=2.22",
     "clang>=21.1.7",
+    "tree-sitter-java>=0.23.5",
+    "tree-sitter-c-sharp>=0.23.5",
+    "tree-sitter-typescript>=0.23.2",
+    "tree-sitter-javascript>=0.25.0",
 ]
 
 [project.scripts]

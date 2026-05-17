@@ -20,7 +20,11 @@ from transpilers.backends.rust import emit_rust
 from transpilers.backends.zig import emit_zig
 from transpilers.frontends.c import parse_c
 from transpilers.frontends.cpp import parse_cpp
+from transpilers.frontends.csharp import parse_csharp
+from transpilers.frontends.java import parse_java
+from transpilers.frontends.javascript import parse_javascript
 from transpilers.frontends.python import parse_python
+from transpilers.frontends.typescript import parse_typescript
 from transpilers.llm import LlmClient, make_llm_inferencer
 from transpilers.passes import (
     hir_to_mir,
@@ -37,6 +41,10 @@ FRONTENDS = {
     "python": parse_python,
     "c": parse_c,
     "cpp": parse_cpp,
+    "java": parse_java,
+    "csharp": parse_csharp,
+    "typescript": parse_typescript,
+    "javascript": parse_javascript,
 }
 
 EXT_TO_SOURCE = {
@@ -48,6 +56,11 @@ EXT_TO_SOURCE = {
     ".cxx": "cpp",
     ".hpp": "cpp",
     ".hh": "cpp",
+    ".java": "java",
+    ".cs": "csharp",
+    ".ts": "typescript",
+    ".js": "javascript",
+    ".mjs": "javascript",
 }
 
 TARGETS = {
@@ -114,6 +127,24 @@ def transpile_cpp_to_zig(source: str, *, llm_fill=None) -> str:
 
 def transpile_cpp_to_c(source: str, *, llm_fill=None) -> str:
     return transpile(source, source_lang="cpp", target="c", llm_fill=llm_fill)
+
+
+# Convenience wrappers for the new frontends. Targets are picked at the call
+# site; tests assemble the pairs they need.
+def transpile_java(source: str, target: str = "rust", *, llm_fill=None) -> str:
+    return transpile(source, source_lang="java", target=target, llm_fill=llm_fill)
+
+
+def transpile_csharp(source: str, target: str = "rust", *, llm_fill=None) -> str:
+    return transpile(source, source_lang="csharp", target=target, llm_fill=llm_fill)
+
+
+def transpile_typescript(source: str, target: str = "rust", *, llm_fill=None) -> str:
+    return transpile(source, source_lang="typescript", target=target, llm_fill=llm_fill)
+
+
+def transpile_javascript(source: str, target: str = "rust", *, llm_fill=None) -> str:
+    return transpile(source, source_lang="javascript", target=target, llm_fill=llm_fill)
 
 
 def main(argv: list[str] | None = None) -> int:
