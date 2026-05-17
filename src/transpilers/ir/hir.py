@@ -57,6 +57,11 @@ class HirIntLiteral(HirNode):
 
 
 @dataclass
+class HirFloatLiteral(HirNode):
+    value: float
+
+
+@dataclass
 class HirBoolLiteral(HirNode):
     value: bool
 

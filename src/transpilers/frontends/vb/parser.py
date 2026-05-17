@@ -82,7 +82,14 @@ def _tokenize(source: str) -> list[Token]:
             j = i
             while j < len(source) and source[j].isdigit():
                 j += 1
-            tokens.append(Token("num", source[i:j], line))
+            kind = "num"
+            # Float: `1.5` (decimal point followed by more digits).
+            if j < len(source) and source[j] == "." and j + 1 < len(source) and source[j + 1].isdigit():
+                j += 1
+                while j < len(source) and source[j].isdigit():
+                    j += 1
+                kind = "float"
+            tokens.append(Token(kind, source[i:j], line))
             i = j
             continue
         if ch == '"':
@@ -398,6 +405,9 @@ class _Parser:
         if tok.kind == "num":
             self.eat()
             return hir.HirIntLiteral(value=int(tok.value))
+        if tok.kind == "float":
+            self.eat()
+            return hir.HirFloatLiteral(value=float(tok.value))
         if tok.kind == "str":
             self.eat()
             return hir.HirStringLiteral(value=tok.value)

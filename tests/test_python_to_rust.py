@@ -70,7 +70,7 @@ def test_elif_collapses_to_else_if():
             return 0
     """
     out = _t(src)
-    assert "} else if x < 0i64 {" in out
+    assert "} else if x < 0 {" in out
 
 
 def test_while_with_mutability_inferred():
@@ -84,10 +84,10 @@ def test_while_with_mutability_inferred():
         return result
     """
     out = _t(src)
-    assert "let mut result: i64 = 1i64;" in out
-    assert "let mut i: i64 = 1i64;" in out
+    assert "let mut result: i64 = 1;" in out
+    assert "let mut i: i64 = 1;" in out
     assert "while i <= n {" in out
-    assert "result = result * i;" in out
+    assert "result *= i;" in out
 
 
 def test_for_range_accumulator():
@@ -99,8 +99,8 @@ def test_for_range_accumulator():
         return total
     """
     out = _t(src)
-    assert "let mut total: i64 = 0i64;" in out
-    assert "for i in 0i64..n {" in out
+    assert "let mut total: i64 = 0;" in out
+    assert "for i in 0..n {" in out
 
 
 def test_for_range_two_args():
@@ -124,7 +124,7 @@ def test_bool_literals_and_comparison():
     """
     out = _t(src)
     assert "fn is_positive(x: i64) -> bool" in out
-    assert "return x > 0i64;" in out
+    assert "return x > 0;" in out
 
 
 def test_boolean_ops_translate_to_rust():
@@ -154,7 +154,7 @@ def test_list_literal_and_index_and_len():
     """
     out = _t(src)
     assert "fn sum_first(xs: Vec<i64>) -> i64" in out
-    assert "xs[0i64 as usize]" in out
+    assert "xs[0 as usize]" in out
 
 
 def test_len_with_cast_to_i64():
@@ -175,7 +175,7 @@ def test_iterate_list_by_index():
         return total
     """
     out = _t(src)
-    assert "for i in 0i64..xs.len() as i64 {" in out
+    assert "for i in 0..xs.len() as i64 {" in out
     assert "xs[i as usize]" in out
 
 

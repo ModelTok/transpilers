@@ -146,6 +146,8 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.ZigName(name=node.name)
     if isinstance(node, mir.MirIntLiteral):
         return lir.ZigIntLiteral(value=node.value)
+    if isinstance(node, mir.MirFloatLiteral):
+        return lir.ZigFloatLiteral(value=node.value)
     if isinstance(node, mir.MirBoolLiteral):
         return lir.ZigBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):

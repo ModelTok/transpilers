@@ -70,7 +70,7 @@ def test_cpp_for_loop_desugars():
         """
     )
     assert "while i < n {" in out
-    assert "i = i + 1i64;" in out
+    assert "i += 1;" in out
 
 
 def test_cpp_logical_ops_to_mojo():

@@ -204,6 +204,11 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
         if token is None:
             raise UnsupportedConstruct("integer literal without tokens")
         return hir.HirIntLiteral(value=int(token.spelling.rstrip("uUlL"), 0))
+    if kind == CursorKind.FLOATING_LITERAL:
+        token = next(cursor.get_tokens(), None)
+        if token is None:
+            raise UnsupportedConstruct("float literal without tokens")
+        return hir.HirFloatLiteral(value=float(token.spelling.rstrip("fFlL")))
     if kind == CursorKind.CXX_BOOL_LITERAL_EXPR:
         token = next(cursor.get_tokens(), None)
         return hir.HirBoolLiteral(value=token is not None and token.spelling == "true")

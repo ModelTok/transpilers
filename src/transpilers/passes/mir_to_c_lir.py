@@ -82,6 +82,8 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.CName(name=node.name)
     if isinstance(node, mir.MirIntLiteral):
         return lir.CIntLiteral(value=node.value)
+    if isinstance(node, mir.MirFloatLiteral):
+        return lir.CFloatLiteral(value=node.value)
     if isinstance(node, mir.MirBoolLiteral):
         return lir.CBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):

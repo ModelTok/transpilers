@@ -59,7 +59,7 @@ def test_c_while_to_rust():
         }
         """
     )
-    assert "let mut result: i64 = 1i64;" in out
+    assert "let mut result: i64 = 1;" in out
     assert "while i <= n {" in out
 
 
@@ -77,10 +77,10 @@ def test_c_for_loop_desugars_to_while():
         }
         """
     )
-    assert "let mut total: i64 = 0i64;" in out
-    assert "let mut i: i64 = 0i64;" in out
+    assert "let mut total: i64 = 0;" in out
+    assert "let mut i: i64 = 0;" in out
     assert "while i < n {" in out
-    assert "i = i + 1i64;" in out
+    assert "i += 1;" in out
 
 
 def test_c_logical_ops():
@@ -108,7 +108,7 @@ def test_c_void_return():
         }
         """
     )
-    assert "fn do_nothing() -> ()" in out
+    assert "fn do_nothing()" in out
     assert "return;" in out
 
 
@@ -207,4 +207,4 @@ def test_interprocedural_inference_on_c():
         """
     )
     assert "fn square(x: i64) -> i64" in out
-    assert "total + square(i)" in out
+    assert "total += square(i)" in out

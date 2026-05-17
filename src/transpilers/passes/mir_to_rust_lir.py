@@ -120,6 +120,8 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.RustName(name=node.name)
     if isinstance(node, mir.MirIntLiteral):
         return lir.RustIntLiteral(value=node.value)
+    if isinstance(node, mir.MirFloatLiteral):
+        return lir.RustFloatLiteral(value=node.value)
     if isinstance(node, mir.MirBoolLiteral):
         return lir.RustBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):

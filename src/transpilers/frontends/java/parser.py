@@ -213,6 +213,8 @@ def _convert_expr(node: Node) -> hir.HirNode:
     kind = node.type
     if kind == "decimal_integer_literal" or kind == "hex_integer_literal" or kind == "binary_integer_literal":
         return hir.HirIntLiteral(value=int(text(node).rstrip("lL").replace("_", ""), 0))
+    if kind == "decimal_floating_point_literal" or kind == "hex_floating_point_literal":
+        return hir.HirFloatLiteral(value=float(text(node).rstrip("fFdD").replace("_", "")))
     if kind == "true":
         return hir.HirBoolLiteral(value=True)
     if kind == "false":

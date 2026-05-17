@@ -115,6 +115,8 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         return mir.MirName(name=node.name, ty=env.get(node.name, UnknownT(hint=f"name {node.name}")))
     if isinstance(node, hir.HirIntLiteral):
         return mir.MirIntLiteral(value=node.value, ty=IntT())
+    if isinstance(node, hir.HirFloatLiteral):
+        return mir.MirFloatLiteral(value=node.value, ty=FloatT())
     if isinstance(node, hir.HirBoolLiteral):
         return mir.MirBoolLiteral(value=node.value, ty=BoolT())
     if isinstance(node, hir.HirStringLiteral):

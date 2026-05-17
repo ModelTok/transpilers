@@ -230,6 +230,9 @@ def _visit_expr(node: mir.MirNode | None, env: dict[str, Type], fn_map: FnMap | 
     if isinstance(node, mir.MirIntLiteral):
         node.ty = IntT()
         return node.ty
+    if isinstance(node, mir.MirFloatLiteral):
+        node.ty = FloatT()
+        return node.ty
     if isinstance(node, mir.MirBoolLiteral):
         node.ty = BoolT()
         return node.ty
@@ -319,8 +322,8 @@ def _arith_unify(
     node: mir.MirBinOp, lt: Type, rt: Type, env: dict[str, Type]
 ) -> tuple[Type, Type]:
     """If one side is a known numeric (or, for `+`, string) type and the other
-    is an unknown Name, promote the Name to match. This is what turns `x + 1`
-    into `x: int` and `s + "lit"` into `s: str`."""
+    is an unknown Name, promote the Name to match. `x + 1` → `x: int`,
+    `x * 1.5` → `x: float`, `s + "lit"` → `s: str`."""
     propagatable = (IntT, FloatT, StrT) if node.op == "+" else (IntT, FloatT)
     if isinstance(lt, propagatable) and isinstance(rt, UnknownT):
         if isinstance(node.right, mir.MirName):
@@ -332,6 +335,16 @@ def _arith_unify(
             env[node.left.name] = rt
             node.left.ty = rt
             lt = rt
+    # If either side is float and the other is int (Name or otherwise), the
+    # result must be float — promote the int-typed Name too.
+    if isinstance(lt, FloatT) and isinstance(rt, IntT) and isinstance(node.right, mir.MirName):
+        env[node.right.name] = FloatT()
+        node.right.ty = FloatT()
+        rt = FloatT()
+    if isinstance(rt, FloatT) and isinstance(lt, IntT) and isinstance(node.left, mir.MirName):
+        env[node.left.name] = FloatT()
+        node.left.ty = FloatT()
+        lt = FloatT()
     return lt, rt
 
 
@@ -415,6 +428,8 @@ def _dump_block(nodes: list[mir.MirNode], out: list[str], depth: int) -> None:
 
 
 def _dump_node(n: mir.MirNode) -> str:
+    if isinstance(n, mir.MirFloatLiteral):
+        return repr(n.value)
     if isinstance(n, mir.MirReturn):
         return f"return {_dump_node(n.value) if n.value else ''}"
     if isinstance(n, mir.MirAssign):

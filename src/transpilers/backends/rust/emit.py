@@ -14,13 +14,38 @@ from transpilers.ir import lir
 INDENT = "    "
 
 
+def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | None:
+    """If `value` is `name <op> rhs` with op in the augmented-assign set, return
+    `(op, rhs)`. Lets Reassign emit `x += v` instead of `x = x + v`."""
+    if not isinstance(value, lir.RustBinOp):
+        return None
+    if not (isinstance(value.left, lir.RustName) and value.left.name == name):
+        return None
+    if value.op not in ("+", "-", "*", "/", "%"):
+        return None
+    return value.op, value.right
+
+
+def _format_float(value: float) -> str:
+    """Emit a Rust-parseable float literal. Whole numbers need an explicit
+    decimal to differentiate from int (`1f64` works but `1.0` is more
+    idiomatic at the source level)."""
+    text = repr(value)
+    if "." not in text and "e" not in text and "E" not in text:
+        text += ".0"
+    return text
+
+
 def emit_rust(module: lir.RustModule) -> str:
     return "\n\n".join(_emit_fn(fn) for fn in module.items) + "\n"
 
 
 def _emit_fn(fn: lir.RustFn) -> str:
     params = ", ".join(f"{n}: {t}" for n, t in fn.params)
-    header = f"fn {fn.name}({params}) -> {fn.return_type} {{"
+    # Drop `-> ()` for unit-returning fns — both forms are legal Rust but the
+    # bare form is more idiomatic.
+    ret = "" if fn.return_type == "()" else f" -> {fn.return_type}"
+    header = f"fn {fn.name}({params}){ret} {{"
     body = _emit_block(fn.body, 1)
     return f"{header}\n{body}\n}}"
 
@@ -41,6 +66,11 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         ann = f": {node.ty}" if node.ty else ""
         return f"{pad}let {mut}{node.name}{ann} = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustReassign):
+        # Pattern-match `x = x <op> value` → `x <op>= value` for idiomatic Rust.
+        aug = _augmented_form(node.name, node.value)
+        if aug is not None:
+            op, rhs = aug
+            return f"{pad}{node.name} {op}= {_emit_expr(rhs)};"
         return f"{pad}{node.name} = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustIf):
         head = f"{pad}if {_emit_expr(node.test)} {{"
@@ -83,7 +113,12 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.RustName):
         return node.name
     if isinstance(node, lir.RustIntLiteral):
-        return f"{node.value}{node.suffix}"
+        # Drop the suffix when None — Rust's type inference picks it up from
+        # context (let bindings, fn signatures, surrounding binops with a
+        # typed side). Keeps emitted source readable.
+        return f"{node.value}{node.suffix or ''}"
+    if isinstance(node, lir.RustFloatLiteral):
+        return _format_float(node.value) + (node.suffix or "")
     if isinstance(node, lir.RustBoolLiteral):
         return "true" if node.value else "false"
     if isinstance(node, lir.RustStringLiteral):
