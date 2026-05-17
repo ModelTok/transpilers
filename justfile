@@ -21,6 +21,15 @@ transpile file target="rust":
 example:
     @just transpile examples/add.py
 
+# Transpile every example to every supported target
+examples-all:
+    @for src in examples/*.py; do \
+        for target in rust zig; do \
+            echo "=== $src -> $target ==="; \
+            just transpile $src $target || exit 1; \
+        done; \
+    done
+
 # Lint
 lint:
     uv run ruff check src tests

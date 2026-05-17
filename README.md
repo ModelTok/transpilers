@@ -5,9 +5,10 @@ Hybrid algorithmic + LLM source-to-source transpiler. Goal: N-to-M across
 
 ## Status
 
-Scaffold + one working vertical slice: **Python → Rust** for a small annotated
-subset (function defs, int params, binary ops, return). Every other frontend
-and backend is stubbed.
+Two working targets: **Python → Rust** and **Python → Zig**, both with full
+algorithmic + interprocedural type inference (annotations optional). All
+five source frontends except Python are stubbed; C/C++/Mojo backends are
+stubbed.
 
 ## Why hybrid
 

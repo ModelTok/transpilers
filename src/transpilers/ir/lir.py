@@ -149,3 +149,147 @@ class RustMethodCall(LirNode):
 class RustCall(LirNode):
     func: str
     args: list[LirNode]
+
+
+# ---------------- Zig dialect ----------------
+#
+# A separate dialect rather than a shared "C-family LIR": Zig's `var`/`const`
+# split, `while (cond) : (step)` for-equivalent, and error-union syntax differ
+# enough from Rust that conflating them would force every backend pass to
+# branch internally. Per-target dialects keep each emitter and lowering
+# focused.
+
+
+@dataclass
+class ZigModule(LirNode):
+    items: list["ZigFn"] = field(default_factory=list)
+
+
+@dataclass
+class ZigFn(LirNode):
+    name: str
+    params: list[tuple[str, str]]
+    return_type: str
+    body: list[LirNode]
+
+
+@dataclass
+class ZigReturn(LirNode):
+    value: LirNode | None
+
+
+@dataclass
+class ZigBinOp(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class ZigCompare(LirNode):
+    op: str
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class ZigBoolOp(LirNode):
+    op: str  # "and" / "or"
+    left: LirNode
+    right: LirNode
+
+
+@dataclass
+class ZigUnary(LirNode):
+    op: str  # "!" / "-"
+    operand: LirNode
+
+
+@dataclass
+class ZigName(LirNode):
+    name: str
+
+
+@dataclass
+class ZigIntLiteral(LirNode):
+    value: int
+
+
+@dataclass
+class ZigBoolLiteral(LirNode):
+    value: bool
+
+
+@dataclass
+class ZigStringLiteral(LirNode):
+    value: str
+
+
+@dataclass
+class ZigIf(LirNode):
+    test: LirNode
+    body: list[LirNode]
+    orelse: list[LirNode]
+
+
+@dataclass
+class ZigWhile(LirNode):
+    test: LirNode
+    body: list[LirNode]
+
+
+@dataclass
+class ZigForRange(LirNode):
+    """Zig `for (start..stop) |target| { ... }`. `step != 1` is unsupported by
+    the `for` syntax — a stepped range lowers to a `while` with explicit
+    increment instead, handled in the lowering pass."""
+
+    target: str
+    start: LirNode
+    stop: LirNode
+    body: list[LirNode]
+
+
+@dataclass
+class ZigVar(LirNode):
+    """`var <name>: <ty> = <value>;` (mutable) or `const <name>: <ty> = <value>;`."""
+
+    name: str
+    mutable: bool
+    ty: str | None
+    value: LirNode
+
+
+@dataclass
+class ZigReassign(LirNode):
+    name: str
+    value: LirNode
+
+
+@dataclass
+class ZigArrayLit(LirNode):
+    """`[_]T{a, b, c}` — fixed-size inferred-length array. For dynamically
+    sized lists we'd need ArrayList, deferred."""
+
+    elem_ty: str
+    elements: list[LirNode]
+
+
+@dataclass
+class ZigIndex(LirNode):
+    value: LirNode
+    index: LirNode
+
+
+@dataclass
+class ZigMethodCall(LirNode):
+    receiver: LirNode
+    method: str
+    args: list[LirNode]
+    cast_to: str | None = None
+
+
+@dataclass
+class ZigCall(LirNode):
+    func: str
+    args: list[LirNode]
