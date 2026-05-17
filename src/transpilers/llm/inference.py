@@ -39,9 +39,32 @@ def make_llm_inferencer(client: LlmClient):
     return fill
 
 
+def make_llm_renamer(client: LlmClient):
+    """LlmFill-compatible callable for the variable-rename pass. Returns
+    the proposed name string (already validated as a Python identifier)."""
+
+    def fill(old_name: str, context: dict) -> str:
+        hole = TypedHole(
+            kind="variable_rename",
+            context={"old_name": old_name, **context},
+            validate=_parse_rename,
+        )
+        return client.fill(hole)
+
+    return fill
+
+
 def _parse_type(raw: str) -> Type:
     payload = json.loads(raw.strip())
     label = payload["type"].lower().strip()
     if label not in ALLOWED:
         raise ValueError(f"LLM returned unknown type {label!r}; allowed: {sorted(ALLOWED)}")
     return ALLOWED[label]
+
+
+def _parse_rename(raw: str) -> str:
+    payload = json.loads(raw.strip())
+    name = payload["name"].strip()
+    if not name.isidentifier():
+        raise ValueError(f"LLM returned non-identifier name {name!r}")
+    return name
