@@ -39,12 +39,26 @@ def _lower_struct_impl(s: mir.MirStruct) -> lir.RustImpl:
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.RustFn:
-    params = [(p.name, _rust_type(p.ty)) for p in fn.params]
-    ret = _rust_type(fn.return_type)
+    # Rust idiom: list params are taken by shared reference (`&Vec<T>`).
+    # Owning the Vec would move the caller's value on each call.
     mut_names = _collect_mutable(fn.body)
+    params = [
+        (f"mut {p.name}" if p.name in mut_names else p.name, _rust_param_type(p.ty))
+        for p in fn.params
+    ]
+    ret = _rust_type(fn.return_type)
     declared: set[str] = {p.name for p in fn.params}
     body = [_lower_stmt(n, declared, mut_names) for n in fn.body]
     return lir.RustFn(name=fn.name, params=params, return_type=ret, body=body)
+
+
+def _rust_param_type(ty: Type) -> str:
+    if isinstance(ty, ListT):
+        try:
+            return f"&Vec<{_rust_type(ty.elem)}>"
+        except ValueError:
+            return "&Vec<_>"
+    return _rust_type(ty)
 
 
 # ---------- mutability inference ----------
@@ -190,6 +204,33 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     raise NotImplementedError(f"MIR expr {type(node).__name__}")
 
 
+def _pyprint_arg(orig: mir.MirNode, lowered: lir.LirNode) -> lir.LirNode:
+    """Wrap `lowered` so it renders the way Python's `print` would.
+    Currently: bools become `"True"` / `"False"` strings via an inline
+    ternary. Floats are left to Rust's Display (cosmetic difference:
+    `12.0` vs `12`) — addressing that needs a per-arg format spec the
+    macro template doesn't yet support."""
+    ty = getattr(orig, "ty", None)
+    from transpilers.ir.types import BoolT
+    if isinstance(ty, BoolT):
+        return _RustIfExpr(
+            test=lowered,
+            then_=lir.RustStringLiteral(value="True"),
+            else_=lir.RustStringLiteral(value="False"),
+        )
+    return lowered
+
+
+class _RustIfExpr(lir.LirNode):
+    """`if <test> { <then> } else { <else> }` — Rust if-as-expression.
+    Used by `_pyprint_arg` for bool→Python-cap rendering."""
+
+    def __init__(self, test: lir.LirNode, then_: lir.LirNode, else_: lir.LirNode) -> None:
+        self.test = test
+        self.then_ = then_
+        self.else_ = else_
+
+
 def _lower_call(node: mir.MirCall) -> lir.LirNode:
     # Stdlib mapping table — turn well-known Python-style builtins into
     # idiomatic Rust so the output is runnable, not just syntactically OK.
@@ -199,8 +240,12 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
             raise ValueError("len() takes exactly one argument")
         return lir.RustMethodCall(receiver=args[0], method="len", args=[], cast_to="i64")
     if node.func in ("print", "println"):
+        # Rewrap each arg so the rendering matches Python's str(): bools
+        # become "True"/"False" (not Rust's "true"/"false"), floats keep
+        # at least one fractional digit (Display drops trailing `.0`).
+        rendered_args = [_pyprint_arg(orig, lowered) for orig, lowered in zip(node.args, args)]
         template = " ".join("{}" for _ in args)
-        return lir.RustMacro(name="println", template=template, args=args)
+        return lir.RustMacro(name="println", template=template, args=rendered_args)
     if node.func == "abs" and len(args) == 1:
         return lir.RustMethodChain(receiver=args[0], method="abs", args=[])
     if node.func == "min" and len(args) == 2:
@@ -216,8 +261,24 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
     if node.func == "str" and len(args) == 1:
         return lir.RustMethodChain(receiver=args[0], method="to_string", args=[])
     # Default: emit as a direct function call. User-defined functions land
-    # here; unknown builtins too (rustc surfaces the error).
-    return lir.RustCall(func=node.func, args=args)
+    # here; unknown builtins too (rustc surfaces the error). Pass list
+    # arguments by reference so the caller's binding isn't moved.
+    from transpilers.ir.types import ListT
+    refined: list[lir.LirNode] = []
+    for orig, lowered in zip(node.args, args):
+        if isinstance(getattr(orig, "ty", None), ListT):
+            refined.append(_RustRef(value=lowered))
+        else:
+            refined.append(lowered)
+    return lir.RustCall(func=node.func, args=refined)
+
+
+class _RustRef(lir.LirNode):
+    """`&value` — shared-reference operator. Used when passing a Vec
+    argument so the caller's binding survives the call."""
+
+    def __init__(self, value: lir.LirNode) -> None:
+        self.value = value
 
 
 def _is_string_concat(node: mir.MirBinOp) -> bool:

@@ -186,6 +186,11 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         if node.template:
             return f'{node.name}!("{node.template}", {rendered})' if rendered else f'{node.name}!("{node.template}")'
         return f"{node.name}!({rendered})"
+    from transpilers.passes.mir_to_rust_lir import _RustIfExpr, _RustRef
+    if isinstance(node, _RustIfExpr):
+        return f"if {_emit_expr(node.test)} {{ {_emit_expr(node.then_)} }} else {{ {_emit_expr(node.else_)} }}"
+    if isinstance(node, _RustRef):
+        return f"&{_emit_expr(node.value)}"
     if isinstance(node, lir.RustMethodChain):
         rendered = ", ".join(_emit_expr(a) for a in node.args)
         return f"{_emit_expr(node.receiver)}.{node.method}({rendered})"
