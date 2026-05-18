@@ -122,8 +122,13 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.PyBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):
         return lir.PyStringLiteral(value=node.value)
+    if isinstance(node, mir.MirNullLiteral):
+        return lir.PyName(name="None")
     if isinstance(node, mir.MirCall):
-        return lir.PyCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+        args = [_lower_expr(a) for a in node.args]
+        if node.func == "__ternary__" and len(args) == 3:
+            return _PyIfExpr(test=args[0], then_=args[1], else_=args[2])
+        return lir.PyCall(func=node.func, args=args)
     if isinstance(node, mir.MirFieldAccess):
         return lir.PyFieldAccess(value=_lower_expr(node.value), field=node.field)
     if isinstance(node, mir.MirStructInit):
@@ -145,6 +150,15 @@ class _PyIndex(lir.LirNode):
     def __init__(self, value: lir.LirNode, index: lir.LirNode) -> None:
         self.value = value
         self.index = index
+
+
+class _PyIfExpr(lir.LirNode):
+    """`<then> if <test> else <else>` — Python ternary."""
+
+    def __init__(self, test: lir.LirNode, then_: lir.LirNode, else_: lir.LirNode) -> None:
+        self.test = test
+        self.then_ = then_
+        self.else_ = else_
 
 
 class _PyList(lir.LirNode):

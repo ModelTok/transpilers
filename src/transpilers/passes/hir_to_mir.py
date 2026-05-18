@@ -187,6 +187,8 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         return mir.MirBoolLiteral(value=node.value, ty=BoolT())
     if isinstance(node, hir.HirStringLiteral):
         return mir.MirStringLiteral(value=node.value, ty=StrT())
+    if isinstance(node, hir.HirNullLiteral):
+        return mir.MirNullLiteral()
     if isinstance(node, hir.HirCall):
         return _lower_call(node, env)
     if isinstance(node, hir.HirList):

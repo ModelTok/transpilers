@@ -221,9 +221,16 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.GoBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):
         return lir.GoStringLiteral(value=node.value)
+    if isinstance(node, mir.MirNullLiteral):
+        return lir.GoName(name="nil")
     if isinstance(node, mir.MirCall):
         arg_nodes = node.args  # keep MIR args for type inspection
         args = [_lower_expr(a) for a in arg_nodes]
+        if node.func == "__ternary__" and len(args) == 3:
+            # Synthetic `cond ? a : b` from C / Java frontends — Go has
+            # no ternary; reuse the existing _GoIfExpr marker (originally
+            # for abs/min/max) so the emitter renders an inline IIFE.
+            return _GoIfExpr(test=args[0], then_=args[1], else_=args[2])
         if node.func == "len":
             # Go's len() returns int, not int64; cast to avoid type mismatches.
             return lir.GoCall(func="int64", args=[lir.GoCall(func="len", args=args)])

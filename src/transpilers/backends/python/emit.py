@@ -157,7 +157,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.PyStructInit):
         args = ", ".join(_emit_expr(v) for _, v in node.field_values)
         return f"{node.name}({args})"
-    from transpilers.passes.mir_to_python_lir import _PyMethodCall as _MC, _PyIndex, _PyList
+    from transpilers.passes.mir_to_python_lir import _PyMethodCall as _MC, _PyIndex, _PyList, _PyIfExpr
     if isinstance(node, _MC):
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{_emit_expr(node.receiver)}.{node.method}({args})"
@@ -166,4 +166,6 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, _PyList):
         elems = ", ".join(_emit_expr(e) for e in node.elements)
         return f"[{elems}]"
+    if isinstance(node, _PyIfExpr):
+        return f"({_emit_expr(node.then_)} if {_emit_expr(node.test)} else {_emit_expr(node.else_)})"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

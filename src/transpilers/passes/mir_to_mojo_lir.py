@@ -176,6 +176,8 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.MojoBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):
         return lir.MojoStringLiteral(value=node.value)
+    if isinstance(node, mir.MirNullLiteral):
+        return lir.MojoName(name="None")
     if isinstance(node, mir.MirCall):
         return _lower_call(node)
     if isinstance(node, mir.MirList):
@@ -194,6 +196,8 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
 
 def _lower_call(node: mir.MirCall) -> lir.LirNode:
     args = [_lower_expr(a) for a in node.args]
+    if node.func == "__ternary__" and len(args) == 3:
+        return _MojoIfExpr(test=args[0], then_=args[1], else_=args[2])
     if node.func == "len":
         if len(args) != 1:
             raise ValueError("len() takes exactly one argument")
@@ -218,6 +222,15 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
         return lir.MojoCall(func="abs", args=args)
     # Print/abs/min/max identity (already Mojo builtins).
     return lir.MojoCall(func=node.func, args=args)
+
+
+class _MojoIfExpr(lir.LirNode):
+    """`<then> if <test> else <else>` — Python/Mojo ternary syntax."""
+
+    def __init__(self, test: lir.LirNode, then_: lir.LirNode, else_: lir.LirNode) -> None:
+        self.test = test
+        self.then_ = then_
+        self.else_ = else_
 
 
 def _mojo_type(ty: Type) -> str:

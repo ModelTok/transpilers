@@ -244,10 +244,22 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.FortranBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):
         return lir.FortranStringLiteral(value=node.value)
+    if isinstance(node, mir.MirNullLiteral):
+        # Fortran has no null/None; pointers exist but cleanup requires
+        # a typed allocation strategy out of scope for this lowering.
+        raise NotImplementedError("fortran has no null literal")
     if isinstance(node, mir.MirCall):
         # `len(xs)` → Fortran intrinsic `size(xs)` on arrays.
         if node.func == "len" and len(node.args) == 1:
             return lir.FortranCall(func="size", args=[_lower_expr(node.args[0])])
+        # `__ternary__(cond, then, else)` → `merge(then, else, cond)`.
+        # Fortran's merge takes (true_val, false_val, mask) — matches the
+        # ternary slot order with a swap.
+        if node.func == "__ternary__" and len(node.args) == 3:
+            return lir.FortranCall(
+                func="merge",
+                args=[_lower_expr(node.args[1]), _lower_expr(node.args[2]), _lower_expr(node.args[0])],
+            )
         return lir.FortranCall(func=node.func, args=[_lower_expr(a) for a in node.args])
     if isinstance(node, mir.MirList):
         elements = [_lower_expr(e) for e in node.elements]

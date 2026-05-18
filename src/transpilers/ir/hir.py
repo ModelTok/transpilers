@@ -72,6 +72,14 @@ class HirStringLiteral(HirNode):
 
 
 @dataclass
+class HirNullLiteral(HirNode):
+    """Python `None`, Java `null`, C `NULL`, Go `nil`. Distinct from
+    int 0 so backends emit their native sentinel (or refuse). A real
+    OptionT in the type lattice would let downstream passes reason
+    about nullability; this node is the minimum primitive needed."""
+
+
+@dataclass
 class HirCompare(HirNode):
     op: str
     left: HirNode

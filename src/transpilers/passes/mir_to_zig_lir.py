@@ -323,6 +323,8 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.ZigBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):
         return lir.ZigStringLiteral(value=node.value)
+    if isinstance(node, mir.MirNullLiteral):
+        return lir.ZigName(name="null")
     if isinstance(node, mir.MirCall):
         return _lower_call(node)
     if isinstance(node, mir.MirList):
@@ -335,6 +337,8 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
 
 def _lower_call(node: mir.MirCall) -> lir.LirNode:
     args = [_lower_expr(a) for a in node.args]
+    if node.func == "__ternary__" and len(args) == 3:
+        return _ZigIfExpr(test=args[0], then_=args[1], else_=args[2])
     if node.func == "len":
         if len(args) != 1:
             raise ValueError("len() takes exactly one argument")

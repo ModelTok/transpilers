@@ -168,4 +168,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
             return f"{_emit_expr(node.receiver)}.{node.method}"
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{_emit_expr(node.receiver)}.{node.method}({args})"
+    from transpilers.passes.mir_to_mojo_lir import _MojoIfExpr
+    if isinstance(node, _MojoIfExpr):
+        return f"({_emit_expr(node.then_)} if {_emit_expr(node.test)} else {_emit_expr(node.else_)})"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

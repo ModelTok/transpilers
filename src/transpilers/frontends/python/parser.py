@@ -113,9 +113,6 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
                 value=_convert(node.value),
             )
         if isinstance(target, cst.Tuple):
-            # `a, b = expr` — desugar to sequential assignments via a tmp
-            # tuple. For the swap idiom `a, b = b, a` (most common case)
-            # we can avoid the tmp by writing into fresh names then back.
             return _tuple_assign(target, node.value)
         raise UnsupportedConstruct(f"assignment target {type(target).__name__}")
 
@@ -177,6 +174,8 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
             return hir.HirBoolLiteral(value=True)
         if node.value == "False":
             return hir.HirBoolLiteral(value=False)
+        if node.value == "None":
+            return hir.HirNullLiteral()
         return hir.HirName(name=node.value)
 
     if isinstance(node, cst.Integer):
@@ -243,16 +242,11 @@ class _WithBlock(hir.HirNode):
 
 class _PassMarker(hir.HirNode):
     """Private marker for `pass` — filtered out during block conversion."""
-    pass
 
 
 class _TupleAssign(hir.HirNode):
-    """`a, b = b, a` desugared to a sequence of HirAssigns.
-
-    When the RHS is itself a tuple `(b, a)`, evaluate it left-to-right into
-    fresh `_tmp_N` locals, then write each target. This preserves the
-    Python semantic that all RHS values are read before any LHS is written.
-    """
+    """Sequence of HirAssigns from tuple unpacking; flattened into the
+    enclosing block during conversion."""
 
     def __init__(self, stmts: list[hir.HirNode]) -> None:
         self.stmts = stmts
@@ -272,7 +266,7 @@ def _tuple_assign(target: cst.Tuple, value: cst.BaseExpression) -> hir.HirNode:
         raise UnsupportedConstruct("tuple unpacking arity mismatch")
     # Stash each RHS in a fresh tmp first, then assign tmps to targets —
     # this models Python's "evaluate all RHS, then bind" exactly.
-    tmps = [f"_tup_{i}" for i in range(len(targets))]
+    tmps = [f"__xpile_swap_{i}" for i in range(len(targets))]
     stmts: list[hir.HirNode] = []
     for tmp, rhs in zip(tmps, rhs_exprs):
         stmts.append(hir.HirAssign(target=tmp, value=_convert(rhs), annotation=None))

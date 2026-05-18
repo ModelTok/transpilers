@@ -281,7 +281,7 @@ def _convert_assignment(node: Node) -> hir.HirNode:
 
 def _tuple_swap(targets: list[Node], rhs_nodes: list[Node]) -> hir.HirNode:
     """`a, b = b, a` (or subscript variant) → tmp staging then writes."""
-    tmps = [f"_tup_{i}" for i in range(len(targets))]
+    tmps = [f"__xpile_swap_{i}" for i in range(len(targets))]
     stmts: list[hir.HirNode] = []
     for tmp, rhs in zip(tmps, rhs_nodes):
         stmts.append(hir.HirAssign(target=tmp, value=_convert_expr(rhs), annotation=None))
@@ -457,5 +457,7 @@ def _type_text(node: Node) -> str:
         elem_node = node.child_by_field_name("element")
         return f"list[{_type_text(elem_node)}]"
     if node.type == "pointer_type":
+        # `*T` → `T` — drops nullability and aliasing (#7). The IR has no
+        # OptionT / RefT yet; mirrors the C++ frontend's `&`/`*` drop.
         return _type_text(node.child_by_field_name("type"))
     raise UnsupportedConstruct(f"go type {node.type}")
