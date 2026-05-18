@@ -61,6 +61,24 @@ class StructT(Type):
 
 
 @dataclass(frozen=True)
+class SimdT(Type):
+    """SIMD vector type — `lanes` elements of `elem`. Modeled as a first-
+    class IR type so we can lift x86/ARM intrinsics to portable
+    semantic-level operations (Mojo's `SIMD[DType.X, N]` is the natural
+    target; Rust's `std::simd` matches the shape; C falls back to the
+    target intrinsic family).
+
+    Conventions:
+      - `elem` is the scalar Type (e.g. FloatT(bits=64), IntT(bits=32))
+      - `lanes` is the vector width in elements (4 for __m256d, 8 for
+        __m256, 16 for __m128i with i8 elems, etc.)
+    """
+
+    elem: Type
+    lanes: int
+
+
+@dataclass(frozen=True)
 class UnknownT(Type):
     """A typed hole. LLM passes are allowed to fill these; algorithmic passes must not invent."""
 
