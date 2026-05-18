@@ -96,6 +96,9 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirBinOp) and node.op == "//":
+        # C: integer division is `/` on integer types.
+        return lir.CBinOp(op="/", left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirFieldAccess):
         via_ptr = isinstance(node.value, mir.MirName) and node.value.name == "self"
         return lir.CFieldAccess(value=_lower_expr(node.value), field=node.field, via_pointer=via_ptr)

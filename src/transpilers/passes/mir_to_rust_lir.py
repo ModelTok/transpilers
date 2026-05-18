@@ -152,9 +152,11 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         )
     if isinstance(node, mir.MirBinOp):
         if _is_string_concat(node):
-            # Flatten left-leaning chains: `a + b + c` → format!("{}{}{}", a, b, c).
             return lir.RustFormat(args=_flatten_concat(node))
-        return lir.RustBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
+        # Python's `//` (FloorDivide) → Rust `/` on integer types
+        # (integer division is the default for `/` on ints in Rust).
+        op = "/" if node.op == "//" else node.op
+        return lir.RustBinOp(op=op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirCompare):
         return lir.RustCompare(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirBoolOp):

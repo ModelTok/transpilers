@@ -86,6 +86,10 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirSubscript):
+        return _PyIndex(value=_lower_expr(node.value), index=_lower_expr(node.index))
+    if isinstance(node, mir.MirList):
+        return _PyList(elements=[_lower_expr(e) for e in node.elements])
     if isinstance(node, mir.MirFieldAccess):
         return lir.PyFieldAccess(value=_lower_expr(node.value), field=node.field)
     if isinstance(node, mir.MirMethodCall):
@@ -129,6 +133,19 @@ class _PyMethodCall(lir.LirNode):
         self.receiver = receiver
         self.method = method
         self.args = args
+
+
+class _PyIndex(lir.LirNode):
+    def __init__(self, value: lir.LirNode, index: lir.LirNode) -> None:
+        self.value = value
+        self.index = index
+
+
+class _PyList(lir.LirNode):
+    """`[a, b, c]` — Python list literal."""
+
+    def __init__(self, elements: list[lir.LirNode]) -> None:
+        self.elements = elements
 
 
 def _py_type(ty: Type) -> str:

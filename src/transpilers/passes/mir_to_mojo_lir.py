@@ -96,6 +96,8 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirBinOp) and node.op == "//":
+        return lir.MojoBinOp(op="//", left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirFieldAccess):
         return lir.MojoFieldAccess(value=_lower_expr(node.value), field=node.field)
     if isinstance(node, mir.MirMethodCall):

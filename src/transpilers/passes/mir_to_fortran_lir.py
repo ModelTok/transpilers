@@ -139,6 +139,9 @@ class _ReturnAssign(lir.LirNode):
 # ---------- expressions ----------
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirBinOp) and node.op == "//":
+        # Fortran `/` on integers is integer division.
+        return lir.FortranBinOp(op="/", left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirFieldAccess):
         return lir.FortranFieldAccess(value=_lower_expr(node.value), field=node.field)
     if isinstance(node, mir.MirMethodCall):
