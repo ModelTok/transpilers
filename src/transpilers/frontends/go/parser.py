@@ -13,6 +13,7 @@ from tree_sitter import Language, Node
 import tree_sitter_go
 
 from transpilers.ir import hir
+from transpilers.frontends._markers import FlattenBlock
 from transpilers.frontends._treesitter import make_parser, named_children, required_field, text
 
 
@@ -122,7 +123,7 @@ def _convert_stmt(node: Node) -> list[hir.HirNode]:
         return _convert_var_decl(node)
     if kind == "assignment_statement":
         result = _convert_assignment(node)
-        if isinstance(result, _GoTupleAssign):
+        if isinstance(result, FlattenBlock):
             return result.stmts
         return [result]
     if kind == "inc_statement" or kind == "dec_statement":
@@ -303,13 +304,7 @@ def _tuple_swap(targets: list[Node], rhs_nodes: list[Node]) -> hir.HirNode:
             ))
         else:
             raise UnsupportedConstruct(f"go tuple-assign slot {slot.type}")
-    return _GoTupleAssign(stmts=stmts)
-
-
-class _GoTupleAssign(hir.HirNode):
-    """Multi-write tuple assignment; statement converter flattens this."""
-    def __init__(self, stmts: list[hir.HirNode]) -> None:
-        self.stmts = stmts
+    return FlattenBlock(stmts=stmts)
 
 
 def _convert_inc_dec(node: Node) -> hir.HirNode:
