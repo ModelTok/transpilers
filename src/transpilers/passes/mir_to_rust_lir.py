@@ -42,14 +42,40 @@ def _lower_function(fn: mir.MirFunction) -> lir.RustFn:
     # Rust idiom: list params are taken by shared reference (`&Vec<T>`).
     # Owning the Vec would move the caller's value on each call.
     mut_names = _collect_mutable(fn.body)
+    # Any assignment to a param is by definition a reassignment (no `let`
+    # declared it), so params need `mut` whenever they appear as an
+    # assignment target — even just once.
+    param_names = {p.name for p in fn.params}
+    reassigned_params = _params_reassigned(fn.body, param_names)
     params = [
-        (f"mut {p.name}" if p.name in mut_names else p.name, _rust_param_type(p.ty))
+        (
+            f"mut {p.name}"
+            if (p.name in mut_names or p.name in reassigned_params)
+            else p.name,
+            _rust_param_type(p.ty),
+        )
         for p in fn.params
     ]
     ret = _rust_type(fn.return_type)
-    declared: set[str] = {p.name for p in fn.params}
-    body = [_lower_stmt(n, declared, mut_names) for n in fn.body]
+    body = [_lower_stmt(n, param_names, mut_names) for n in fn.body]
     return lir.RustFn(name=fn.name, params=params, return_type=ret, body=body)
+
+
+def _params_reassigned(body: list[mir.MirNode], param_names: set[str]) -> set[str]:
+    out: set[str] = set()
+    def _scan(nodes: list[mir.MirNode]) -> None:
+        for n in nodes:
+            if isinstance(n, mir.MirAssign) and n.target in param_names:
+                out.add(n.target)
+            elif isinstance(n, mir.MirIf):
+                _scan(n.body)
+                _scan(n.orelse)
+            elif isinstance(n, mir.MirWhile):
+                _scan(n.body)
+            elif isinstance(n, mir.MirForRange):
+                _scan(n.body)
+    _scan(body)
+    return out
 
 
 def _rust_param_type(ty: Type) -> str:
