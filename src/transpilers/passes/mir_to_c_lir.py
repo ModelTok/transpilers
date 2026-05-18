@@ -152,7 +152,15 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirCall):
         args = [_lower_expr(a) for a in node.args]
         if node.func == "len":
-            raise NotImplementedError("len() in C requires a slice/length protocol; not yet supported")
+            # `len(xs)` on a slice maps to the carrier's `.len` field. Cast
+            # to int64_t so the result composes with the rest of our IntT
+            # arithmetic without warnings.
+            if len(args) != 1:
+                raise ValueError("len() takes exactly one argument")
+            return lir.CCall(
+                func="(int64_t)",
+                args=[lir.CFieldAccess(value=args[0], field="len", via_pointer=False)],
+            )
         if node.func in ("print", "println"):
             # Best-effort printf. Use `%lld` for our IntT(64) and `%g` for
             # floats. The emitter escapes the real newline to `\n` in the
@@ -179,7 +187,39 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.CCall(func=node.func, args=args)
     if isinstance(node, mir.MirSubscript):
         return lir.CIndex(value=_lower_expr(node.value), index=_lower_expr(node.index))
+    if isinstance(node, mir.MirList):
+        # Compound-literal slice. The inner `(elem_t[]){...}` array lives
+        # in automatic storage when this expression appears in a function
+        # body — long-lived enough for the slice's lifetime in that scope.
+        elem_ty = _c_list_elem_type(node.ty)
+        slice_ty = _c_type(node.ty)
+        return _CSliceLiteral(
+            slice_ty=slice_ty,
+            elem_ty=elem_ty,
+            elements=[_lower_expr(e) for e in node.elements],
+        )
     raise NotImplementedError(f"MIR expr {type(node).__name__}")
+
+
+def _c_list_elem_type(ty) -> str:
+    if not isinstance(ty, ListT):
+        raise ValueError("expected ListT for slice literal")
+    if isinstance(ty.elem, IntT):
+        return "int64_t"
+    if isinstance(ty.elem, BoolT):
+        return "bool"
+    if isinstance(ty.elem, FloatT):
+        return "double"
+    raise NotImplementedError(f"no C element type for {type(ty.elem).__name__}")
+
+
+class _CSliceLiteral(lir.LirNode):
+    """`((slice_T_t){(T[]){a,b,c}, 3})` — compound-literal slice ctor."""
+
+    def __init__(self, slice_ty: str, elem_ty: str, elements: list[lir.LirNode]) -> None:
+        self.slice_ty = slice_ty
+        self.elem_ty = elem_ty
+        self.elements = elements
 
 
 class _AddressOf(lir.LirNode):
@@ -210,7 +250,15 @@ def _c_type(ty: Type) -> str:
     if isinstance(ty, NoneT):
         return "void"
     if isinstance(ty, ListT):
-        raise NotImplementedError("list / slice types in C require a length-carrying struct")
+        # C has no generics; map to one of the fixed slice typedefs emitted
+        # in the file preamble. Each slice carries `(data, len)`.
+        if isinstance(ty.elem, IntT):
+            return "slice_i64_t"
+        if isinstance(ty.elem, BoolT):
+            return "slice_bool_t"
+        if isinstance(ty.elem, FloatT):
+            return "slice_f64_t"
+        raise NotImplementedError(f"no C slice type for list element {type(ty.elem).__name__}")
     if isinstance(ty, StructT):
         return ty.name
     if isinstance(ty, UnknownT):

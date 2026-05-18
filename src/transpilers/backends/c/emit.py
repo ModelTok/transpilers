@@ -10,7 +10,19 @@ from transpilers.ir import lir
 
 
 INDENT = "    "
-PREAMBLE = "#include <stdint.h>\n#include <stdbool.h>\n#include <stdio.h>\n#include <stdlib.h>\n\n"
+PREAMBLE = (
+    "#include <stdint.h>\n"
+    "#include <stdbool.h>\n"
+    "#include <stdio.h>\n"
+    "#include <stdlib.h>\n"
+    "#include <stddef.h>\n"
+    "\n"
+    "/* Slice types — Python `list[T]` lowers to one of these. */\n"
+    "typedef struct { int64_t *data; size_t len; } slice_i64_t;\n"
+    "typedef struct { double *data; size_t len; } slice_f64_t;\n"
+    "typedef struct { bool *data; size_t len; } slice_bool_t;\n"
+    "\n"
+)
 
 
 def _c_string_escape(s: str) -> str:
@@ -93,7 +105,9 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         sep = "->" if node.via_pointer else "."
         return f"{pad}{_emit_expr(node.obj)}{sep}{node.field} = {_emit_expr(node.value)};"
     if isinstance(node, lir.CSubscriptAssign):
-        return f"{pad}{_emit_expr(node.obj)}[{_emit_expr(node.index)}] = {_emit_expr(node.value)};"
+        # Slice element write — every CSubscriptAssign in this pipeline
+        # targets a `slice_*_t` carrier, so the index lands on `.data[i]`.
+        return f"{pad}{_emit_expr(node.obj)}.data[{_emit_expr(node.index)}] = {_emit_expr(node.value)};"
     if isinstance(node, lir.CIf):
         head = f"{pad}if ({_emit_expr(node.test)}) {{"
         body = _emit_block(node.body, depth + 1)
@@ -148,7 +162,13 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         escaped = _c_string_escape(node.value)
         return f'"{escaped}"'
     if isinstance(node, lir.CIndex):
-        return f"{_emit_expr(node.value)}[{_emit_expr(node.index)}]"
+        # Same routing rule as CSubscriptAssign: every C index lands on a
+        # slice value, so step through `.data` to reach the element.
+        return f"{_emit_expr(node.value)}.data[{_emit_expr(node.index)}]"
+    from transpilers.passes.mir_to_c_lir import _CSliceLiteral
+    if isinstance(node, _CSliceLiteral):
+        elems = ", ".join(_emit_expr(e) for e in node.elements)
+        return f"(({node.slice_ty}){{({node.elem_ty}[]){{{elems}}}, {len(node.elements)}}})"
     if isinstance(node, lir.CCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
         # Cast-style "calls" (`(int64_t)`, `(double)`) emit as cast prefix.
