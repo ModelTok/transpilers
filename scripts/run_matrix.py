@@ -30,8 +30,14 @@ WRAP_MAIN = {
 
 
 def run_python(path: pathlib.Path) -> tuple[bool, str]:
+    # The corpus files define `main()` but don't call it at module scope.
+    # Append a top-level call so the reference run produces output to
+    # compare against. The transpilers do this implicitly: Rust/Zig/C/Go
+    # treat `main` as the entry point, Mojo/Python need the explicit call
+    # — they pick it up from the Builder's wrapper too.
+    src = path.read_text() + "\n\nmain()\n"
     proc = subprocess.run(
-        [sys.executable, str(path)],
+        [sys.executable, "-c", src],
         capture_output=True, text=True, timeout=30,
     )
     return proc.returncode == 0, (proc.stdout if proc.returncode == 0 else proc.stderr)
@@ -76,7 +82,10 @@ def _build_and_run_zig(src: str, td: pathlib.Path) -> tuple[bool, str]:
         # zig build-exe puts the binary in cwd as `prog`
         exe = td / "prog"
     run = subprocess.run([str(exe)], capture_output=True, text=True, timeout=15)
-    return run.returncode == 0, (run.stdout if run.returncode == 0 else run.stderr)
+    # Zig's `std.debug.print` writes to stderr; we accept either stream
+    # so the matrix focuses on algorithmic correctness, not Zig's stdio
+    # convention. Combine in source order: stdout first, then stderr.
+    return run.returncode == 0, (run.stdout + run.stderr)
 
 
 def _build_and_run_c(src: str, td: pathlib.Path) -> tuple[bool, str]:

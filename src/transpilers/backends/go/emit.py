@@ -14,6 +14,23 @@ INDENT = "\t"
 PREAMBLE = "package main\n\n"
 
 
+def _imports_for(source: str) -> str:
+    """Scan the emitted source for `pkg.Func` calls and synthesize a
+    minimal `import (...)` block. Keeps the file legal Go regardless of
+    which stdlib helpers the lowering decided to emit."""
+    pkgs: list[str] = []
+    if "fmt." in source:
+        pkgs.append("fmt")
+    if "math." in source:
+        pkgs.append("math")
+    if not pkgs:
+        return ""
+    if len(pkgs) == 1:
+        return f'import "{pkgs[0]}"\n\n'
+    body = "\n".join(f'\t"{p}"' for p in pkgs)
+    return f"import (\n{body}\n)\n\n"
+
+
 def _is_go_method_call(node: lir.LirNode) -> bool:
     from transpilers.passes.mir_to_go_lir import _GoMethodCall as _MC
     return isinstance(node, _MC)
@@ -30,7 +47,8 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_go(module: lir.GoModule) -> str:
-    return PREAMBLE + "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    body = "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    return PREAMBLE + _imports_for(body) + body
 
 
 def _emit_item(item: lir.LirNode) -> str:
