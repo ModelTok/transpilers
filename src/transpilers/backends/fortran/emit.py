@@ -31,28 +31,58 @@ def emit_fortran(module: lir.FortranModule) -> str:
     types = [item for item in module.items if isinstance(item, lir.FortranType)]
     fns = [item for item in module.items if isinstance(item, lir.FortranFn)]
 
-    if not types:
-        # No derived types — free functions at file scope are legal Fortran
-        # for `external` subprograms.
-        return "\n\n".join(_emit_fn(fn) for fn in fns) + "\n"
+    main_fn = next((f for f in fns if f.name == "main"), None)
+    lib_fns = [f for f in fns if f.name != "main"]
 
-    # Wrap in a synthesized module so derived types are legal (gfortran
-    # rejects them at file scope without a `module`/`program` enclosing
-    # block). Method functions move inside the module's `contains` block.
-    type_blocks = "\n\n".join(_emit_type_decl_only(t) for t in types)
+    # Collect method functions from derived types.
     method_fns: list[lir.FortranFn] = []
     for t in types:
         method_fns.extend(t.methods)
-    method_fns.extend(fns)
-    contains_block = "\n\n".join(_emit_fn(fn) for fn in method_fns)
-    return (
-        f"module {MODULE_NAME}\n"
-        f"{INDENT}implicit none\n\n"
-        f"{type_blocks}\n\n"
-        f"contains\n\n"
-        f"{contains_block}\n\n"
-        f"end module {MODULE_NAME}\n"
-    )
+
+    # All non-main functions go into the module.
+    all_lib = method_fns + lib_fns
+
+    # Build module block — always emit a module so functions have a proper
+    # interface available to callers (including the program block).
+    type_blocks = "\n\n".join(_emit_type_decl_only(t) for t in types)
+    fn_blocks = "\n\n".join(_emit_fn(f) for f in all_lib)
+
+    module_lines = [f"module {MODULE_NAME}", f"{INDENT}implicit none"]
+    if type_blocks:
+        module_lines.append("")
+        module_lines.append(type_blocks)
+    if fn_blocks:
+        module_lines.append("")
+        module_lines.append("contains")
+        module_lines.append("")
+        module_lines.append(fn_blocks)
+        module_lines.append("")
+    module_lines.append(f"end module {MODULE_NAME}")
+    module_block = "\n".join(module_lines)
+
+    if main_fn is None:
+        return module_block + "\n"
+
+    program_block = _emit_program(main_fn)
+    return module_block + "\n\n" + program_block + "\n"
+
+
+def _emit_program(main_fn: lir.FortranFn) -> str:
+    """Emit a `program prog ... end program prog` block from the main function."""
+    decl_lines = [f"{INDENT}use {MODULE_NAME}", f"{INDENT}implicit none"]
+    for name, ty in main_fn.locals:
+        if "dimension(:)" in ty:
+            decl_lines.append(f"{INDENT}{ty}, allocatable :: {name}")
+        else:
+            decl_lines.append(f"{INDENT}{ty} :: {name}")
+    body_lines: list[str] = []
+    for stmt in main_fn.body:
+        body_lines.extend(_emit_stmt(stmt, 1))
+    lines = ["program prog", *decl_lines, ""]
+    if body_lines:
+        lines.extend(body_lines)
+    lines.append("end program prog")
+    return "\n".join(lines)
 
 
 def _emit_type_decl_only(t: lir.FortranType) -> str:
@@ -88,19 +118,99 @@ def _emit_type(t: lir.FortranType) -> str:
     return "\n".join(lines) + "\n\n" + method_defs
 
 
+def _collect_assigned_names(nodes: list[lir.LirNode]) -> set[str]:
+    """Return the set of names that appear on the LHS of any assignment in
+    the body (including nested blocks). Used to suppress `intent(in)` for
+    parameters that the function body mutates."""
+    assigned: set[str] = set()
+    for node in nodes:
+        if isinstance(node, lir.FortranAssign):
+            # name may be "obj%field" — take the root name before any `%`.
+            assigned.add(node.name.split("%")[0])
+        elif isinstance(node, lir.FortranSubscriptAssign):
+            if isinstance(node.obj, lir.FortranName):
+                assigned.add(node.obj.name)
+        elif isinstance(node, lir.FortranIf):
+            assigned |= _collect_assigned_names(node.body)
+            assigned |= _collect_assigned_names(node.orelse)
+        elif isinstance(node, lir.FortranWhile):
+            assigned |= _collect_assigned_names(node.body)
+        elif isinstance(node, lir.FortranForRange):
+            assigned.add(node.target)
+            assigned |= _collect_assigned_names(node.body)
+    return assigned
+
+
+def _calls_name(nodes: list[lir.LirNode], name: str) -> bool:
+    """Return True if any FortranCall in the body (recursively) calls `name`."""
+    for node in nodes:
+        if isinstance(node, lir.FortranCall) and node.func == name:
+            return True
+        if isinstance(node, lir.FortranAssign) and _calls_name_expr(node.value, name):
+            return True
+        if isinstance(node, _ReturnAssign) and _calls_name_expr(node.value, name):
+            return True
+        if isinstance(node, lir.FortranIf):
+            if _calls_name(node.body, name) or _calls_name(node.orelse, name):
+                return True
+        if isinstance(node, lir.FortranWhile) and _calls_name(node.body, name):
+            return True
+        if isinstance(node, lir.FortranForRange) and _calls_name(node.body, name):
+            return True
+    return False
+
+
+def _calls_name_expr(node: lir.LirNode | None, name: str) -> bool:
+    if node is None:
+        return False
+    if isinstance(node, lir.FortranCall):
+        if node.func == name:
+            return True
+        return any(_calls_name_expr(a, name) for a in node.args)
+    if isinstance(node, lir.FortranBinOp):
+        return _calls_name_expr(node.left, name) or _calls_name_expr(node.right, name)
+    if isinstance(node, lir.FortranCompare):
+        return _calls_name_expr(node.left, name) or _calls_name_expr(node.right, name)
+    if isinstance(node, lir.FortranBoolOp):
+        return _calls_name_expr(node.left, name) or _calls_name_expr(node.right, name)
+    if isinstance(node, lir.FortranUnary):
+        return _calls_name_expr(node.operand, name)
+    return False
+
+
 def _emit_fn(fn: lir.FortranFn) -> str:
     is_subroutine = fn.return_type is None
     keyword = "subroutine" if is_subroutine else "function"
+    # Fortran requires the RECURSIVE prefix if the function calls itself.
+    is_recursive = _calls_name(fn.body, fn.name)
+    recursive_prefix = "recursive " if is_recursive else ""
     params = ", ".join(n for n, _ in fn.params)
-    head = f"{keyword} {fn.name}({params})"
+    head = f"{recursive_prefix}{keyword} {fn.name}({params})"
     if not is_subroutine:
         head += f" result({fn.result_name})"
+
+    # Detect params that are assigned to in the body — they can't be intent(in).
+    assigned_in_body = _collect_assigned_names(fn.body)
 
     decl_lines = [f"{INDENT}implicit none"]
     for name, ty in fn.params:
         # Array params are assumed-shape via `dimension(:)` — `intent(in)`
         # places after the shape attribute is the conventional ordering.
-        decl_lines.append(f"{INDENT}{ty}, intent(in) :: {name}")
+        # Scalar params that are reassigned in the body use `value` so Fortran
+        # makes a local copy (Fortran passes by reference by default, so
+        # writing to a scalar param called with a literal would segfault).
+        # Array params cannot use `value` (VALUE conflicts with DIMENSION).
+        is_array = "dimension(:)" in ty
+        if name in assigned_in_body and not is_array:
+            # Scalar param reassigned in body: pass by value so literals don't
+            # segfault (Fortran is pass-by-reference by default).
+            decl_lines.append(f"{INDENT}{ty}, value :: {name}")
+        elif name in assigned_in_body and is_array:
+            # Array param that's subscript-assigned: must be intent(inout)
+            # since VALUE conflicts with DIMENSION.
+            decl_lines.append(f"{INDENT}{ty}, intent(inout) :: {name}")
+        else:
+            decl_lines.append(f"{INDENT}{ty}, intent(in) :: {name}")
     if not is_subroutine:
         decl_lines.append(f"{INDENT}{fn.return_type} :: {fn.result_name}")
     for name, ty in fn.locals:
@@ -135,9 +245,11 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> list[str]:
         return [f"{pad}{_emit_expr(node.obj)}({_emit_expr(node.index)} + 1) = {_emit_expr(node.value)}"]
     # `print(x, y, z)` lowers to a FortranCall but Fortran's print is a
     # statement form, not a function call — rewrite at emit.
+    # Use explicit format '(*(g0, 1x))' so integers/floats print without
+    # leading spaces (list-directed `print *` uses wide fixed-width fields).
     if isinstance(node, lir.FortranCall) and node.func in ("print", "println"):
         rendered = ", ".join(_emit_expr(a) for a in node.args)
-        return [f"{pad}print *, {rendered}"]
+        return [f"{pad}print '(*(g0, 1x))', {rendered}"]
     if isinstance(node, lir.FortranIf):
         out = [f"{pad}if ({_emit_expr(node.test)}) then"]
         for inner in node.body:

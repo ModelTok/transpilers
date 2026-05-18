@@ -23,6 +23,10 @@ def _imports_for(source: str) -> str:
         pkgs.append("fmt")
     if "math." in source:
         pkgs.append("math")
+    if "strconv." in source:
+        pkgs.append("strconv")
+    if "strings." in source:
+        pkgs.append("strings")
     if not pkgs:
         return ""
     if len(pkgs) == 1:
@@ -169,7 +173,15 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.GoStructInit):
         body = ", ".join(f"{n}: {_emit_expr(v)}" for n, v in node.field_values)
         return f"{node.name}{{{body}}}"
-    from transpilers.passes.mir_to_go_lir import _GoMethodCall as _MC, _GoIfExpr, _GoIndex, _GoSliceLit
+    from transpilers.passes.mir_to_go_lir import (
+        _GoMethodCall as _MC,
+        _GoIfExpr,
+        _GoIndex,
+        _GoSliceLit,
+        _GoSliceAppend,
+        _GoBoolStr,
+        _GoFloatStr,
+    )
     if isinstance(node, _MC):
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{_emit_expr(node.receiver)}.{node.method}({args})"
@@ -183,4 +195,18 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, _GoSliceLit):
         elements = ", ".join(_emit_expr(e) for e in node.elements)
         return f"[]{node.elem_ty}{{{elements}}}"
+    if isinstance(node, _GoSliceAppend):
+        return f"append({_emit_expr(node.left)}, {_emit_expr(node.right)}...)"
+    if isinstance(node, _GoBoolStr):
+        return f'map[bool]string{{true: "True", false: "False"}}[{_emit_expr(node.value)}]'
+    if isinstance(node, _GoFloatStr):
+        v = _emit_expr(node.value)
+        # Match Python's float str(): always show a decimal point.
+        # strconv.FormatFloat 'g' removes trailing zeros, so "12" not "12.0".
+        # The IIFE appends ".0" when neither "." nor "e" is present.
+        return (
+            f'func() string {{ s := strconv.FormatFloat({v}, \'g\', -1, 64); '
+            f'if strings.IndexByte(s, \'.\') < 0 && strings.IndexByte(s, \'e\') < 0 '
+            f'{{ return s + ".0" }}; return s }}()'
+        )
     raise NotImplementedError(f"LIR node {type(node).__name__}")

@@ -8,7 +8,7 @@ appears as a flat sequence of statements at the call site.
 from __future__ import annotations
 
 from transpilers.ir import lir
-from transpilers.passes.mir_to_zig_lir import _ZigBlock
+from transpilers.passes.mir_to_zig_lir import _ZigBlock, _ZigMutableArrayDecl
 
 
 INDENT = "    "
@@ -87,6 +87,10 @@ def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
         if isinstance(n, _ZigBlock):
             for inner in n.items:
                 lines.append(_emit_stmt(inner, depth))
+        elif isinstance(n, _ZigMutableArrayDecl):
+            # Expands to two statements at the call site.
+            for stmt_str in _emit_mutable_array_decl(n, depth):
+                lines.append(stmt_str)
         else:
             lines.append(_emit_stmt(n, depth))
     return "\n".join(lines)
@@ -132,7 +136,26 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     if isinstance(node, _ZigBlock):
         # Block at statement position — emit each item at this depth.
         return "\n".join(_emit_stmt(inner, depth) for inner in node.items)
+    if isinstance(node, _ZigMutableArrayDecl):
+        return "\n".join(_emit_mutable_array_decl(node, depth))
     return f"{pad}{_emit_expr(node)};"
+
+
+def _emit_mutable_array_decl(node: _ZigMutableArrayDecl, depth: int) -> list[str]:
+    """Emit the two-statement form for a list literal that needs to be a slice.
+
+    var _xs_arr = [_]i64{1, 2, 3};
+    const xs: []i64 = _xs_arr[0..];
+
+    Using `const` for the slice binding avoids the "variable is never mutated"
+    error when xs itself isn't reassigned. `[]i64` (not `[]const i64`) keeps
+    the *elements* mutable so subscript writes work.
+    """
+    pad = INDENT * depth
+    items = ", ".join(_emit_expr(e) for e in node.array_lit.elements)
+    arr_line = f"{pad}var {node.arr_name} = [_]{node.array_lit.elem_ty}{{{items}}};"
+    slice_line = f"{pad}const {node.name}: []{node.array_lit.elem_ty} = {node.arr_name}[0..];"
+    return [arr_line, slice_line]
 
 
 def _op_of(node: lir.LirNode) -> str | None:
@@ -171,7 +194,8 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return f'"{escaped}"'
     if isinstance(node, lir.ZigArrayLit):
         items = ", ".join(_emit_expr(e) for e in node.elements)
-        return f"[_]{node.elem_ty}{{{items}}}"
+        prefix = "&" if node.ref else ""
+        return f"{prefix}[_]{node.elem_ty}{{{items}}}"
     if isinstance(node, lir.ZigFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
     if isinstance(node, lir.ZigStructInit):
@@ -204,4 +228,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
             else:
                 rendered_args.append(_emit_expr(a))
         return f"{node.func}({', '.join(rendered_args)})"
+    from transpilers.passes.mir_to_zig_lir import _ZigIfExpr as _IE
+    if isinstance(node, _IE):
+        return f"if ({_emit_expr(node.test)}) {_emit_expr(node.then_)} else {_emit_expr(node.else_)}"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

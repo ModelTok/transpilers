@@ -44,25 +44,45 @@ def _lower_struct(s: mir.MirStruct) -> lir.MojoStruct:
 
 def _lower_function(fn: mir.MirFunction) -> lir.MojoFn:
     # Mojo args are read-only by default; reassigning to `n` errors unless
-    # the param is declared `var n: …`. Scan the body for param-reassign.
-    reassigned = _params_reassigned(fn.body, {p.name for p in fn.params})
-    params = [
-        (f"var {p.name}" if p.name in reassigned else p.name, _mojo_type(p.ty))
-        for p in fn.params
-    ]
+    # the param is declared `var n: …`. Subscript-assigning to `xs` (e.g.
+    # `xs[i] = v`) requires `mut xs: …` instead. Scan the body for both.
+    param_names = {p.name for p in fn.params}
+    var_params, mut_params = _params_reassigned(fn.body, param_names)
+    params = []
+    for p in fn.params:
+        if p.name in mut_params:
+            params.append((f"mut {p.name}", _mojo_type(p.ty)))
+        elif p.name in var_params:
+            params.append((f"var {p.name}", _mojo_type(p.ty)))
+        else:
+            params.append((p.name, _mojo_type(p.ty)))
     ret = _mojo_type(fn.return_type)
     declared: set[str] = {p.name for p in fn.params}
     body = [_lower_stmt(n, declared) for n in fn.body]
     return lir.MojoFn(name=fn.name, params=params, return_type=ret, body=body)
 
 
-def _params_reassigned(body: list[mir.MirNode], param_names: set[str]) -> set[str]:
-    """Return the subset of `param_names` that get reassigned in `body`."""
-    out: set[str] = set()
+def _params_reassigned(
+    body: list[mir.MirNode], param_names: set[str]
+) -> tuple[set[str], set[str]]:
+    """Return two sets: (var_params, mut_params).
+
+    var_params: params that are scalar-reassigned (need `var` prefix).
+    mut_params: params that are subscript-assigned (need `mut` prefix).
+    """
+    var_out: set[str] = set()
+    mut_out: set[str] = set()
+
     def _scan(nodes: list[mir.MirNode]) -> None:
         for n in nodes:
             if isinstance(n, mir.MirAssign) and n.target in param_names:
-                out.add(n.target)
+                var_out.add(n.target)
+            elif (
+                isinstance(n, mir.MirSubscriptAssign)
+                and isinstance(n.obj, mir.MirName)
+                and n.obj.name in param_names
+            ):
+                mut_out.add(n.obj.name)
             elif isinstance(n, mir.MirIf):
                 _scan(n.body)
                 _scan(n.orelse)
@@ -70,8 +90,9 @@ def _params_reassigned(body: list[mir.MirNode], param_names: set[str]) -> set[st
                 _scan(n.body)
             elif isinstance(n, mir.MirForRange):
                 _scan(n.body)
+
     _scan(body)
-    return out
+    return var_out, mut_out
 
 
 def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
