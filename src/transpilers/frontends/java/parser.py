@@ -197,12 +197,23 @@ def _convert_assignment(node: Node) -> hir.HirNode:
     right = required_field(node, "right")
     op_node = required_field(node, "operator")
     op = text(op_node)
-    if left.type != "identifier":
-        raise UnsupportedConstruct(f"java assignment lhs {left.type}")
     aug = None if op == "=" else op[:-1]
-    return hir.HirAssign(
-        target=text(left), value=_convert_expr(right), annotation=None, augmented_op=aug
-    )
+    rhs = _convert_expr(right)
+    if left.type == "identifier":
+        return hir.HirAssign(target=text(left), value=rhs, annotation=None, augmented_op=aug)
+    if left.type == "array_access" and aug is None:
+        return hir.HirSubscriptAssign(
+            obj=_convert_expr(required_field(left, "array")),
+            index=_convert_expr(required_field(left, "index")),
+            value=rhs,
+        )
+    if left.type == "field_access" and aug is None:
+        return hir.HirFieldAssign(
+            obj=_convert_expr(required_field(left, "object")),
+            field=text(required_field(left, "field")),
+            value=rhs,
+        )
+    raise UnsupportedConstruct(f"java assignment lhs {left.type}")
 
 
 def _convert_update(node: Node) -> hir.HirNode:
@@ -294,6 +305,24 @@ def _convert_expr(node: Node) -> hir.HirNode:
         arr = required_field(node, "array")
         idx = required_field(node, "index")
         return hir.HirSubscript(value=_convert_expr(arr), index=_convert_expr(idx))
+    if kind == "ternary_expression":
+        cond = required_field(node, "condition")
+        cons = required_field(node, "consequence")
+        alt = required_field(node, "alternative")
+        return hir.HirCall(
+            func="__ternary__",
+            args=[_convert_expr(cond), _convert_expr(cons), _convert_expr(alt)],
+        )
+    if kind == "null_literal":
+        # No first-class null/Option in our IR; treat as integer 0 since
+        # most idiomatic uses compare to it (`if (x == null)`) where the
+        # comparison still has the right truthy result.
+        return hir.HirIntLiteral(value=0)
+    if kind == "array_initializer":
+        # `{1, 2, 3}` — Java's array-literal short form. Lower the same way
+        # as a `new int[]{...}` would: HirList of converted elements.
+        elements = [_convert_expr(c) for c in named_children(node)]
+        return hir.HirList(elements=elements)
     raise UnsupportedConstruct(f"java expr {kind}")
 
 
