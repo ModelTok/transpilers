@@ -191,19 +191,31 @@ def _emit_inclusive_stop(stop: lir.LirNode) -> str:
     return f"{_emit_expr(stop)} - 1"
 
 
+def _op_of(node: lir.LirNode) -> str | None:
+    if isinstance(node, (lir.FortranBinOp, lir.FortranCompare, lir.FortranBoolOp)):
+        return node.op
+    return None
+
+
+def _paren(child: lir.LirNode, parent_op: str, *, on_right: bool) -> str:
+    from transpilers.backends._precedence import paren_emit
+    return paren_emit(child, parent_op, on_right=on_right, emit_expr=_emit_expr, op_of=_op_of)
+
+
 def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
     if isinstance(node, lir.FortranBinOp):
-        return f"{_emit_expr(node.left)} {node.op} {_emit_expr(node.right)}"
+        return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.FortranCompare):
-        return f"{_emit_expr(node.left)} {node.op} {_emit_expr(node.right)}"
+        return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.FortranBoolOp):
-        return f"{_emit_expr(node.left)} {node.op} {_emit_expr(node.right)}"
+        return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.FortranUnary):
+        operand = _paren(node.operand, "__unary__", on_right=False)
         if node.op == ".not.":
-            return f".not. {_emit_expr(node.operand)}"
-        return f"-{_emit_expr(node.operand)}"
+            return f".not. {operand}"
+        return f"-{operand}"
     if isinstance(node, lir.FortranName):
         return node.name
     if isinstance(node, lir.FortranIntLiteral):
