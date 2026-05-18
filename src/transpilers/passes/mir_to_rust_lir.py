@@ -86,6 +86,12 @@ def _lower_stmt(node: mir.MirNode, declared: set[str], mut: set[str]) -> lir.Lir
         return lir.RustFieldAssign(
             obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)
         )
+    if isinstance(node, mir.MirSubscriptAssign):
+        return lir.RustSubscriptAssign(
+            obj=_lower_expr(node.obj),
+            index=_lower_expr(node.index),
+            value=_lower_expr(node.value),
+        )
     if isinstance(node, mir.MirAssign):
         return _lower_assign(node, declared, mut)
     if isinstance(node, mir.MirIf):

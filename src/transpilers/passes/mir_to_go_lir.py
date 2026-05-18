@@ -38,6 +38,12 @@ def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
         return lir.GoFieldAssign(
             obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)
         )
+    if isinstance(node, mir.MirSubscriptAssign):
+        return lir.GoSubscriptAssign(
+            obj=_lower_expr(node.obj),
+            index=_lower_expr(node.index),
+            value=_lower_expr(node.value),
+        )
     if isinstance(node, mir.MirAssign):
         return _lower_assign(node, declared)
     if isinstance(node, mir.MirIf):

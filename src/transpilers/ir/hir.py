@@ -180,6 +180,15 @@ class HirFieldAssign(HirNode):
 
 
 @dataclass
+class HirSubscriptAssign(HirNode):
+    """`obj[index] = value` — indexed write into a list / array / map."""
+
+    obj: HirNode
+    index: HirNode
+    value: HirNode
+
+
+@dataclass
 class HirStructInit(HirNode):
     """Constructor-style struct creation. `args` correspond to the struct's
     fields in declaration order (positional). Empty args means zero-init."""

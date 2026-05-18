@@ -92,6 +92,12 @@ def _lower_stmt(node: mir.MirNode, result_name: str) -> lir.LirNode:
             name=_emit_field_path(node.obj, node.field),
             value=_lower_expr(node.value),
         )
+    if isinstance(node, mir.MirSubscriptAssign):
+        return lir.FortranSubscriptAssign(
+            obj=_lower_expr(node.obj),
+            index=_lower_expr(node.index),
+            value=_lower_expr(node.value),
+        )
     if isinstance(node, mir.MirReturn):
         if node.value is None or not result_name:
             return lir.FortranReturn()
