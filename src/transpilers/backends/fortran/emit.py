@@ -232,9 +232,16 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         elems = ", ".join(_emit_expr(e) for e in node.elements)
         return f"[{elems}]"
     if isinstance(node, lir.FortranSubscript):
-        # 1-indexed; bridge from our 0-based MIR with +1. Mirror the
-        # offset-folding done by `_emit_inclusive_stop` so `xs[i+1]`
-        # in source produces `xs(i + 2)` rather than `xs(i + 1 + 1)`.
-        idx = _emit_expr(node.index)
-        return f"{_emit_expr(node.value)}({idx} + 1)"
+        # 1-indexed; bridge from our 0-based MIR with +1. Constant-fold
+        # when the index is itself a literal so `xs[0]` prints as `xs(1)`
+        # rather than `xs(0 + 1)`. Also fold `i + k` → `i + (k+1)`.
+        if isinstance(node.index, lir.FortranIntLiteral):
+            return f"{_emit_expr(node.value)}({node.index.value + 1})"
+        if (
+            isinstance(node.index, lir.FortranBinOp)
+            and node.index.op == "+"
+            and isinstance(node.index.right, lir.FortranIntLiteral)
+        ):
+            return f"{_emit_expr(node.value)}({_emit_expr(node.index.left)} + {node.index.right.value + 1})"
+        return f"{_emit_expr(node.value)}({_emit_expr(node.index)} + 1)"
     raise NotImplementedError(f"LIR node {type(node).__name__}")
