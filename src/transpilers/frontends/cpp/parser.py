@@ -31,22 +31,56 @@ class UnsupportedConstruct(Exception):
 
 # C++ types collapsed onto HIR annotation strings consumable by hir_to_mir.
 CPP_TYPE_ALIASES: dict[str, str] = {
+    # Integer family — collapse all width/signedness variants onto `int`.
     "int": "int",
-    "long": "int",
-    "long long": "int",
-    "short": "int",
+    "signed": "int",
     "signed int": "int",
+    "unsigned": "int",
     "unsigned int": "int",
+    "long": "int",
+    "signed long": "int",
     "unsigned long": "int",
+    "long long": "int",
+    "signed long long": "int",
+    "unsigned long long": "int",
+    "short": "int",
+    "signed short": "int",
+    "unsigned short": "int",
     "char": "int",
     "signed char": "int",
     "unsigned char": "int",
+    # stdint-style names that show up after `#include <cstdint>`.
+    "int8_t": "int",
+    "int16_t": "int",
+    "int32_t": "int",
+    "int64_t": "int",
+    "uint8_t": "int",
+    "uint16_t": "int",
+    "uint32_t": "int",
+    "uint64_t": "int",
+    "size_t": "int",
+    "std::size_t": "int",
+    "ssize_t": "int",
+    "ptrdiff_t": "int",
+    "std::ptrdiff_t": "int",
+    # Floating-point.
     "float": "float",
     "double": "float",
     "long double": "float",
+    # Booleans / void.
     "bool": "bool",
     "_Bool": "bool",
     "void": "None",
+    # String shapes — collapse onto our StrT.
+    "char *": "str",
+    "const char *": "str",
+    "std::string": "str",
+    "std::string_view": "str",
+    "string_view": "str",
+    "basic_string": "str",
+    "basic_string_view": "str",
+    "std::basic_string": "str",
+    "std::basic_string_view": "str",
 }
 
 INPUT_NAME = "input.cpp"
