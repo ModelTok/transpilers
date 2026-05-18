@@ -16,6 +16,7 @@ from transpilers.ir.types import (
     ListT,
     NoneT,
     RangeT,
+    SimdT,
     StrT,
     StructT,
     Type,
@@ -242,6 +243,14 @@ def _resolve_annotation(ann: str | None) -> Type:
     if ann.startswith("list[") and ann.endswith("]"):
         inner = ann[len("list[") : -1]
         return ListT(elem=_resolve_annotation(inner))
+    if ann.startswith("simd[") and ann.endswith("]"):
+        # `simd[<elem>, <lanes>]` — a SIMD vector type. The C++ frontend
+        # produces these strings when it sees Intel/ARM vector typedefs.
+        inner = ann[len("simd[") : -1]
+        elem_text, _, lanes_text = inner.rpartition(",")
+        elem = _resolve_annotation(elem_text.strip())
+        lanes = int(lanes_text.strip())
+        return SimdT(elem=elem, lanes=lanes)
     if ann in _KNOWN_STRUCTS:
         return StructT(name=ann)
     # Unknown identifier-shaped annotation looking like a class name

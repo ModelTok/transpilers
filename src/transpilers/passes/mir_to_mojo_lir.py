@@ -11,7 +11,18 @@ the format!() detour Rust needs.
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
-from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
+from transpilers.ir.types import (
+    BoolT,
+    FloatT,
+    IntT,
+    ListT,
+    NoneT,
+    SimdT,
+    StrT,
+    StructT,
+    Type,
+    UnknownT,
+)
 
 
 def mir_to_mojo_lir(module: mir.MirModule) -> lir.MojoModule:
@@ -129,13 +140,31 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
 
 
 def _lower_call(node: mir.MirCall) -> lir.LirNode:
+    args = [_lower_expr(a) for a in node.args]
     if node.func == "len":
-        if len(node.args) != 1:
+        if len(args) != 1:
             raise ValueError("len() takes exactly one argument")
-        # Mojo provides len() as a builtin. No casting needed since our
-        # IntT(64) maps to Mojo's `Int` which is the right shape.
-        return lir.MojoCall(func="len", args=[_lower_expr(node.args[0])])
-    return lir.MojoCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+        return lir.MojoCall(func="len", args=args)
+    # SIMD lifting — the C++ frontend translates Intel intrinsics into
+    # synthetic `simd_pack` / `simd_splat` / `simd_zero` / `simd_sqrt`
+    # calls. Map them to Mojo's portable `SIMD[DType.X, N](...)` form.
+    # We assume float64 + lanes-from-arg-count for the heuristic; a real
+    # type-context-propagation pass could pick precisely.
+    if node.func == "simd_pack" and args:
+        return lir.MojoCall(func=f"SIMD[DType.float64, {len(args)}]", args=args)
+    if node.func == "simd_splat" and len(args) == 1:
+        return lir.MojoCall(func="SIMD[DType.float64, 4]", args=args)
+    if node.func == "simd_zero" and not args:
+        return lir.MojoCall(
+            func="SIMD[DType.float64, 4]",
+            args=[lir.MojoFloatLiteral(value=0.0)],
+        )
+    if node.func == "simd_sqrt" and len(args) == 1:
+        return lir.MojoMethodCall(receiver=args[0], method="sqrt", args=[])
+    if node.func == "simd_abs" and len(args) == 1:
+        return lir.MojoCall(func="abs", args=args)
+    # Print/abs/min/max identity (already Mojo builtins).
+    return lir.MojoCall(func=node.func, args=args)
 
 
 def _mojo_type(ty: Type) -> str:
@@ -158,6 +187,21 @@ def _mojo_type(ty: Type) -> str:
         return f"List[{_mojo_type(ty.elem)}]"
     if isinstance(ty, StructT):
         return ty.name
+    if isinstance(ty, SimdT):
+        # `SIMD[DType.<elem>, <lanes>]` — Mojo's portable SIMD type. The
+        # compiler picks AVX2/AVX-512/NEON/SVE per target ISA.
+        return f"SIMD[DType.{_dtype_for(ty.elem)}, {ty.lanes}]"
     if isinstance(ty, UnknownT):
         raise ValueError(f"unresolved type hole: {ty.hint}")
     raise NotImplementedError(f"type {type(ty).__name__}")
+
+
+def _dtype_for(elem: Type) -> str:
+    if isinstance(elem, FloatT):
+        return f"float{elem.bits}"
+    if isinstance(elem, IntT):
+        prefix = "int" if elem.signed else "uint"
+        return f"{prefix}{elem.bits}"
+    if isinstance(elem, BoolT):
+        return "bool"
+    raise NotImplementedError(f"no DType for {type(elem).__name__}")

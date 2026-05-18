@@ -52,6 +52,22 @@ CPP_TYPE_ALIASES: dict[str, str] = {
 INPUT_NAME = "input.cpp"
 
 
+# Intel SIMD intrinsic vector types — alias to portable `simd[T, N]`
+# annotations. The Mojo target emits `SIMD[DType.X, N]` directly; other
+# targets fall back via the type lattice.
+SIMD_TYPE_ALIASES: dict[str, str] = {
+    "__m256d": "simd[float, 4]",
+    "__m256":  "simd[float, 8]",
+    "__m256i": "simd[int, 8]",
+    "__m128d": "simd[float, 2]",
+    "__m128":  "simd[float, 4]",
+    "__m128i": "simd[int, 4]",
+    "__m512d": "simd[float, 8]",
+    "__m512":  "simd[float, 16]",
+    "__m512i": "simd[int, 16]",
+}
+
+
 _SYSTEM_INCLUDE_CACHE: list[str] | None = None
 
 
@@ -398,6 +414,11 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
         return hir.HirName(name="self")
     if kind == CursorKind.CALL_EXPR:
         return _convert_call(cursor)
+    if kind == CursorKind.ARRAY_SUBSCRIPT_EXPR:
+        # `arr[index]` — two children: the array expression and the index.
+        kids = list(cursor.get_children())
+        if len(kids) == 2:
+            return hir.HirSubscript(value=_convert_expr(kids[0]), index=_convert_expr(kids[1]))
     if kind == CursorKind.COMPOUND_ASSIGNMENT_OPERATOR:
         raise UnsupportedConstruct("compound assignment as expression")
     if kind in (CursorKind.GNU_NULL_EXPR, CursorKind.CXX_NULL_PTR_LITERAL_EXPR):
@@ -514,7 +535,43 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     if not name:
         raise UnsupportedConstruct(f"call target {callee.kind.name}")
     args = [_convert_expr(a) for a in kids[1:]]
+    # SIMD intrinsic lifting: turn Intel `_mm*` calls into semantic HIR
+    # operations on SIMD-typed values. Mojo will emit idiomatic `a + b`
+    # on SIMD types; other targets fall back to the original call form.
+    lifted = _lift_simd_intrinsic(name, args)
+    if lifted is not None:
+        return lifted
     return hir.HirCall(func=name, args=args)
+
+
+_SIMD_BINOP = {
+    "add": "+", "sub": "-", "mul": "*", "div": "/",
+    "and": "&", "or": "|", "xor": "^",
+}
+
+
+def _lift_simd_intrinsic(name: str, args: list[hir.HirNode]) -> hir.HirNode | None:
+    """Recognize Intel SIMD intrinsics and lift them to semantic HIR
+    operations. Returns None if the name doesn't match an intrinsic
+    pattern; the caller falls back to a plain HirCall."""
+    if not name.startswith(("_mm_", "_mm128_", "_mm256_", "_mm512_")):
+        return None
+    parts = [p for p in name.split("_") if p]
+    if len(parts) < 2:
+        return None
+    op = parts[1]
+    if op in _SIMD_BINOP and len(args) == 2:
+        return hir.HirBinOp(op=_SIMD_BINOP[op], left=args[0], right=args[1])
+    if op == "set" and args:
+        # Intel's `_mm256_set_pd(d, c, b, a)` reverses lane order.
+        return hir.HirCall(func="simd_pack", args=list(reversed(args)))
+    if op == "set1" and len(args) == 1:
+        return hir.HirCall(func="simd_splat", args=args)
+    if op == "setzero" and not args:
+        return hir.HirCall(func="simd_zero", args=[])
+    if op in ("sqrt", "abs", "ceil", "floor") and len(args) == 1:
+        return hir.HirCall(func=f"simd_{op}", args=args)
+    return None
 
 
 def _decl_name(cursor: ci.Cursor) -> str | None:
@@ -580,6 +637,8 @@ def _type_text(t: ci.Type) -> str:
     cleaned = spelling.replace("const ", "").replace("volatile ", "").strip()
     if cleaned in CPP_TYPE_ALIASES:
         return CPP_TYPE_ALIASES[cleaned]
+    if cleaned in SIMD_TYPE_ALIASES:
+        return SIMD_TYPE_ALIASES[cleaned]
     # Best-effort fallback: collapse on the canonical kind.
     kind = t.kind
     INTEGER_KINDS = {
