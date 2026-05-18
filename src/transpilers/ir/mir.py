@@ -42,6 +42,16 @@ class MirReturn(MirNode):
 
 
 @dataclass
+class MirBreak(MirNode):
+    pass
+
+
+@dataclass
+class MirContinue(MirNode):
+    pass
+
+
+@dataclass
 class MirBinOp(MirNode):
     op: str
     left: MirNode

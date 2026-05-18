@@ -110,6 +110,10 @@ def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
 
 def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     pad = INDENT * depth
+    if isinstance(node, lir.ZigBreak):
+        return f"{pad}break;"
+    if isinstance(node, lir.ZigContinue):
+        return f"{pad}continue;"
     if isinstance(node, lir.ZigReturn):
         return f"{pad}return {_emit_expr(node.value)};" if node.value else f"{pad}return;"
     if isinstance(node, lir.ZigVar):

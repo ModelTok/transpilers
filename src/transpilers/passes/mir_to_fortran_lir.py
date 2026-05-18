@@ -102,6 +102,10 @@ def _lower_stmt(node: mir.MirNode, result_name: str) -> lir.LirNode:
         if node.value is None or not result_name:
             return lir.FortranReturn()
         return _ReturnAssign(result_name=result_name, value=_lower_expr(node.value))
+    if isinstance(node, mir.MirBreak):
+        return lir.FortranExit()
+    if isinstance(node, mir.MirContinue):
+        return lir.FortranCycle()
     if isinstance(node, mir.MirAssign):
         if node.augmented_op is not None:
             rhs = lir.FortranBinOp(

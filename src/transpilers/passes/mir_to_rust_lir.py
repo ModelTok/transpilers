@@ -138,6 +138,10 @@ def _scan_assigns(nodes: list[mir.MirNode], counts: dict[str, int], aug: set[str
 def _lower_stmt(node: mir.MirNode, declared: set[str], mut: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.RustReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirBreak):
+        return lir.RustBreak()
+    if isinstance(node, mir.MirContinue):
+        return lir.RustContinue()
     if isinstance(node, mir.MirFieldAssign):
         return lir.RustFieldAssign(
             obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)

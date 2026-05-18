@@ -93,6 +93,10 @@ def _lower_function(fn: hir.HirFunction) -> mir.MirFunction:
 def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
     if isinstance(node, hir.HirReturn):
         return mir.MirReturn(value=_lower_expr(node.value, env) if node.value else None)
+    if isinstance(node, hir.HirBreak):
+        return mir.MirBreak()
+    if isinstance(node, hir.HirContinue):
+        return mir.MirContinue()
     if isinstance(node, hir.HirFieldAssign):
         return mir.MirFieldAssign(
             obj=_lower_expr(node.obj, env),

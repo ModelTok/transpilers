@@ -49,6 +49,10 @@ def _lower_function(fn: mir.MirFunction) -> lir.CFn:
 def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.CReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirBreak):
+        return lir.CBreak()
+    if isinstance(node, mir.MirContinue):
+        return lir.CContinue()
     if isinstance(node, mir.MirFieldAssign):
         via_ptr = isinstance(node.obj, mir.MirName) and node.obj.name == "self"
         return lir.CFieldAssign(

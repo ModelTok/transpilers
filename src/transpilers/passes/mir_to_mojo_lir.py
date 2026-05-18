@@ -98,6 +98,10 @@ def _params_reassigned(
 def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.MojoReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirBreak):
+        return lir.MojoBreak()
+    if isinstance(node, mir.MirContinue):
+        return lir.MojoContinue()
     if isinstance(node, mir.MirFieldAssign):
         return lir.MojoFieldAssign(
             obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)

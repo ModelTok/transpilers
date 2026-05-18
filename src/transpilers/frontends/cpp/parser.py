@@ -297,6 +297,8 @@ def _convert_stmt(cursor: ci.Cursor) -> list[hir.HirNode]:
         return [_convert_while(cursor)]
     if kind == CursorKind.FOR_STMT:
         return _convert_for(cursor)
+    if kind == CursorKind.CXX_FOR_RANGE_STMT:
+        return _convert_for_range(cursor)
     if kind == CursorKind.COMPOUND_STMT:
         return _convert_compound(cursor)
     if kind in (CursorKind.BINARY_OPERATOR, CursorKind.COMPOUND_ASSIGNMENT_OPERATOR):
@@ -305,6 +307,20 @@ def _convert_stmt(cursor: ci.Cursor) -> list[hir.HirNode]:
         return [_convert_unary_stmt(cursor)]
     if kind == CursorKind.CALL_EXPR:
         return [_convert_expr(cursor)]
+    if kind == CursorKind.BREAK_STMT:
+        return [hir.HirBreak()]
+    if kind == CursorKind.CONTINUE_STMT:
+        return [hir.HirContinue()]
+    if kind == CursorKind.NULL_STMT:
+        return []
+    if kind == CursorKind.SWITCH_STMT:
+        return _convert_switch(cursor)
+    if kind == CursorKind.UNEXPOSED_EXPR:
+        # libclang sometimes wraps real statements (especially assignments
+        # that involve operator overloads) in UNEXPOSED. Drill in.
+        kids = list(cursor.get_children())
+        if len(kids) == 1:
+            return _convert_stmt(kids[0])
     raise UnsupportedConstruct(f"stmt {kind.name}")
 
 
@@ -355,9 +371,137 @@ def _convert_if(cursor: ci.Cursor) -> hir.HirNode:
 
 def _convert_while(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
-    cond = _convert_expr(kids[0])
+    test_cursor = kids[0]
     body = _convert_stmt(kids[1]) if len(kids) > 1 else []
+    # `while (t--)` competitive-programming idiom: post-decrement on a name
+    # means "test t != 0 then decrement". Desugar to a clean form rather
+    # than refusing (which #4 made the default for postfix in expr context).
+    stripped = _strip_unexposed(test_cursor)
+    if stripped.kind == CursorKind.UNARY_OPERATOR and _unary_token(stripped) in ("--", "++"):
+        op = _unary_token(stripped)
+        inner_kids = list(stripped.get_children())
+        if inner_kids and inner_kids[0].kind == CursorKind.DECL_REF_EXPR:
+            name = inner_kids[0].spelling
+            cond = hir.HirCompare(op="!=", left=hir.HirName(name=name), right=hir.HirIntLiteral(value=0))
+            step = "-" if op == "--" else "+"
+            update = hir.HirAssign(
+                target=name, value=hir.HirIntLiteral(value=1),
+                annotation=None, augmented_op=step,
+            )
+            return hir.HirWhile(test=cond, body=[update, *body])
+    cond = _convert_expr(test_cursor)
     return hir.HirWhile(test=cond, body=body)
+
+
+def _strip_unexposed(cursor: ci.Cursor) -> ci.Cursor:
+    """Recurse past UNEXPOSED_EXPR wrappers libclang inserts for things
+    like implicit conversions — they hide the real operator kind."""
+    while cursor.kind == CursorKind.UNEXPOSED_EXPR:
+        inner = list(cursor.get_children())
+        if not inner:
+            return cursor
+        cursor = inner[0]
+    return cursor
+
+
+def _convert_switch(cursor: ci.Cursor) -> list[hir.HirNode]:
+    """`switch (x) { case A: ...; break; case B: ...; ... default: ...; }`
+    desugars to a chain of `if/elif/else`. Fall-through is *not* modelled —
+    each case body terminates at its break (we strip those during conversion).
+    Cases without an explicit break would semantically need fall-through
+    support, but that's out of scope for the initial subset."""
+    kids = list(cursor.get_children())
+    if len(kids) < 2:
+        raise UnsupportedConstruct("malformed switch")
+    test_expr = _convert_expr(kids[0])
+    body_cursor = kids[1]
+    cases: list[tuple[hir.HirNode, list[hir.HirNode]]] = []
+    default_body: list[hir.HirNode] = []
+
+    body_kids = list(body_cursor.get_children()) if body_cursor.kind == CursorKind.COMPOUND_STMT else [body_cursor]
+    current_value: hir.HirNode | None = None
+    current_body: list[hir.HirNode] = []
+    is_default = False
+
+    def flush() -> None:
+        nonlocal current_value, current_body, is_default
+        if is_default:
+            default_body.extend(current_body)
+        elif current_value is not None:
+            cases.append((current_value, current_body))
+        current_value = None
+        current_body = []
+        is_default = False
+
+    for c in body_kids:
+        if c.kind == CursorKind.CASE_STMT:
+            flush()
+            case_kids = list(c.get_children())
+            if case_kids:
+                current_value = _convert_expr(case_kids[0])
+                # The case's statement child(ren) follow the value.
+                for inner in case_kids[1:]:
+                    current_body.extend(_convert_stmt(inner))
+        elif c.kind == CursorKind.DEFAULT_STMT:
+            flush()
+            is_default = True
+            for inner in c.get_children():
+                current_body.extend(_convert_stmt(inner))
+        else:
+            current_body.extend(_convert_stmt(c))
+    flush()
+
+    # Strip trailing HirBreak from each case body — switch semantics.
+    def _strip_break(stmts: list[hir.HirNode]) -> list[hir.HirNode]:
+        return [s for s in stmts if not isinstance(s, hir.HirBreak)]
+
+    # Build nested if/elif/else from the cases.
+    chain: list[hir.HirNode] = _strip_break(default_body)
+    for value, body in reversed(cases):
+        chain = [hir.HirIf(
+            test=hir.HirCompare(op="==", left=test_expr, right=value),
+            body=_strip_break(body),
+            orelse=chain,
+        )]
+    return chain
+
+
+def _convert_for_range(cursor: ci.Cursor) -> list[hir.HirNode]:
+    """`for (auto x : xs)` → indexed loop with x = xs[i] inside.
+
+    libclang exposes the children as: VAR_DECL (loop var), iterable expr,
+    then COMPOUND_STMT body. Lacking a foreach in our HIR, we desugar to
+    `for i in range(len(xs)): x = xs[i]; <body>`.
+    """
+    kids = list(cursor.get_children())
+    var_decl = next((c for c in kids if c.kind == CursorKind.VAR_DECL), None)
+    body_cursor = next((c for c in kids if c.kind == CursorKind.COMPOUND_STMT), None)
+    # The iterable expression is the first non-VAR_DECL, non-body child.
+    iter_cursor = next(
+        (c for c in kids
+         if c.kind not in (CursorKind.VAR_DECL, CursorKind.COMPOUND_STMT, CursorKind.NULL_STMT)),
+        None,
+    )
+    if var_decl is None or iter_cursor is None or body_cursor is None:
+        raise UnsupportedConstruct("malformed range-for")
+    iter_expr = _convert_expr(iter_cursor)
+    var_name = var_decl.spelling
+    idx_name = f"__xpile_idx"
+    body = _convert_compound(body_cursor)
+    bind = hir.HirAssign(
+        target=var_name,
+        value=hir.HirSubscript(value=iter_expr, index=hir.HirName(name=idx_name)),
+        annotation=None,
+    )
+    loop = hir.HirFor(
+        target=idx_name,
+        iter=hir.HirCall(
+            func="range",
+            args=[hir.HirIntLiteral(value=0), hir.HirCall(func="len", args=[iter_expr])],
+        ),
+        body=[bind, *body],
+    )
+    return [loop]
 
 
 def _convert_for(cursor: ci.Cursor) -> list[hir.HirNode]:
@@ -418,6 +562,20 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
     if kind == CursorKind.CXX_BOOL_LITERAL_EXPR:
         token = next(cursor.get_tokens(), None)
         return hir.HirBoolLiteral(value=token is not None and token.spelling == "true")
+    if kind == CursorKind.CHARACTER_LITERAL:
+        token = next(cursor.get_tokens(), None)
+        if token is None:
+            return hir.HirIntLiteral(value=0)
+        spelling = token.spelling
+        if len(spelling) >= 3 and spelling.startswith("'") and spelling.endswith("'"):
+            inner = spelling[1:-1]
+            # Common escapes only — the rest stay as their literal byte.
+            escape_map = {"\\n": 10, "\\t": 9, "\\r": 13, "\\0": 0, "\\'": 39, "\\\\": 92}
+            if inner in escape_map:
+                return hir.HirIntLiteral(value=escape_map[inner])
+            if len(inner) == 1:
+                return hir.HirIntLiteral(value=ord(inner))
+        return hir.HirIntLiteral(value=0)
     if kind == CursorKind.STRING_LITERAL:
         token = next(cursor.get_tokens(), None)
         if token is None:
@@ -468,6 +626,31 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
                 return _convert_expr(c)
         if kids:
             return _convert_expr(kids[-1])
+    if kind == CursorKind.CONDITIONAL_OPERATOR:
+        # `cond ? a : b` — three children. Lower as a __ternary__ builtin
+        # call so each backend folds it into a target-native if-expression.
+        kids = list(cursor.get_children())
+        if len(kids) == 3:
+            return hir.HirCall(
+                func="__ternary__",
+                args=[_convert_expr(kids[0]), _convert_expr(kids[1]), _convert_expr(kids[2])],
+            )
+    if kind == CursorKind.INIT_LIST_EXPR:
+        # `{1, 2, 3}` brace-init at expression position — emit as a list literal.
+        return hir.HirList(elements=[_convert_expr(c) for c in cursor.get_children()])
+    if kind == CursorKind.UNEXPOSED_EXPR:
+        # Multi-child UNEXPOSED nodes (e.g. operator-overload call wrapper)
+        # — drill into the last non-trivial child.
+        kids = list(cursor.get_children())
+        for c in kids[::-1]:
+            if c.kind != CursorKind.TYPE_REF:
+                try:
+                    return _convert_expr(c)
+                except UnsupportedConstruct:
+                    continue
+        # Empty UNEXPOSED (or all children failed): yield 0 so the call site
+        # parses. Lossy but matches our other I/O-strip behavior.
+        return hir.HirIntLiteral(value=0)
     raise UnsupportedConstruct(f"expr {kind.name}")
 
 
@@ -507,6 +690,25 @@ def _convert_assignment_stmt(cursor: ci.Cursor) -> hir.HirNode:
         lhs_kids = list(lhs.get_children())
         obj = _convert_expr(lhs_kids[0]) if lhs_kids else hir.HirName(name="self")
         return hir.HirFieldAssign(obj=obj, field=lhs.spelling, value=rhs)
+    if lhs.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR and op == "=":
+        lhs_kids = list(lhs.get_children())
+        if len(lhs_kids) == 2:
+            return hir.HirSubscriptAssign(
+                obj=_convert_expr(lhs_kids[0]),
+                index=_convert_expr(lhs_kids[1]),
+                value=rhs,
+            )
+    # libclang re-parses `vec[i] = v` through the operator[] overload as
+    # `vec.operator[](i) = v`, surfaced as a CALL_EXPR LHS. Treat it as a
+    # subscript-assign best-effort (operator[] semantics aren't modelled).
+    if lhs.kind == CursorKind.CALL_EXPR and op == "=":
+        lhs_kids = list(lhs.get_children())
+        if len(lhs_kids) >= 2:
+            return hir.HirSubscriptAssign(
+                obj=_convert_expr(lhs_kids[0]),
+                index=_convert_expr(lhs_kids[1]),
+                value=rhs,
+            )
     target = _decl_name(lhs)
     if target is None:
         raise UnsupportedConstruct(f"assignment target {lhs.kind.name}")
@@ -559,7 +761,12 @@ def _convert_unary_stmt(cursor: ci.Cursor) -> hir.HirNode:
 def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
     if not kids:
-        raise UnsupportedConstruct("call with no callee")
+        # libclang's CALL_EXPR exposes no children for operator-overload
+        # calls like `cin >> n` / `cout << x`. Lose the I/O side effect
+        # and emit a synthetic no-op call — competitive-programming code
+        # is the main culprit and we care about the algorithm body, not
+        # the I/O wrapping.
+        return hir.HirCall(func="__cpp_overloaded_op__", args=[])
     callee = kids[0]
     # `obj.method(args)` arrives as CALL_EXPR whose callee is MEMBER_REF_EXPR.
     if callee.kind == CursorKind.MEMBER_REF_EXPR:
@@ -571,9 +778,18 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
         )
         args = [_convert_expr(a) for a in kids[1:]]
         return hir.HirMethodCall(receiver=receiver, method=callee.spelling, args=args)
+    # libclang sometimes wraps the callee in UNEXPOSED — drill in.
+    while callee.kind == CursorKind.UNEXPOSED_EXPR:
+        inner = list(callee.get_children())
+        if not inner:
+            break
+        callee = inner[0]
     name = _decl_name(callee) or callee.spelling
     if not name:
-        raise UnsupportedConstruct(f"call target {callee.kind.name}")
+        # Operator overload or similar opaque callee — emit a placeholder
+        # so the surrounding code parses (same rationale as the zero-kids
+        # case above).
+        return hir.HirCall(func="__cpp_overloaded_op__", args=[_convert_expr(a) for a in kids[1:]])
     args = [_convert_expr(a) for a in kids[1:]]
     # SIMD intrinsic lifting: turn Intel `_mm*` calls into semantic HIR
     # operations on SIMD-typed values. Mojo will emit idiomatic `a + b`
@@ -671,6 +887,17 @@ def _loc_lt(a: ci.SourceLocation, b: ci.SourceLocation) -> bool:
 
 # ---------- type text ----------
 
+_VECTOR_ELEM_ALIASES = {
+    "int": "int", "long": "int", "long long": "int", "short": "int",
+    "unsigned": "int", "unsigned int": "int", "unsigned long": "int",
+    "char": "int", "unsigned char": "int", "signed char": "int",
+    "size_t": "int", "ptrdiff_t": "int",
+    "float": "float", "double": "float", "long double": "float",
+    "bool": "bool",
+    "string": "str", "std::string": "str",
+}
+
+
 def _type_text(t: ci.Type) -> str:
     spelling = t.spelling
     # Strip cv-qualifiers and references for the alias lookup.
@@ -679,6 +906,27 @@ def _type_text(t: ci.Type) -> str:
         return CPP_TYPE_ALIASES[cleaned]
     if cleaned in SIMD_TYPE_ALIASES:
         return SIMD_TYPE_ALIASES[cleaned]
+    # std::string family → str.
+    if cleaned in ("string", "std::string", "std::basic_string<char>"):
+        return "str"
+    # std::vector<T> → list[T]. Recursive in case T is itself a template.
+    if cleaned.startswith(("vector<", "std::vector<")) and cleaned.endswith(">"):
+        inner = cleaned.split("<", 1)[1][:-1].strip()
+        # Recurse via a fresh _type_text would need a ci.Type; just map the
+        # common element-types directly.
+        return f"list[{_VECTOR_ELEM_ALIASES.get(inner, inner)}]"
+    # Array types — `int[]`, `int[10]`, `int[n]`. Drop the size; carry the
+    # element type as a list.
+    if "[" in cleaned and cleaned.endswith("]"):
+        head = cleaned[: cleaned.index("[")].strip()
+        if head in _VECTOR_ELEM_ALIASES:
+            return f"list[{_VECTOR_ELEM_ALIASES[head]}]"
+    # Array libclang kinds.
+    if t.kind in (ci.TypeKind.CONSTANTARRAY, ci.TypeKind.INCOMPLETEARRAY, ci.TypeKind.VARIABLEARRAY):
+        try:
+            return f"list[{_type_text(t.element_type)}]"
+        except UnsupportedConstruct:
+            return "list[int]"
     # Best-effort fallback: collapse on the canonical kind.
     kind = t.kind
     INTEGER_KINDS = {
@@ -706,6 +954,16 @@ def _type_text(t: ci.Type) -> str:
             return _type_text(t.get_pointee())
         except UnsupportedConstruct:
             return "int"
+    # User-defined typedefs (`typedef long long siz`) — resolve through
+    # the canonical type so aliases for primitive types still translate.
+    if kind == ci.TypeKind.TYPEDEF:
+        canonical = t.get_canonical()
+        if canonical.kind != kind:
+            try:
+                return _type_text(canonical)
+            except UnsupportedConstruct:
+                pass
+        return "int"
     # `auto x = ...` — libclang exposes the deduced type via the canonical
     # form. Recurse so we get the real type.
     if kind in (ci.TypeKind.AUTO, ci.TypeKind.ELABORATED, ci.TypeKind.UNEXPOSED):

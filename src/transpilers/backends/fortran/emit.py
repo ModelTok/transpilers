@@ -254,6 +254,10 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> list[str]:
     pad = INDENT * depth
     if isinstance(node, _ReturnAssign):
         return [f"{pad}{node.result_name} = {_emit_expr(node.value)}", f"{pad}return"]
+    if isinstance(node, lir.FortranExit):
+        return [f"{pad}exit"]
+    if isinstance(node, lir.FortranCycle):
+        return [f"{pad}cycle"]
     if isinstance(node, lir.FortranReturn):
         return [f"{pad}return"]
     if isinstance(node, lir.FortranAssign):
