@@ -255,8 +255,13 @@ def _convert_block(body: cst.BaseSuite) -> list[hir.HirNode]:
         # never reaches downstream passes.
         if isinstance(node, _WithBlock):
             out.extend(node.stmts)
-        else:
-            out.append(node)
+            continue
+        # Drop bare string-literal expression statements (docstrings).
+        # They have no runtime effect but leak into emit as raw quoted
+        # text on targets that don't have a comment-statement form.
+        if isinstance(node, hir.HirStringLiteral):
+            continue
+        out.append(node)
     return out
 
 
