@@ -113,17 +113,29 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     return f"{pad}{_emit_expr(node)}"
 
 
+def _op_of(node: lir.LirNode) -> str | None:
+    if isinstance(node, (lir.MojoBinOp, lir.MojoCompare, lir.MojoBoolOp)):
+        return node.op
+    return None
+
+
+def _paren(child: lir.LirNode, parent_op: str, *, on_right: bool) -> str:
+    from transpilers.backends._precedence import paren_emit
+    return paren_emit(child, parent_op, on_right=on_right, emit_expr=_emit_expr, op_of=_op_of)
+
+
 def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
     if isinstance(node, lir.MojoBinOp):
-        return f"{_emit_expr(node.left)} {node.op} {_emit_expr(node.right)}"
+        return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.MojoCompare):
-        return f"{_emit_expr(node.left)} {node.op} {_emit_expr(node.right)}"
+        return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.MojoBoolOp):
-        return f"{_emit_expr(node.left)} {node.op} {_emit_expr(node.right)}"
+        return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.MojoUnary):
-        return f"{node.op} {_emit_expr(node.operand)}" if node.op == "not" else f"{node.op}{_emit_expr(node.operand)}"
+        operand = _paren(node.operand, "__unary__", on_right=False)
+        return f"{node.op} {operand}" if node.op == "not" else f"{node.op}{operand}"
     if isinstance(node, lir.MojoName):
         return node.name
     if isinstance(node, lir.MojoIntLiteral):
