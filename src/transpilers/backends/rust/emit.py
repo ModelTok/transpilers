@@ -102,6 +102,9 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         return f"{pad}{node.name} = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustFieldAssign):
         return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)};"
+    if isinstance(node, lir.RustSubscriptAssign):
+        # Rust indexing requires `usize`; our IntT lowers to `i64`, so cast.
+        return f"{pad}{_emit_expr(node.obj)}[{_emit_expr(node.index)} as usize] = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustIf):
         head = f"{pad}if {_emit_expr(node.test)} {{"
         body = _emit_block(node.body, depth + 1)

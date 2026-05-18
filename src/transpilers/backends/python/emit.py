@@ -86,6 +86,8 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         return f"{pad}{node.name}{ann} = {_emit_expr(node.value)}"
     if isinstance(node, lir.PyFieldAssign):
         return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)}"
+    if isinstance(node, lir.PySubscriptAssign):
+        return f"{pad}{_emit_expr(node.obj)}[{_emit_expr(node.index)}] = {_emit_expr(node.value)}"
     if isinstance(node, lir.PyIf):
         head = f"{pad}if {_emit_expr(node.test)}:"
         body = _emit_block(node.body, depth + 1) or (pad + INDENT + "pass")
@@ -143,10 +145,13 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.PyStructInit):
         args = ", ".join(_emit_expr(v) for _, v in node.field_values)
         return f"{node.name}({args})"
-    from transpilers.passes.mir_to_python_lir import _PyMethodCall as _MC, _PyIndex
+    from transpilers.passes.mir_to_python_lir import _PyMethodCall as _MC, _PyIndex, _PyList
     if isinstance(node, _MC):
         args = ", ".join(_emit_expr(a) for a in node.args)
         return f"{_emit_expr(node.receiver)}.{node.method}({args})"
     if isinstance(node, _PyIndex):
         return f"{_emit_expr(node.value)}[{_emit_expr(node.index)}]"
+    if isinstance(node, _PyList):
+        elems = ", ".join(_emit_expr(e) for e in node.elements)
+        return f"[{elems}]"
     raise NotImplementedError(f"LIR node {type(node).__name__}")

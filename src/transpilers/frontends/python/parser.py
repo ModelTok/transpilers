@@ -94,9 +94,25 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
         if len(node.targets) != 1:
             raise UnsupportedConstruct("multi-target assignment")
         target = node.targets[0].target
-        if not isinstance(target, cst.Name):
-            raise UnsupportedConstruct(f"assignment target {type(target).__name__}")
-        return hir.HirAssign(target=target.value, value=_convert(node.value), annotation=None)
+        if isinstance(target, cst.Name):
+            return hir.HirAssign(target=target.value, value=_convert(node.value), annotation=None)
+        if isinstance(target, cst.Subscript):
+            # `xs[i] = v` — only plain single-index form (no slice).
+            if len(target.slice) != 1 or not isinstance(target.slice[0].slice, cst.Index):
+                raise UnsupportedConstruct("slice / multi-index subscript-assignment")
+            idx = target.slice[0].slice.value
+            return hir.HirSubscriptAssign(
+                obj=_convert(target.value),
+                index=_convert(idx),
+                value=_convert(node.value),
+            )
+        if isinstance(target, cst.Attribute):
+            return hir.HirFieldAssign(
+                obj=_convert(target.value),
+                field=target.attr.value,
+                value=_convert(node.value),
+            )
+        raise UnsupportedConstruct(f"assignment target {type(target).__name__}")
 
     if isinstance(node, cst.AnnAssign):
         if not isinstance(node.target, cst.Name):

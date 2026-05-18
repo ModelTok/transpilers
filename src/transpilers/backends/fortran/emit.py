@@ -120,6 +120,11 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> list[str]:
         return [f"{pad}return"]
     if isinstance(node, lir.FortranAssign):
         return [f"{pad}{node.name} = {_emit_expr(node.value)}"]
+    if isinstance(node, lir.FortranSubscriptAssign):
+        # Fortran arrays are 1-indexed by default; +1 to bridge our 0-based
+        # MIR. Real shape-aware lowering would track this in the type
+        # lattice; the +1 is correct for any plain rank-1 array.
+        return [f"{pad}{_emit_expr(node.obj)}({_emit_expr(node.index)} + 1) = {_emit_expr(node.value)}"]
     # `print(x, y, z)` lowers to a FortranCall but Fortran's print is a
     # statement form, not a function call — rewrite at emit.
     if isinstance(node, lir.FortranCall) and node.func in ("print", "println"):

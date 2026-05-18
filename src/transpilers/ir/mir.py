@@ -188,6 +188,13 @@ class MirFieldAssign(MirNode):
 
 
 @dataclass
+class MirSubscriptAssign(MirNode):
+    obj: MirNode
+    index: MirNode
+    value: MirNode
+
+
+@dataclass
 class MirStructInit(MirNode):
     """`Point { x: 0, y: 0 }`-shaped construction. `field_values` carries
     `(field_name, value)` pairs in the struct's field declaration order, so

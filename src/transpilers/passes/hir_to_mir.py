@@ -99,12 +99,29 @@ def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
             field=node.field,
             value=_lower_expr(node.value, env),
         )
+    if isinstance(node, hir.HirSubscriptAssign):
+        return mir.MirSubscriptAssign(
+            obj=_lower_expr(node.obj, env),
+            index=_lower_expr(node.index, env),
+            value=_lower_expr(node.value, env),
+        )
     if isinstance(node, hir.HirAssign):
         value = _lower_expr(node.value, env)
         ann_ty = _resolve_annotation(node.annotation) if node.annotation else None
         # Augmented ops desugar to `target = target <op> value`; we keep the
         # original op symbol on MIR so emission can pick `+=` form for readability.
         ty = ann_ty if ann_ty is not None and not isinstance(ann_ty, UnknownT) else _type_of(value)
+        # Propagate the binding's list element type onto an empty list literal,
+        # so each backend's MIR→LIR pass can render the element type even when
+        # `[]` carries no inference signal of its own.
+        from transpilers.ir.types import ListT
+        if (
+            isinstance(value, mir.MirList)
+            and isinstance(ty, ListT)
+            and isinstance(value.ty, ListT)
+            and isinstance(value.ty.elem, UnknownT)
+        ):
+            value.ty = ty
         if node.target not in env:
             env[node.target] = ty
         return mir.MirAssign(target=node.target, value=value, ty=ty, augmented_op=node.augmented_op)

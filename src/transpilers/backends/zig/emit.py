@@ -105,6 +105,9 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         return f"{pad}{node.name} = {_emit_expr(node.value)};"
     if isinstance(node, lir.ZigFieldAssign):
         return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)};"
+    if isinstance(node, lir.ZigSubscriptAssign):
+        # Zig indexing requires `usize`; @intCast bridges from our signed lattice.
+        return f"{pad}{_emit_expr(node.obj)}[@intCast({_emit_expr(node.index)})] = {_emit_expr(node.value)};"
     if isinstance(node, lir.ZigIf):
         head = f"{pad}if ({_emit_expr(node.test)}) {{"
         body = _emit_block(node.body, depth + 1)

@@ -288,6 +288,60 @@ class FortranStructInit(LirNode):
     field_values: list[tuple[str, LirNode]]
 
 
+# ---------- subscript-assignment statements (`xs[i] = v`) ----------
+# One node per target so each emitter renders the language-specific form.
+
+@dataclass
+class RustSubscriptAssign(LirNode):
+    obj: LirNode
+    index: LirNode
+    value: LirNode
+
+
+@dataclass
+class ZigSubscriptAssign(LirNode):
+    obj: LirNode
+    index: LirNode
+    value: LirNode
+
+
+@dataclass
+class CSubscriptAssign(LirNode):
+    obj: LirNode
+    index: LirNode
+    value: LirNode
+
+
+@dataclass
+class GoSubscriptAssign(LirNode):
+    obj: LirNode
+    index: LirNode
+    value: LirNode
+
+
+@dataclass
+class MojoSubscriptAssign(LirNode):
+    obj: LirNode
+    index: LirNode
+    value: LirNode
+
+
+@dataclass
+class PySubscriptAssign(LirNode):
+    obj: LirNode
+    index: LirNode
+    value: LirNode
+
+
+@dataclass
+class FortranSubscriptAssign(LirNode):
+    """Fortran arrays are 1-indexed — the emitter adds the +1 offset."""
+
+    obj: LirNode
+    index: LirNode
+    value: LirNode
+
+
 @dataclass
 class RustFormat(LirNode):
     """`format!("{}{}...", arg1, arg2, ...)` — produced when MIR binop `+` has

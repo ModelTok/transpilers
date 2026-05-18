@@ -50,15 +50,18 @@ def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.CReturn(value=_lower_expr(node.value) if node.value else None)
     if isinstance(node, mir.MirFieldAssign):
-        # `p.x = value` uses `.` (value access). When `obj` is `self` inside
-        # a method body, the receiver is a pointer so we'd use `->` — handled
-        # by the same heuristic as field-access reads.
         via_ptr = isinstance(node.obj, mir.MirName) and node.obj.name == "self"
         return lir.CFieldAssign(
             obj=_lower_expr(node.obj),
             field=node.field,
             value=_lower_expr(node.value),
             via_pointer=via_ptr,
+        )
+    if isinstance(node, mir.MirSubscriptAssign):
+        return lir.CSubscriptAssign(
+            obj=_lower_expr(node.obj),
+            index=_lower_expr(node.index),
+            value=_lower_expr(node.value),
         )
     if isinstance(node, mir.MirAssign):
         return _lower_assign(node, declared)

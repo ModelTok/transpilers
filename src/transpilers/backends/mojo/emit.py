@@ -83,6 +83,8 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         return f"{pad}{node.name} = {_emit_expr(node.value)}"
     if isinstance(node, lir.MojoFieldAssign):
         return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)}"
+    if isinstance(node, lir.MojoSubscriptAssign):
+        return f"{pad}{_emit_expr(node.obj)}[{_emit_expr(node.index)}] = {_emit_expr(node.value)}"
     if isinstance(node, lir.MojoIf):
         head = f"{pad}if {_emit_expr(node.test)}:"
         body = _emit_block(node.body, depth + 1) or (pad + INDENT + "pass")
