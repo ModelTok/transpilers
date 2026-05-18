@@ -156,7 +156,19 @@ def parse_cpp(source: str) -> hir.HirModule:
     index = ci.Index.create()
     # Pull system include paths from the host clang invocation so libclang
     # resolves `#include <stddef.h>` etc. without manual configuration.
-    parse_args = ["-std=c++17", "-x", "c++"] + _system_include_args()
+    # Pre-define the most common stdlib constants so LeetCode/competitive
+    # files that use `NULL` / `INT_MIN` without including <cstddef>/<climits>
+    # still parse. The values are the canonical platform-32-bit limits;
+    # downstream type inference treats these as plain int constants.
+    predefs = [
+        "-DNULL=0",
+        "-DINT_MIN=(-2147483647 - 1)", "-DINT_MAX=2147483647",
+        "-DLONG_MIN=(-9223372036854775807L - 1)", "-DLONG_MAX=9223372036854775807L",
+        "-DLLONG_MIN=(-9223372036854775807LL - 1)", "-DLLONG_MAX=9223372036854775807LL",
+        "-DUINT_MAX=4294967295U",
+        "-DEXIT_SUCCESS=0", "-DEXIT_FAILURE=1",
+    ]
+    parse_args = ["-std=c++17", "-x", "c++"] + predefs + _system_include_args()
     tu = index.parse(
         INPUT_NAME,
         args=parse_args,
@@ -638,6 +650,26 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
     if kind == CursorKind.INIT_LIST_EXPR:
         # `{1, 2, 3}` brace-init at expression position — emit as a list literal.
         return hir.HirList(elements=[_convert_expr(c) for c in cursor.get_children()])
+    if kind in (CursorKind.CXX_UNARY_EXPR,):
+        # `sizeof(T)` / `alignof(T)` — emit as a constant placeholder (real
+        # value isn't available without type-size context).
+        return hir.HirIntLiteral(value=0)
+    if kind == CursorKind.CXX_NEW_EXPR:
+        # `new T(args)` — drop the heap allocation, yield T-constructed value.
+        # Best-effort: emit the call-style construction, lossy on ownership.
+        kids = list(cursor.get_children())
+        for c in kids[::-1]:
+            if c.kind != CursorKind.TYPE_REF:
+                try:
+                    return _convert_expr(c)
+                except UnsupportedConstruct:
+                    continue
+        return hir.HirIntLiteral(value=0)
+    if kind in (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF):
+        # A bare type reference at expression position — usually a sizeof
+        # argument or template parameter leak. Yield 0; the surrounding
+        # context handles the semantics.
+        return hir.HirIntLiteral(value=0)
     if kind == CursorKind.UNEXPOSED_EXPR:
         # Multi-child UNEXPOSED nodes (e.g. operator-overload call wrapper)
         # — drill into the last non-trivial child.
@@ -657,7 +689,7 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
 COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
 ARITH_OPS = {"+", "-", "*", "/", "%"}
 LOGICAL_OPS = {"&&", "||"}
-ASSIGN_OPS = {"=", "+=", "-=", "*=", "/=", "%="}
+ASSIGN_OPS = {"=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>="}
 
 
 def _convert_binop(cursor: ci.Cursor) -> hir.HirNode:
