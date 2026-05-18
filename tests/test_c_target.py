@@ -103,16 +103,18 @@ def test_c_target_refuses_string_concat():
         )
 
 
-def test_c_target_refuses_list_types():
-    """Lists need a (ptr, len) struct; raise rather than emit a bare pointer
-    that silently drops the length."""
-    with pytest.raises(NotImplementedError, match="list / slice types in C"):
-        _py(
-            """
-            def f(xs: list[int]) -> int:
-                return xs[0]
-            """
-        )
+def test_c_target_lists_emit_slice():
+    """`list[T]` lowers to one of the fixed slice typedefs (`slice_i64_t`
+    for `list[int]`); subscript reads route through `.data[i]` and `len(xs)`
+    becomes `(int64_t)xs.len`."""
+    out = _py(
+        """
+        def first(xs: list[int]) -> int:
+            return xs[0]
+        """
+    )
+    assert "slice_i64_t" in out
+    assert ".data[0]" in out
 
 
 # ---------- compile checks ----------
