@@ -314,10 +314,7 @@ def _convert_expr(node: Node) -> hir.HirNode:
             args=[_convert_expr(cond), _convert_expr(cons), _convert_expr(alt)],
         )
     if kind == "null_literal":
-        # No first-class null/Option in our IR; treat as integer 0 since
-        # most idiomatic uses compare to it (`if (x == null)`) where the
-        # comparison still has the right truthy result.
-        return hir.HirIntLiteral(value=0)
+        return hir.HirNullLiteral()
     if kind == "array_initializer":
         # `{1, 2, 3}` — Java's array-literal short form. Lower the same way
         # as a `new int[]{...}` would: HirList of converted elements.

@@ -245,6 +245,11 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.RustBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):
         return lir.RustStringLiteral(value=node.value)
+    if isinstance(node, mir.MirNullLiteral):
+        # No OptionT in the type lattice yet; emit a bare `None` so the
+        # downstream rustc surfaces the missing context. Cleaner than
+        # silently substituting 0.
+        return lir.RustName(name="None")
     if isinstance(node, mir.MirCall):
         return _lower_call(node)
     if isinstance(node, mir.MirList):
@@ -296,6 +301,9 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
     # Stdlib mapping table — turn well-known Python-style builtins into
     # idiomatic Rust so the output is runnable, not just syntactically OK.
     args = [_lower_expr(a) for a in node.args]
+    if node.func == "__ternary__" and len(args) == 3:
+        # Synthetic `cond ? a : b` produced by C / Java frontends.
+        return _RustIfExpr(test=args[0], then_=args[1], else_=args[2])
     if node.func == "len":
         if len(args) != 1:
             raise ValueError("len() takes exactly one argument")

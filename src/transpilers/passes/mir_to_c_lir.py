@@ -149,8 +149,12 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         return lir.CBoolLiteral(value=node.value)
     if isinstance(node, mir.MirStringLiteral):
         return lir.CStringLiteral(value=node.value)
+    if isinstance(node, mir.MirNullLiteral):
+        return lir.CName(name="NULL")
     if isinstance(node, mir.MirCall):
         args = [_lower_expr(a) for a in node.args]
+        if node.func == "__ternary__" and len(args) == 3:
+            return lir.CTernary(test=args[0], then_=args[1], else_=args[2])
         if node.func == "len":
             # `len(xs)` on a slice maps to the carrier's `.len` field. Cast
             # to int64_t so the result composes with the rest of our IntT

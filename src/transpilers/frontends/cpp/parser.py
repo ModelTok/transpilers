@@ -530,11 +530,11 @@ def _convert_unary_expr(cursor: ci.Cursor) -> hir.HirNode:
     if op == "~":
         return hir.HirUnaryOp(op="-", operand=_convert_expr(kids[0]))
     if op in ("++", "--"):
-        # `i++` / `i--` used as expressions (e.g. inside another expression).
-        # Drop the side effect: yield the operand. Lossy but lets common
-        # idioms like `arr[i++]` parse — typically these appear in driver
-        # code we may or may not need exact semantics for.
-        return _convert_expr(kids[0])
+        # Refuse rather than silently drop the side effect (#4): a
+        # source `arr[i++] = 0` would lower to `arr[i] = 0` and loop
+        # forever in the target. Statement-position increments are
+        # handled separately by _convert_unary_stmt.
+        raise UnsupportedConstruct(f"postfix {op!r} in expression position")
     raise UnsupportedConstruct(f"unary op {op!r} as expression")
 
 

@@ -80,6 +80,13 @@ class MirStringLiteral(MirNode):
 
 
 @dataclass
+class MirNullLiteral(MirNode):
+    """Source-level null/None — backend renders as its native sentinel."""
+
+    ty: Type = field(default_factory=UnknownT)
+
+
+@dataclass
 class MirCompare(MirNode):
     op: str
     left: MirNode
