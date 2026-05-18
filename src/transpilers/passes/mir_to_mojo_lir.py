@@ -43,11 +43,35 @@ def _lower_struct(s: mir.MirStruct) -> lir.MojoStruct:
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.MojoFn:
-    params = [(p.name, _mojo_type(p.ty)) for p in fn.params]
+    # Mojo args are read-only by default; reassigning to `n` errors unless
+    # the param is declared `var n: …`. Scan the body for param-reassign.
+    reassigned = _params_reassigned(fn.body, {p.name for p in fn.params})
+    params = [
+        (f"var {p.name}" if p.name in reassigned else p.name, _mojo_type(p.ty))
+        for p in fn.params
+    ]
     ret = _mojo_type(fn.return_type)
     declared: set[str] = {p.name for p in fn.params}
     body = [_lower_stmt(n, declared) for n in fn.body]
     return lir.MojoFn(name=fn.name, params=params, return_type=ret, body=body)
+
+
+def _params_reassigned(body: list[mir.MirNode], param_names: set[str]) -> set[str]:
+    """Return the subset of `param_names` that get reassigned in `body`."""
+    out: set[str] = set()
+    def _scan(nodes: list[mir.MirNode]) -> None:
+        for n in nodes:
+            if isinstance(n, mir.MirAssign) and n.target in param_names:
+                out.add(n.target)
+            elif isinstance(n, mir.MirIf):
+                _scan(n.body)
+                _scan(n.orelse)
+            elif isinstance(n, mir.MirWhile):
+                _scan(n.body)
+            elif isinstance(n, mir.MirForRange):
+                _scan(n.body)
+    _scan(body)
+    return out
 
 
 def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
