@@ -48,7 +48,9 @@ def _strip_preprocessor(source: str) -> str:
     pragmatic shortcut that covers the common types in practice."""
     import re as _re
 
-    # `//` line comments — pycparser rejects them.
+    # pycparser rejects both `//` line comments and `/* ... */` block
+    # comments. Strip both before handing the source over.
+    source = _re.sub(r"/\*.*?\*/", "", source, flags=_re.DOTALL)
     source = _re.sub(r"//[^\n]*", "", source)
     out_lines = []
     for line in source.splitlines():
@@ -248,6 +250,19 @@ def _convert_expr(node: c_ast.Node) -> hir.HirNode:
         # Expression-level assignment (`x = 5` as an expression). C allows this;
         # we don't, in the initial subset.
         raise UnsupportedConstruct("assignment as expression")
+    if isinstance(node, c_ast.ArrayRef):
+        return hir.HirSubscript(value=_convert_expr(node.name), index=_convert_expr(node.subscript))
+    if isinstance(node, c_ast.Cast):
+        # Drop the cast — best-effort; the target's type system handles
+        # whatever the underlying expression already represents.
+        return _convert_expr(node.expr)
+    if isinstance(node, c_ast.TernaryOp):
+        # `cond ? a : b` desugars to a select-like expression. Render via
+        # method/builtin call so each backend can shape it per target.
+        return hir.HirCall(
+            func="__ternary__",
+            args=[_convert_expr(node.cond), _convert_expr(node.iftrue), _convert_expr(node.iffalse)],
+        )
     raise UnsupportedConstruct(f"expr {type(node).__name__}")
 
 

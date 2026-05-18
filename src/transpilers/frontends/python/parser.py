@@ -112,6 +112,11 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
                 field=target.attr.value,
                 value=_convert(node.value),
             )
+        if isinstance(target, cst.Tuple):
+            # `a, b = expr` — desugar to sequential assignments via a tmp
+            # tuple. For the swap idiom `a, b = b, a` (most common case)
+            # we can avoid the tmp by writing into fresh names then back.
+            return _tuple_assign(target, node.value)
         raise UnsupportedConstruct(f"assignment target {type(target).__name__}")
 
     if isinstance(node, cst.AnnAssign):
@@ -134,6 +139,9 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
             annotation=None,
             augmented_op=_op_symbol(node.operator),
         )
+
+    if isinstance(node, cst.Pass):
+        return _PassMarker()
 
     if isinstance(node, cst.Expr):
         return _convert(node.value)
@@ -233,6 +241,66 @@ class _WithBlock(hir.HirNode):
         self.stmts = stmts
 
 
+class _PassMarker(hir.HirNode):
+    """Private marker for `pass` — filtered out during block conversion."""
+    pass
+
+
+class _TupleAssign(hir.HirNode):
+    """`a, b = b, a` desugared to a sequence of HirAssigns.
+
+    When the RHS is itself a tuple `(b, a)`, evaluate it left-to-right into
+    fresh `_tmp_N` locals, then write each target. This preserves the
+    Python semantic that all RHS values are read before any LHS is written.
+    """
+
+    def __init__(self, stmts: list[hir.HirNode]) -> None:
+        self.stmts = stmts
+
+
+def _tuple_assign(target: cst.Tuple, value: cst.BaseExpression) -> hir.HirNode:
+    """`a, b = expr1, expr2` (or LHS subscripts) → temps then writes.
+
+    Each LHS slot may be a Name (HirAssign), Subscript (HirSubscriptAssign),
+    or Attribute (HirFieldAssign). The RHS must be a parallel tuple literal.
+    """
+    targets = [e.value for e in target.elements if isinstance(e, cst.Element)]
+    if not isinstance(value, cst.Tuple):
+        raise UnsupportedConstruct("tuple unpacking from non-tuple RHS")
+    rhs_exprs = [e.value for e in value.elements if isinstance(e, cst.Element)]
+    if len(rhs_exprs) != len(targets):
+        raise UnsupportedConstruct("tuple unpacking arity mismatch")
+    # Stash each RHS in a fresh tmp first, then assign tmps to targets —
+    # this models Python's "evaluate all RHS, then bind" exactly.
+    tmps = [f"_tup_{i}" for i in range(len(targets))]
+    stmts: list[hir.HirNode] = []
+    for tmp, rhs in zip(tmps, rhs_exprs):
+        stmts.append(hir.HirAssign(target=tmp, value=_convert(rhs), annotation=None))
+    for slot, tmp in zip(targets, tmps):
+        rhs = hir.HirName(name=tmp)
+        if isinstance(slot, cst.Name):
+            stmts.append(hir.HirAssign(target=slot.value, value=rhs, annotation=None))
+        elif isinstance(slot, cst.Subscript):
+            if len(slot.slice) != 1 or not isinstance(slot.slice[0].slice, cst.Index):
+                raise UnsupportedConstruct("slice subscript in tuple unpacking")
+            stmts.append(hir.HirSubscriptAssign(
+                obj=_convert(slot.value),
+                index=_convert(slot.slice[0].slice.value),
+                value=rhs,
+            ))
+        elif isinstance(slot, cst.Attribute):
+            stmts.append(hir.HirFieldAssign(
+                obj=_convert(slot.value),
+                field=slot.attr.value,
+                value=rhs,
+            ))
+        else:
+            raise UnsupportedConstruct(
+                f"tuple unpacking slot {type(slot).__name__}"
+            )
+    return _TupleAssign(stmts=stmts)
+
+
 def _convert_function(fn: cst.FunctionDef) -> hir.HirFunction:
     params = [_convert_param(p) for p in fn.params.params]
     ret = _annotation_text(fn.returns.annotation) if fn.returns else None
@@ -256,10 +324,17 @@ def _convert_block(body: cst.BaseSuite) -> list[hir.HirNode]:
         if isinstance(node, _WithBlock):
             out.extend(node.stmts)
             continue
+        # `a, b = b, a` desugars to a sequence of assigns; flatten the same way.
+        if isinstance(node, _TupleAssign):
+            out.extend(node.stmts)
+            continue
         # Drop bare string-literal expression statements (docstrings).
         # They have no runtime effect but leak into emit as raw quoted
         # text on targets that don't have a comment-statement form.
         if isinstance(node, hir.HirStringLiteral):
+            continue
+        # `pass` is a no-op statement; targets handle empty blocks themselves.
+        if isinstance(node, _PassMarker):
             continue
         out.append(node)
     return out
@@ -305,10 +380,15 @@ def _annotation_text(node: cst.BaseExpression) -> str:
 def _op_symbol(op: cst.BaseBinaryOp | cst.BaseAugOp) -> str:
     table = {
         cst.Add: "+", cst.Subtract: "-", cst.Multiply: "*", cst.Divide: "/",
-        cst.Modulo: "%", cst.FloorDivide: "//",
+        cst.Modulo: "%", cst.FloorDivide: "//", cst.Power: "**",
+        cst.BitAnd: "&", cst.BitOr: "|", cst.BitXor: "^",
+        cst.LeftShift: "<<", cst.RightShift: ">>",
         cst.AddAssign: "+", cst.SubtractAssign: "-",
         cst.MultiplyAssign: "*", cst.DivideAssign: "/",
-        cst.FloorDivideAssign: "//",
+        cst.FloorDivideAssign: "//", cst.ModuloAssign: "%",
+        cst.PowerAssign: "**",
+        cst.BitAndAssign: "&", cst.BitOrAssign: "|", cst.BitXorAssign: "^",
+        cst.LeftShiftAssign: "<<", cst.RightShiftAssign: ">>",
     }
     for kls, sym in table.items():
         if isinstance(op, kls):
@@ -321,6 +401,7 @@ def _cmp_symbol(op: cst.BaseCompOp) -> str:
         cst.Equal: "==", cst.NotEqual: "!=",
         cst.LessThan: "<", cst.LessThanEqual: "<=",
         cst.GreaterThan: ">", cst.GreaterThanEqual: ">=",
+        cst.Is: "==", cst.IsNot: "!=",  # `x is None` → `x == None` at MIR
     }
     for kls, sym in table.items():
         if isinstance(op, kls):

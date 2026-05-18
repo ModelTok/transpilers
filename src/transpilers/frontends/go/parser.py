@@ -121,7 +121,10 @@ def _convert_stmt(node: Node) -> list[hir.HirNode]:
     if kind == "var_declaration":
         return _convert_var_decl(node)
     if kind == "assignment_statement":
-        return [_convert_assignment(node)]
+        result = _convert_assignment(node)
+        if isinstance(result, _GoTupleAssign):
+            return result.stmts
+        return [result]
     if kind == "inc_statement" or kind == "dec_statement":
         return [_convert_inc_dec(node)]
     if kind == "expression_statement":
@@ -239,15 +242,9 @@ def _convert_assignment(node: Node) -> hir.HirNode:
     right = required_field(node, "right")
     left_kids = named_children(left)
     right_kids = named_children(right)
-    # Multi-value form: bind the first non-`_` LHS to the first RHS, drop
-    # rest. Same approximation as short_var_declaration.
     real_lhs = [c for c in left_kids if not (c.type == "identifier" and text(c) == "_")]
     if not real_lhs or not right_kids:
         return hir.HirAssign(target="_", value=hir.HirIntLiteral(value=0), annotation=None)
-    target = real_lhs[0]
-    if target.type != "identifier":
-        raise UnsupportedConstruct(f"go assignment lhs {target.type}")
-    # Operator can be `=` or `+=` etc. — its token sits between left and right.
     op = None
     for child in node.children:
         if not child.is_named:
@@ -258,15 +255,61 @@ def _convert_assignment(node: Node) -> hir.HirNode:
     if op is None:
         op = "="
     aug = None if op == "=" else op[:-1]
-    if len(right_kids) > 1:
-        # Multi-value assignment — keep the first RHS only.
-        pass
-    return hir.HirAssign(
-        target=text(target),
-        value=_convert_expr(right_kids[0]),
-        annotation=None,
-        augmented_op=aug,
-    )
+    # Multi-target tuple form: `a, b = b, a` (and the subscript variant
+    # `xs[i], xs[j] = xs[j], xs[i]`) → desugar to a sequence of writes via
+    # tmps, mirroring the Python frontend's _tuple_assign.
+    if len(real_lhs) > 1 and aug is None and len(right_kids) == len(real_lhs):
+        return _tuple_swap(real_lhs, right_kids)
+    target = real_lhs[0]
+    rhs = _convert_expr(right_kids[0])
+    if target.type == "identifier":
+        return hir.HirAssign(target=text(target), value=rhs, annotation=None, augmented_op=aug)
+    if target.type == "index_expression":
+        return hir.HirSubscriptAssign(
+            obj=_convert_expr(required_field(target, "operand")),
+            index=_convert_expr(required_field(target, "index")),
+            value=rhs,
+        )
+    if target.type == "selector_expression":
+        return hir.HirFieldAssign(
+            obj=_convert_expr(required_field(target, "operand")),
+            field=text(required_field(target, "field")),
+            value=rhs,
+        )
+    raise UnsupportedConstruct(f"go assignment lhs {target.type}")
+
+
+def _tuple_swap(targets: list[Node], rhs_nodes: list[Node]) -> hir.HirNode:
+    """`a, b = b, a` (or subscript variant) → tmp staging then writes."""
+    tmps = [f"_tup_{i}" for i in range(len(targets))]
+    stmts: list[hir.HirNode] = []
+    for tmp, rhs in zip(tmps, rhs_nodes):
+        stmts.append(hir.HirAssign(target=tmp, value=_convert_expr(rhs), annotation=None))
+    for slot, tmp in zip(targets, tmps):
+        rhs_expr = hir.HirName(name=tmp)
+        if slot.type == "identifier":
+            stmts.append(hir.HirAssign(target=text(slot), value=rhs_expr, annotation=None))
+        elif slot.type == "index_expression":
+            stmts.append(hir.HirSubscriptAssign(
+                obj=_convert_expr(required_field(slot, "operand")),
+                index=_convert_expr(required_field(slot, "index")),
+                value=rhs_expr,
+            ))
+        elif slot.type == "selector_expression":
+            stmts.append(hir.HirFieldAssign(
+                obj=_convert_expr(required_field(slot, "operand")),
+                field=text(required_field(slot, "field")),
+                value=rhs_expr,
+            ))
+        else:
+            raise UnsupportedConstruct(f"go tuple-assign slot {slot.type}")
+    return _GoTupleAssign(stmts=stmts)
+
+
+class _GoTupleAssign(hir.HirNode):
+    """Multi-write tuple assignment; statement converter flattens this."""
+    def __init__(self, stmts: list[hir.HirNode]) -> None:
+        self.stmts = stmts
 
 
 def _convert_inc_dec(node: Node) -> hir.HirNode:
@@ -321,6 +364,26 @@ def _convert_expr(node: Node) -> hir.HirNode:
         return _convert_unary(node)
     if kind == "call_expression":
         return _convert_call(node)
+    if kind == "index_expression":
+        operand = required_field(node, "operand")
+        index = required_field(node, "index")
+        return hir.HirSubscript(value=_convert_expr(operand), index=_convert_expr(index))
+    if kind == "composite_literal":
+        # `[]int{1, 2, 3}` / `T{...}` — only the slice/array literal form
+        # maps cleanly to HirList. Structs would need user-type tracking.
+        type_node = node.child_by_field_name("type")
+        body_node = node.child_by_field_name("body")
+        if type_node is not None and type_node.type in ("slice_type", "array_type"):
+            elements = []
+            if body_node is not None:
+                for c in named_children(body_node):
+                    if c.type == "literal_element":
+                        inner = named_children(c)
+                        if inner:
+                            elements.append(_convert_expr(inner[0]))
+                    elif c.type != "comment":
+                        elements.append(_convert_expr(c))
+            return hir.HirList(elements=elements)
     raise UnsupportedConstruct(f"go expr {kind}")
 
 
@@ -386,4 +449,13 @@ def _type_text(node: Node) -> str:
     if node.type == "qualified_type":
         # `os.File` etc. — out of scope.
         raise UnsupportedConstruct(f"go qualified type {text(node)}")
+    if node.type == "slice_type":
+        # `[]int` → `list[int]` (Python annotation form for downstream typing).
+        elem_node = node.child_by_field_name("element")
+        return f"list[{_type_text(elem_node)}]"
+    if node.type == "array_type":
+        elem_node = node.child_by_field_name("element")
+        return f"list[{_type_text(elem_node)}]"
+    if node.type == "pointer_type":
+        return _type_text(node.child_by_field_name("type"))
     raise UnsupportedConstruct(f"go type {node.type}")
