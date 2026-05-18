@@ -54,7 +54,10 @@ def _emit_struct(s: lir.ZigStruct) -> str:
 def _emit_fn(fn: lir.ZigFn, *, depth: int = 0, struct_name: str | None = None) -> str:
     indent = INDENT * depth
     params = ", ".join(_emit_param(n, t, struct_name) for n, t in fn.params)
-    header = f"{indent}fn {fn.name}({params}) {fn.return_type} {{"
+    # Zig's runtime calls `pub fn main` from `std/start.zig`; without
+    # `pub` the entrypoint isn't visible and the program won't link.
+    visibility = "pub " if fn.name == "main" and depth == 0 else ""
+    header = f"{indent}{visibility}fn {fn.name}({params}) {fn.return_type} {{"
     body = _emit_block(fn.body, depth + 1)
     return f"{header}\n{body}\n{indent}}}"
 

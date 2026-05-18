@@ -139,8 +139,10 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         if node.func == "len":
             return lir.GoCall(func="len", args=args)
         if node.func in ("print", "println"):
-            # Go's `println` builtin is a debug print — no import needed.
-            return lir.GoCall(func="println", args=args)
+            # Go's `println` builtin writes to stderr — not what Python's
+            # print does. Use `fmt.Println` for stdout. The Go emitter
+            # adds the `import "fmt"` when it sees the qualified call.
+            return lir.GoCall(func="fmt.Println", args=args)
         if node.func == "abs" and len(args) == 1:
             x = args[0]
             return _GoIfExpr(
