@@ -77,6 +77,18 @@ def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
 
 
 def _lower_expr(node: mir.MirNode) -> lir.LirNode:
+    if isinstance(node, mir.MirBinOp) and node.op == "//":
+        return lir.GoBinOp(op="/", left=_lower_expr(node.left), right=_lower_expr(node.right))
+    if isinstance(node, mir.MirSubscript):
+        return _GoIndex(value=_lower_expr(node.value), index=_lower_expr(node.index))
+    if isinstance(node, mir.MirList):
+        # `[]int64{1, 2, 3}` — Go slice literal. Element type assumed int64
+        # (the most common case in our integer-heavy corpus); a typed-context
+        # propagation pass could pick precisely from the LHS annotation.
+        elem_ty = "int64"
+        if isinstance(node.ty, ListT):
+            elem_ty = _go_type(node.ty.elem)
+        return _GoSliceLit(elem_ty=elem_ty, elements=[_lower_expr(e) for e in node.elements])
     if isinstance(node, mir.MirFieldAccess):
         return lir.GoFieldAccess(value=_lower_expr(node.value), field=node.field)
     if isinstance(node, mir.MirStructInit):
@@ -157,6 +169,22 @@ class _GoIfExpr(lir.LirNode):
         self.test = test
         self.then_ = then_
         self.else_ = else_
+
+
+class _GoIndex(lir.LirNode):
+    """Array/slice subscript: `arr[index]`."""
+
+    def __init__(self, value: lir.LirNode, index: lir.LirNode) -> None:
+        self.value = value
+        self.index = index
+
+
+class _GoSliceLit(lir.LirNode):
+    """`[]<elem_ty>{a, b, c}` — Go slice literal."""
+
+    def __init__(self, elem_ty: str, elements: list[lir.LirNode]) -> None:
+        self.elem_ty = elem_ty
+        self.elements = elements
 
 
 def _is_string_concat(node: mir.MirBinOp) -> bool:

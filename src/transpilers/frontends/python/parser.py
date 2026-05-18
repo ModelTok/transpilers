@@ -284,9 +284,10 @@ def _annotation_text(node: cst.BaseExpression) -> str:
 def _op_symbol(op: cst.BaseBinaryOp | cst.BaseAugOp) -> str:
     table = {
         cst.Add: "+", cst.Subtract: "-", cst.Multiply: "*", cst.Divide: "/",
-        cst.Modulo: "%",
+        cst.Modulo: "%", cst.FloorDivide: "//",
         cst.AddAssign: "+", cst.SubtractAssign: "-",
         cst.MultiplyAssign: "*", cst.DivideAssign: "/",
+        cst.FloorDivideAssign: "//",
     }
     for kls, sym in table.items():
         if isinstance(op, kls):

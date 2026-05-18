@@ -161,11 +161,10 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
             args=[_lower_expr(a) for a in node.args],
         )
     if isinstance(node, mir.MirBinOp):
+        # Python `//` (floor-divide) → Zig `/` on integers.
+        if node.op == "//":
+            return lir.ZigBinOp(op="/", left=_lower_expr(node.left), right=_lower_expr(node.right))
         if _is_string_concat(node):
-            # Runtime string concat in Zig requires an allocator and
-            # std.fmt.allocPrint — a real implementation needs a strategy for
-            # ownership/lifetimes that we haven't designed yet. Raising is the
-            # correct failure mode: surface the gap, don't emit broken code.
             raise NotImplementedError(
                 "string concatenation in Zig requires allocator-aware emission "
                 "(std.fmt.allocPrint), not yet supported"
