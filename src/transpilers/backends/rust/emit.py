@@ -104,7 +104,8 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustSubscriptAssign):
         # Rust indexing requires `usize`; our IntT lowers to `i64`, so cast.
-        return f"{pad}{_emit_expr(node.obj)}[{_emit_expr(node.index)} as usize] = {_emit_expr(node.value)};"
+        # Parenthesise the index so `j + 1 as usize` doesn't parse as `j + (1 as usize)`.
+        return f"{pad}{_emit_expr(node.obj)}[({_emit_expr(node.index)}) as usize] = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustIf):
         head = f"{pad}if {_emit_expr(node.test)} {{"
         body = _emit_block(node.body, depth + 1)
@@ -190,7 +191,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, _RustIfExpr):
         return f"if {_emit_expr(node.test)} {{ {_emit_expr(node.then_)} }} else {{ {_emit_expr(node.else_)} }}"
     if isinstance(node, _RustRef):
-        return f"&{_emit_expr(node.value)}"
+        return f"&mut {_emit_expr(node.value)}"
     if isinstance(node, _RustPyFloat):
         return _emit_expr(node.value)
     if isinstance(node, _RustListConcat):
@@ -210,7 +211,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         body = ", ".join(f"{n}: {_emit_expr(v)}" for n, v in node.field_values)
         return f"{node.name} {{ {body} }}"
     if isinstance(node, lir.RustIndex):
-        return f"{_emit_expr(node.value)}[{_emit_expr(node.index)} as usize]"
+        return f"{_emit_expr(node.value)}[({_emit_expr(node.index)}) as usize]"
     if isinstance(node, lir.RustMethodCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
         call = f"{_emit_expr(node.receiver)}.{node.method}({args})"

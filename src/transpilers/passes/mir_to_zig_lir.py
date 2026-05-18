@@ -353,6 +353,8 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
             orig_ty = getattr(orig, "ty", None)
             if isinstance(orig_ty, BoolT) or isinstance(rendered, _ZigIfExpr):
                 specs.append("{s}")
+            elif isinstance(orig_ty, FloatT) or isinstance(rendered, _ZigPyFloat):
+                specs.append("{s}")
             else:
                 specs.append("{}")
         template = " ".join(specs) + "\n"
@@ -458,9 +460,7 @@ def _is_int_type(ty: object) -> bool:
 
 
 def _pyprint_arg(orig: mir.MirNode, lowered: lir.LirNode) -> lir.LirNode:
-    """Wrap `lowered` so it renders the way Python's `print` would.
-    Currently: bools become `"True"` / `"False"` strings via an inline
-    if-expression. Floats are left to Zig's default formatting."""
+    """Wrap `lowered` so it renders the way Python's `print` would."""
     ty = getattr(orig, "ty", None)
     if isinstance(ty, BoolT):
         return _ZigIfExpr(
@@ -468,7 +468,17 @@ def _pyprint_arg(orig: mir.MirNode, lowered: lir.LirNode) -> lir.LirNode:
             then_=lir.ZigStringLiteral(value="True"),
             else_=lir.ZigStringLiteral(value="False"),
         )
+    if isinstance(ty, FloatT):
+        return _ZigPyFloat(value=lowered)
     return lowered
+
+
+class _ZigPyFloat(lir.LirNode):
+    """`_py_float(x)` — calls the injected helper that preserves `.0`
+    for whole-number floats, matching Python's print behavior."""
+
+    def __init__(self, value: lir.LirNode) -> None:
+        self.value = value
 
 
 def _zig_type(ty: Type) -> str:

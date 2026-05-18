@@ -154,8 +154,8 @@ def test_list_literal_and_index_and_len():
     """
     out = _t(src)
     # List params take a shared reference so the caller keeps ownership.
-    assert "fn sum_first(xs: &Vec<i64>) -> i64" in out
-    assert "xs[0 as usize]" in out
+    assert "fn sum_first(xs: & Vec<i64>) -> i64" in out
+    assert "xs[(0) as usize]" in out
 
 
 def test_len_with_cast_to_i64():
@@ -177,7 +177,7 @@ def test_iterate_list_by_index():
     """
     out = _t(src)
     assert "for i in 0..xs.len() as i64 {" in out
-    assert "xs[i as usize]" in out
+    assert "xs[(i) as usize]" in out
 
 
 # ---------- compile checks: every construct produces real Rust ----------

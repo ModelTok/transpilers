@@ -39,23 +39,20 @@ def _lower_struct_impl(s: mir.MirStruct) -> lir.RustImpl:
 
 
 def _lower_function(fn: mir.MirFunction) -> lir.RustFn:
-    # Rust idiom: list params are taken by shared reference (`&Vec<T>`).
-    # Owning the Vec would move the caller's value on each call.
     mut_names = _collect_mutable(fn.body)
-    # Any assignment to a param is by definition a reassignment (no `let`
-    # declared it), so params need `mut` whenever they appear as an
-    # assignment target — even just once.
     param_names = {p.name for p in fn.params}
     reassigned_params = _params_reassigned(fn.body, param_names)
+    subscript_assigned_params = _params_subscript_assigned(fn.body, param_names)
     params = [
         (
             f"mut {p.name}"
             if (p.name in mut_names or p.name in reassigned_params)
             else p.name,
-            _rust_param_type(p.ty),
+            _rust_param_type(p.ty, mutable=p.name in subscript_assigned_params),
         )
         for p in fn.params
     ]
+    # At call sites, list params that are mutably borrowed need `&mut` prefix.
     ret = _rust_type(fn.return_type)
     body = [_lower_stmt(n, param_names, mut_names) for n in fn.body]
     return lir.RustFn(name=fn.name, params=params, return_type=ret, body=body)
@@ -78,12 +75,31 @@ def _params_reassigned(body: list[mir.MirNode], param_names: set[str]) -> set[st
     return out
 
 
-def _rust_param_type(ty: Type) -> str:
+def _params_subscript_assigned(body: list[mir.MirNode], param_names: set[str]) -> set[str]:
+    """Return params mutated via xs[i] = v — need &mut Vec<T>."""
+    out: set[str] = set()
+    def _scan(nodes: list[mir.MirNode]) -> None:
+        for n in nodes:
+            if isinstance(n, mir.MirSubscriptAssign):
+                if isinstance(n.obj, mir.MirName) and n.obj.name in param_names:
+                    out.add(n.obj.name)
+            elif isinstance(n, mir.MirIf):
+                _scan(n.body); _scan(n.orelse)
+            elif isinstance(n, mir.MirWhile):
+                _scan(n.body)
+            elif isinstance(n, mir.MirForRange):
+                _scan(n.body)
+    _scan(body)
+    return out
+
+
+def _rust_param_type(ty: Type, *, mutable: bool = False) -> str:
     if isinstance(ty, ListT):
+        ref = "&mut" if mutable else "&"
         try:
-            return f"&Vec<{_rust_type(ty.elem)}>"
+            return f"{ref} Vec<{_rust_type(ty.elem)}>"
         except ValueError:
-            return "&Vec<_>"
+            return f"{ref} Vec<_>"
     return _rust_type(ty)
 
 
@@ -174,9 +190,12 @@ def _lower_assign(node: mir.MirAssign, declared: set[str], mut: set[str]) -> lir
         # Nested unknown (e.g., ListT(elem=UnknownT)) — fall through to
         # untyped binding rather than failing the whole emission.
         ty_str = None
+    # Lists are always `mut` in Python — any local Vec may be passed as
+    # `&mut` or have elements assigned, so declare it mutable upfront.
+    is_list = isinstance(node.ty, ListT)
     return lir.RustLet(
         name=node.target,
-        mutable=node.target in mut,
+        mutable=(node.target in mut) or is_list,
         ty=ty_str,
         value=_lower_expr(node.value),
     )
@@ -325,8 +344,8 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
 
 
 class _RustRef(lir.LirNode):
-    """`&value` — shared-reference operator. Used when passing a Vec
-    argument so the caller's binding survives the call."""
+    """`&mut value` — mutable reference. Vec params always use `&mut`
+    so callee can do subscript-assigns without a separate borrow path."""
 
     def __init__(self, value: lir.LirNode) -> None:
         self.value = value
