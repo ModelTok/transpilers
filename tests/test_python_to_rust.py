@@ -153,7 +153,8 @@ def test_list_literal_and_index_and_len():
         return xs[0] + xs[1]
     """
     out = _t(src)
-    assert "fn sum_first(xs: Vec<i64>) -> i64" in out
+    # List params take a shared reference so the caller keeps ownership.
+    assert "fn sum_first(xs: &Vec<i64>) -> i64" in out
     assert "xs[0 as usize]" in out
 
 
