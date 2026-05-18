@@ -16,11 +16,26 @@ PREAMBLE = (
     "#include <stdio.h>\n"
     "#include <stdlib.h>\n"
     "#include <stddef.h>\n"
+    "#include <string.h>\n"
     "\n"
     "/* Slice types — Python `list[T]` lowers to one of these. */\n"
     "typedef struct { int64_t *data; size_t len; } slice_i64_t;\n"
     "typedef struct { double *data; size_t len; } slice_f64_t;\n"
     "typedef struct { bool *data; size_t len; } slice_bool_t;\n"
+    "\n"
+    "/* Python-compatible float printer: shortest round-trip representation.\n"
+    " * Writes into a caller-supplied buffer (at least 32 bytes). Returns buf. */\n"
+    "static const char* _py_float_buf(double v, char *buf) {\n"
+    "    int prec;\n"
+    "    for (prec = 1; prec <= 17; prec++) {\n"
+    "        snprintf(buf, 32, \"%.*g\", prec, v);\n"
+    "        double back; sscanf(buf, \"%lf\", &back);\n"
+    "        if (back == v) break;\n"
+    "    }\n"
+    "    if (!strchr(buf, '.') && !strchr(buf, 'e') && !strchr(buf, 'E'))\n"
+    "        strcat(buf, \".0\");\n"
+    "    return buf;\n"
+    "}\n"
     "\n"
 )
 
@@ -176,10 +191,13 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         # Same routing rule as CSubscriptAssign: every C index lands on a
         # slice value, so step through `.data` to reach the element.
         return f"{_emit_expr(node.value)}.data[{_emit_expr(node.index)}]"
-    from transpilers.passes.mir_to_c_lir import _CSliceLiteral
+    from transpilers.passes.mir_to_c_lir import _CSliceLiteral, _CPyFloat
     if isinstance(node, _CSliceLiteral):
         elems = ", ".join(_emit_expr(e) for e in node.elements)
         return f"(({node.slice_ty}){{({node.elem_ty}[]){{{elems}}}, {len(node.elements)}}})"
+    if isinstance(node, _CPyFloat):
+        # Call the preamble helper with a stack buffer.
+        return f"_py_float_buf({_emit_expr(node.value)}, (char[32]){{}})"
     if isinstance(node, lir.CCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
         # Cast-style "calls" (`(int64_t)`, `(double)`) emit as cast prefix.

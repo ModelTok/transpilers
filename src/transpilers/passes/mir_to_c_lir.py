@@ -162,13 +162,33 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
                 args=[lir.CFieldAccess(value=args[0], field="len", via_pointer=False)],
             )
         if node.func in ("print", "println"):
-            # Best-effort printf. Use `%lld` for our IntT(64) and `%g` for
-            # floats. The emitter escapes the real newline to `\n` in the
-            # emitted source.
-            template = " ".join("%lld" for _ in args) + "\n"
+            # Build per-arg format specifiers so each type prints the way
+            # Python's `print()` would:
+            #   bool  → %s  with  (x ? "True" : "False")
+            #   float → _py_float() helper defined in the preamble
+            #   int   → %lld
+            fmt_parts: list[str] = []
+            final_args: list[lir.LirNode] = []
+            for orig, lowered in zip(node.args, args):
+                ty = getattr(orig, "ty", None)
+                if isinstance(ty, BoolT):
+                    fmt_parts.append("%s")
+                    final_args.append(lir.CTernary(
+                        test=lowered,
+                        then_=lir.CStringLiteral(value="True"),
+                        else_=lir.CStringLiteral(value="False"),
+                    ))
+                elif isinstance(ty, FloatT):
+                    # Delegate to the _py_float helper in the preamble.
+                    fmt_parts.append("%s")
+                    final_args.append(_CPyFloat(value=lowered))
+                else:
+                    fmt_parts.append("%lld")
+                    final_args.append(lowered)
+            template = " ".join(fmt_parts) + "\n"
             return lir.CCall(
                 func="printf",
-                args=[lir.CStringLiteral(value=template), *args],
+                args=[lir.CStringLiteral(value=template), *final_args],
             )
         if node.func == "abs" and len(args) == 1:
             # C's stdlib has abs/labs/llabs — use llabs for int64.
@@ -224,6 +244,15 @@ class _CSliceLiteral(lir.LirNode):
 
 class _AddressOf(lir.LirNode):
     """`&expr` — internal marker emitted by C method-call lowering."""
+
+    def __init__(self, value: lir.LirNode) -> None:
+        self.value = value
+
+
+class _CPyFloat(lir.LirNode):
+    """Wraps a float expression so the emitter renders it via the
+    `_py_float_buf()` helper defined in the C preamble, which produces
+    Python-compatible shortest-round-trip float strings."""
 
     def __init__(self, value: lir.LirNode) -> None:
         self.value = value

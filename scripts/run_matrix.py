@@ -124,18 +124,28 @@ def _build_and_run_python(src: str, td: pathlib.Path) -> tuple[bool, str]:
 
 
 def _build_and_run_fortran(src: str, td: pathlib.Path) -> tuple[bool, str]:
-    # Our Fortran emit produces free-standing functions; gfortran needs a
-    # `program` block to actually link a binary. Skip exec for now and
-    # only verify compilation as a library.
-    p = td / "lib.f90"
+    p = td / "main.f90"
     p.write_text(src)
-    build = subprocess.run(
-        ["gfortran", "-ffree-line-length-none", "-frealloc-lhs", "-c", str(p), "-o", str(td / "lib.o")],
-        capture_output=True, text=True, timeout=60,
-    )
-    if build.returncode != 0:
-        return False, f"compile: {build.stderr.strip().splitlines()[-1] if build.stderr else 'unknown'}"
-    return True, "<compile-only>"
+    exe = td / "main"
+    if "program prog" in src:
+        # Full program with entry point — compile and run.
+        build = subprocess.run(
+            ["gfortran", "-ffree-line-length-none", "-frealloc-lhs", str(p), "-o", str(exe)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if build.returncode != 0:
+            return False, f"compile: {build.stderr.strip().splitlines()[-1] if build.stderr else 'unknown'}"
+        run = subprocess.run([str(exe)], capture_output=True, text=True, timeout=15)
+        return run.returncode == 0, (run.stdout if run.returncode == 0 else run.stderr)
+    else:
+        # Library-only (no main) — compile as object file to check correctness.
+        build = subprocess.run(
+            ["gfortran", "-ffree-line-length-none", "-frealloc-lhs", "-c", str(p), "-o", str(td / "lib.o")],
+            capture_output=True, text=True, timeout=60,
+        )
+        if build.returncode != 0:
+            return False, f"compile: {build.stderr.strip().splitlines()[-1] if build.stderr else 'unknown'}"
+        return True, "<compile-only>"
 
 
 def _build_and_run_mojo(src: str, td: pathlib.Path) -> tuple[bool, str]:

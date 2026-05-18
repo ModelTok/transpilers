@@ -199,6 +199,11 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirBinOp):
         if _is_string_concat(node):
             return lir.RustFormat(args=_flatten_concat(node))
+        if _is_list_concat(node):
+            return _RustListConcat(
+                left=_lower_expr(node.left),
+                right=_lower_expr(node.right),
+            )
         # Python's `//` (FloorDivide) → Rust `/` on integer types
         # (integer division is the default for `/` on ints in Rust).
         op = "/" if node.op == "//" else node.op
@@ -232,18 +237,20 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
 
 def _pyprint_arg(orig: mir.MirNode, lowered: lir.LirNode) -> lir.LirNode:
     """Wrap `lowered` so it renders the way Python's `print` would.
-    Currently: bools become `"True"` / `"False"` strings via an inline
-    ternary. Floats are left to Rust's Display (cosmetic difference:
-    `12.0` vs `12`) — addressing that needs a per-arg format spec the
-    macro template doesn't yet support."""
+    Bools become `"True"` / `"False"` strings via an inline ternary.
+    Floats are marked with `_RustPyFloat` so the caller can emit `{:?}`
+    in the format string (Rust Debug for f64 preserves the trailing `.0`
+    that Display drops)."""
     ty = getattr(orig, "ty", None)
-    from transpilers.ir.types import BoolT
+    from transpilers.ir.types import BoolT, FloatT
     if isinstance(ty, BoolT):
         return _RustIfExpr(
             test=lowered,
             then_=lir.RustStringLiteral(value="True"),
             else_=lir.RustStringLiteral(value="False"),
         )
+    if isinstance(ty, FloatT):
+        return _RustPyFloat(value=lowered)
     return lowered
 
 
@@ -257,6 +264,15 @@ class _RustIfExpr(lir.LirNode):
         self.else_ = else_
 
 
+class _RustPyFloat(lir.LirNode):
+    """`{:?}` format marker. The enclosing print lowering emits `{:?}` in the
+    template string for this arg position; the emitter renders `.value`
+    directly (the Debug specifier handles the `.0` suffix)."""
+
+    def __init__(self, value: lir.LirNode) -> None:
+        self.value = value
+
+
 def _lower_call(node: mir.MirCall) -> lir.LirNode:
     # Stdlib mapping table — turn well-known Python-style builtins into
     # idiomatic Rust so the output is runnable, not just syntactically OK.
@@ -267,10 +283,19 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
         return lir.RustMethodCall(receiver=args[0], method="len", args=[], cast_to="i64")
     if node.func in ("print", "println"):
         # Rewrap each arg so the rendering matches Python's str(): bools
-        # become "True"/"False" (not Rust's "true"/"false"), floats keep
-        # at least one fractional digit (Display drops trailing `.0`).
-        rendered_args = [_pyprint_arg(orig, lowered) for orig, lowered in zip(node.args, args)]
-        template = " ".join("{}" for _ in args)
+        # become "True"/"False" (not Rust's "true"/"false"), floats use
+        # `{:?}` (Rust Debug for f64 preserves the trailing `.0` that
+        # Display drops).  Build the template dynamically per-arg.
+        tokens: list[str] = []
+        rendered_args: list[lir.LirNode] = []
+        for orig, lowered in zip(node.args, args):
+            refined = _pyprint_arg(orig, lowered)
+            if isinstance(refined, _RustPyFloat):
+                tokens.append("{:?}")
+            else:
+                tokens.append("{}")
+            rendered_args.append(refined)
+        template = " ".join(tokens)
         return lir.RustMacro(name="println", template=template, args=rendered_args)
     if node.func == "abs" and len(args) == 1:
         return lir.RustMethodChain(receiver=args[0], method="abs", args=[])
@@ -307,11 +332,30 @@ class _RustRef(lir.LirNode):
         self.value = value
 
 
+class _RustListConcat(lir.LirNode):
+    """Python `left + right` where both sides are lists. Emits an inline
+    block that clones `left`, extends it with `right`'s elements, and
+    yields the combined Vec:
+        `{ let mut _t = <left>.clone(); _t.extend(<right>); _t }`"""
+
+    def __init__(self, left: lir.LirNode, right: lir.LirNode) -> None:
+        self.left = left
+        self.right = right
+
+
 def _is_string_concat(node: mir.MirBinOp) -> bool:
     return (
         node.op == "+"
         and isinstance(getattr(node.left, "ty", None), StrT)
         and isinstance(getattr(node.right, "ty", None), StrT)
+    )
+
+
+def _is_list_concat(node: mir.MirBinOp) -> bool:
+    return (
+        node.op == "+"
+        and isinstance(getattr(node.left, "ty", None), ListT)
+        and isinstance(getattr(node.right, "ty", None), ListT)
     )
 
 

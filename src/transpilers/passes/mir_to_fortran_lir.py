@@ -130,6 +130,41 @@ def _lower_stmt(node: mir.MirNode, result_name: str) -> lir.LirNode:
             step=_lower_expr(node.step) if node.step else None,
             body=[_lower_stmt(n, result_name) for n in node.body],
         )
+    if isinstance(node, mir.MirCall) and node.func == "print":
+        # Wrap boolean args with merge("True ","False",<arg>) so the output
+        # matches Python's True/False rather than Fortran's T/F.
+        args = [_lower_bool_print_arg(a) for a in node.args]
+        return lir.FortranCall(func="print", args=args)
+    return _lower_expr(node)
+
+
+def _is_bool_type(node: mir.MirNode) -> bool:
+    """True if this MIR expression is definitely of boolean type."""
+    ty = getattr(node, "ty", None)
+    if isinstance(ty, BoolT):
+        return True
+    if isinstance(node, (mir.MirBoolLiteral, mir.MirCompare, mir.MirBoolOp)):
+        return True
+    if isinstance(node, mir.MirUnaryOp) and node.op == "not":
+        return True
+    return False
+
+
+def _lower_bool_print_arg(node: mir.MirNode) -> lir.LirNode:
+    """Lower a print() argument, wrapping booleans as merge('True ','False',x)."""
+    if _is_bool_type(node):
+        expr = _lower_expr(node)
+        return lir.FortranCall(
+            func="trim",
+            args=[lir.FortranCall(
+                func="merge",
+                args=[
+                    lir.FortranStringLiteral(value="True "),
+                    lir.FortranStringLiteral(value="False"),
+                    expr,
+                ],
+            )],
+        )
     return _lower_expr(node)
 
 
@@ -148,6 +183,12 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirBinOp) and node.op == "//":
         # Fortran `/` on integers is integer division.
         return lir.FortranBinOp(op="/", left=_lower_expr(node.left), right=_lower_expr(node.right))
+    if isinstance(node, mir.MirBinOp) and node.op == "%":
+        # Fortran modulo is an intrinsic function, not an operator.
+        return lir.FortranCall(
+            func="mod",
+            args=[_lower_expr(node.left), _lower_expr(node.right)],
+        )
     if isinstance(node, mir.MirFieldAccess):
         return lir.FortranFieldAccess(value=_lower_expr(node.value), field=node.field)
     if isinstance(node, mir.MirMethodCall):
@@ -167,7 +208,9 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
             )
         return lir.FortranBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirCompare):
-        return lir.FortranCompare(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
+        _CMP_OPS = {"==": ".eq.", "!=": ".ne.", "<": ".lt.", "<=": ".le.", ">": ".gt.", ">=": ".ge."}
+        fortran_op = _CMP_OPS.get(node.op, node.op)
+        return lir.FortranCompare(op=fortran_op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirBoolOp):
         op = ".and." if node.op == "and" else ".or."
         return lir.FortranBoolOp(op=op, left=_lower_expr(node.left), right=_lower_expr(node.right))

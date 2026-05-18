@@ -497,10 +497,14 @@ class ZigReassign(LirNode):
 @dataclass
 class ZigArrayLit(LirNode):
     """`[_]T{a, b, c}` — fixed-size inferred-length array. For dynamically
-    sized lists we'd need ArrayList, deferred."""
+    sized lists we'd need ArrayList, deferred.
+
+    When `ref=True`, emit as `&[_]T{a, b, c}` so the array literal coerces
+    to a slice type (`[]T`) in assignment context."""
 
     elem_ty: str
     elements: list[LirNode]
+    ref: bool = False
 
 
 @dataclass

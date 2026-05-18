@@ -186,11 +186,18 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         if node.template:
             return f'{node.name}!("{node.template}", {rendered})' if rendered else f'{node.name}!("{node.template}")'
         return f"{node.name}!({rendered})"
-    from transpilers.passes.mir_to_rust_lir import _RustIfExpr, _RustRef
+    from transpilers.passes.mir_to_rust_lir import _RustIfExpr, _RustRef, _RustPyFloat, _RustListConcat
     if isinstance(node, _RustIfExpr):
         return f"if {_emit_expr(node.test)} {{ {_emit_expr(node.then_)} }} else {{ {_emit_expr(node.else_)} }}"
     if isinstance(node, _RustRef):
         return f"&{_emit_expr(node.value)}"
+    if isinstance(node, _RustPyFloat):
+        return _emit_expr(node.value)
+    if isinstance(node, _RustListConcat):
+        # `left + right` for Vec: clone left, extend with right's elements.
+        left = _emit_expr(node.left)
+        right = _emit_expr(node.right)
+        return f"{{ let mut _t = {left}.clone(); _t.extend({right}); _t }}"
     if isinstance(node, lir.RustMethodChain):
         rendered = ", ".join(_emit_expr(a) for a in node.args)
         return f"{_emit_expr(node.receiver)}.{node.method}({rendered})"
