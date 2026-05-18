@@ -27,6 +27,24 @@ INDENT = "  "
 MODULE_NAME = "m"
 
 
+_PY_FLOAT_FORTRAN = """\
+  function pyfloat(x) result(s)
+    real(8), intent(in) :: x
+    character(len=40) :: s
+    integer :: i, j
+    write(s, '(g0.16)') x
+    s = adjustl(s)
+    i = index(s, '.')
+    if (i > 0) then
+      j = len_trim(s)
+      do while (j > i + 1 .and. s(j:j) == '0')
+        j = j - 1
+      end do
+      s = s(1:j)
+    end if
+  end function pyfloat"""
+
+
 def emit_fortran(module: lir.FortranModule) -> str:
     types = [item for item in module.items if isinstance(item, lir.FortranType)]
     fns = [item for item in module.items if isinstance(item, lir.FortranFn)]
@@ -46,6 +64,9 @@ def emit_fortran(module: lir.FortranModule) -> str:
     # interface available to callers (including the program block).
     type_blocks = "\n\n".join(_emit_type_decl_only(t) for t in types)
     fn_blocks = "\n\n".join(_emit_fn(f) for f in all_lib)
+    program_body = _emit_program(main_fn) if main_fn else ""
+    if "pyfloat(" in fn_blocks or "pyfloat(" in program_body:
+        fn_blocks = _PY_FLOAT_FORTRAN + ("\n\n" + fn_blocks if fn_blocks else "")
 
     module_lines = [f"module {MODULE_NAME}", f"{INDENT}implicit none"]
     if type_blocks:
@@ -63,8 +84,7 @@ def emit_fortran(module: lir.FortranModule) -> str:
     if main_fn is None:
         return module_block + "\n"
 
-    program_block = _emit_program(main_fn)
-    return module_block + "\n\n" + program_block + "\n"
+    return module_block + "\n\n" + program_body + "\n"
 
 
 def _emit_program(main_fn: lir.FortranFn) -> str:
@@ -353,6 +373,11 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         args = ", ".join(_emit_expr(v) for _, v in node.field_values)
         return f"{node.name}({args})"
     if isinstance(node, lir.FortranArrayLit):
+        if not node.elements:
+            # Fortran rejects `[]`; the typed-empty constructor `[T ::]` is
+            # the only legal form, so elem_type must be known by lowering.
+            assert node.elem_type, "empty FortranArrayLit requires elem_type"
+            return f"[{node.elem_type} ::]"
         elems = ", ".join(_emit_expr(e) for e in node.elements)
         return f"[{elems}]"
     if isinstance(node, lir.FortranSubscript):

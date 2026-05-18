@@ -131,9 +131,8 @@ def _lower_stmt(node: mir.MirNode, result_name: str) -> lir.LirNode:
             body=[_lower_stmt(n, result_name) for n in node.body],
         )
     if isinstance(node, mir.MirCall) and node.func == "print":
-        # Wrap boolean args with merge("True ","False",<arg>) so the output
-        # matches Python's True/False rather than Fortran's T/F.
-        args = [_lower_bool_print_arg(a) for a in node.args]
+        # Match Python's repr output for bool and float args.
+        args = [_lower_print_arg(a) for a in node.args]
         return lir.FortranCall(func="print", args=args)
     return _lower_expr(node)
 
@@ -150,8 +149,9 @@ def _is_bool_type(node: mir.MirNode) -> bool:
     return False
 
 
-def _lower_bool_print_arg(node: mir.MirNode) -> lir.LirNode:
-    """Lower a print() argument, wrapping booleans as merge('True ','False',x)."""
+def _lower_print_arg(node: mir.MirNode) -> lir.LirNode:
+    """Lower a print() argument, wrapping booleans and floats to match
+    Python's repr-style output."""
     if _is_bool_type(node):
         expr = _lower_expr(node)
         return lir.FortranCall(
@@ -164,6 +164,12 @@ def _lower_bool_print_arg(node: mir.MirNode) -> lir.LirNode:
                     expr,
                 ],
             )],
+        )
+    ty = getattr(node, "ty", None)
+    if isinstance(ty, FloatT):
+        return lir.FortranCall(
+            func="trim",
+            args=[lir.FortranCall(func="pyfloat", args=[_lower_expr(node)])],
         )
     return _lower_expr(node)
 
@@ -206,6 +212,17 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
             raise NotImplementedError(
                 "Fortran string concat requires fixed-length char buffers; not yet supported"
             )
+        # List concatenation: `xs + [v]` → `[xs, v]`. Re-allocates per use
+        # (O(n) copy); acceptable for our algorithm corpus. Flattening both
+        # sides avoids ragged `[[a, b], c]` constructors that Fortran rejects.
+        if (
+            node.op == "+"
+            and isinstance(getattr(node.left, "ty", None), ListT)
+            and isinstance(getattr(node.right, "ty", None), ListT)
+        ):
+            return lir.FortranArrayLit(
+                elements=[*_spread_list(node.left), *_spread_list(node.right)]
+            )
         return lir.FortranBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
     if isinstance(node, mir.MirCompare):
         _CMP_OPS = {"==": ".eq.", "!=": ".ne.", "<": ".lt.", "<=": ".le.", ">": ".gt.", ">=": ".ge."}
@@ -233,7 +250,13 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
             return lir.FortranCall(func="size", args=[_lower_expr(node.args[0])])
         return lir.FortranCall(func=node.func, args=[_lower_expr(a) for a in node.args])
     if isinstance(node, mir.MirList):
-        return lir.FortranArrayLit(elements=[_lower_expr(e) for e in node.elements])
+        elements = [_lower_expr(e) for e in node.elements]
+        elem_ty = None
+        if not elements:
+            list_ty = getattr(node, "ty", None)
+            if isinstance(list_ty, ListT):
+                elem_ty = _fortran_type(list_ty.elem)
+        return lir.FortranArrayLit(elements=elements, elem_type=elem_ty)
     if isinstance(node, mir.MirSubscript):
         return lir.FortranSubscript(
             value=_lower_expr(node.value),
@@ -256,6 +279,15 @@ def _emit_field_path(obj: mir.MirNode, field: str) -> str:
     if isinstance(obj, mir.MirFieldAccess):
         return f"{_emit_field_path(obj.value, obj.field)}%{field}"
     raise NotImplementedError(f"fortran field-assign on {type(obj).__name__}")
+
+
+def _spread_list(node: mir.MirNode) -> list[lir.LirNode]:
+    """Flatten a literal list one level so concatenation emits a single
+    `[a, b, c]` rather than `[[a, b], c]` — Fortran rejects ragged ranks
+    in array constructors."""
+    if isinstance(node, mir.MirList):
+        return [_lower_expr(e) for e in node.elements]
+    return [_lower_expr(node)]
 
 
 def _is_string_concat(node: mir.MirBinOp) -> bool:

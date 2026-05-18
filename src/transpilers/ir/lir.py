@@ -1273,9 +1273,12 @@ class FortranFieldAccess(LirNode):
 
 @dataclass
 class FortranArrayLit(LirNode):
-    """`[1, 2, 3]` — Fortran 2003 array constructor."""
+    """`[1, 2, 3]` — Fortran 2003 array constructor.
+    When `elements` is empty, `elem_type` must be set so the emitter
+    can produce `[<type> ::]` (Fortran requires a typed constructor)."""
 
     elements: list[LirNode]
+    elem_type: str | None = None  # e.g. "logical", "integer"
 
 
 @dataclass
