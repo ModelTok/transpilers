@@ -1287,3 +1287,38 @@ class FortranSubscript(LirNode):
 
     value: LirNode
     index: LirNode
+
+
+# ---------- loop control (`break` / `continue`) ----------
+# One per target so each emitter renders the language-specific keyword.
+
+@dataclass
+class RustBreak(LirNode): pass
+@dataclass
+class RustContinue(LirNode): pass
+@dataclass
+class ZigBreak(LirNode): pass
+@dataclass
+class ZigContinue(LirNode): pass
+@dataclass
+class CBreak(LirNode): pass
+@dataclass
+class CContinue(LirNode): pass
+@dataclass
+class GoBreak(LirNode): pass
+@dataclass
+class GoContinue(LirNode): pass
+@dataclass
+class MojoBreak(LirNode): pass
+@dataclass
+class MojoContinue(LirNode): pass
+@dataclass
+class PyBreak(LirNode): pass
+@dataclass
+class PyContinue(LirNode): pass
+@dataclass
+class FortranExit(LirNode):
+    """Fortran's break-equivalent is `exit`."""
+@dataclass
+class FortranCycle(LirNode):
+    """Fortran's continue-equivalent is `cycle`."""

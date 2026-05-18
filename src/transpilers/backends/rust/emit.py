@@ -90,6 +90,10 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     pad = INDENT * depth
     if isinstance(node, lir.RustReturn):
         return f"{pad}return {_emit_expr(node.value)};" if node.value else f"{pad}return;"
+    if isinstance(node, lir.RustBreak):
+        return f"{pad}break;"
+    if isinstance(node, lir.RustContinue):
+        return f"{pad}continue;"
     if isinstance(node, lir.RustLet):
         mut = "mut " if node.mutable else ""
         ann = f": {node.ty}" if node.ty else ""

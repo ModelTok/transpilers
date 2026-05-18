@@ -106,6 +106,10 @@ def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
 
 def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     pad = INDENT * depth
+    if isinstance(node, lir.CBreak):
+        return f"{pad}break;"
+    if isinstance(node, lir.CContinue):
+        return f"{pad}continue;"
     if isinstance(node, lir.CReturn):
         return f"{pad}return {_emit_expr(node.value)};" if node.value else f"{pad}return;"
     if isinstance(node, lir.CDecl):

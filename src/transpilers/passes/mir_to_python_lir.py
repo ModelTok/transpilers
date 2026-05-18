@@ -46,6 +46,10 @@ def _lower_function(fn: mir.MirFunction) -> lir.PyFn:
 def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.PyReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirBreak):
+        return lir.PyBreak()
+    if isinstance(node, mir.MirContinue):
+        return lir.PyContinue()
     if isinstance(node, mir.MirFieldAssign):
         return lir.PyFieldAssign(
             obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)

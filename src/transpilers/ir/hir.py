@@ -40,6 +40,16 @@ class HirReturn(HirNode):
 
 
 @dataclass
+class HirBreak(HirNode):
+    """`break` — exits the innermost enclosing loop."""
+
+
+@dataclass
+class HirContinue(HirNode):
+    """`continue` — skips to the next iteration of the innermost loop."""
+
+
+@dataclass
 class HirBinOp(HirNode):
     op: str
     left: HirNode

@@ -141,6 +141,12 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
     if isinstance(node, cst.Pass):
         return PassMarker()
 
+    if isinstance(node, cst.Break):
+        return hir.HirBreak()
+
+    if isinstance(node, cst.Continue):
+        return hir.HirContinue()
+
     if isinstance(node, cst.Expr):
         return _convert(node.value)
 

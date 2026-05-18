@@ -141,6 +141,10 @@ def _scan(nodes: list[mir.MirNode], counts: dict[str, int], aug: set[str]) -> No
 def _lower_stmt(node: mir.MirNode, declared: set[str], mut: set[str]) -> lir.LirNode:
     if isinstance(node, mir.MirReturn):
         return lir.ZigReturn(value=_lower_expr(node.value) if node.value else None)
+    if isinstance(node, mir.MirBreak):
+        return lir.ZigBreak()
+    if isinstance(node, mir.MirContinue):
+        return lir.ZigContinue()
     if isinstance(node, mir.MirFieldAssign):
         return lir.ZigFieldAssign(
             obj=_lower_expr(node.obj), field=node.field, value=_lower_expr(node.value)
