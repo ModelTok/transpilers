@@ -24,12 +24,24 @@ def _zig_string_escape(s: str) -> str:
     )
 
 
+_PY_FLOAT_HELPER = """\
+fn _py_float(x: f64) []const u8 {
+    const S = struct { var buf: [64]u8 = undefined; };
+    const s = std.fmt.bufPrint(&S.buf, "{d}", .{x}) catch return "?";
+    for (s) |c| if (c == '.' or c == 'e') return s;
+    return std.fmt.bufPrint(&S.buf, "{d}.0", .{x}) catch s;
+}
+"""
+
+
 def emit_zig(module: lir.ZigModule) -> str:
     body = "\n\n".join(_emit_item(item) for item in module.items) + "\n"
-    # If any emission references `std.`, prepend the std import.
+    preamble = ""
     if "std." in body:
-        body = 'const std = @import("std");\n\n' + body
-    return body
+        preamble += 'const std = @import("std");\n\n'
+    if "_py_float(" in body:
+        preamble += _PY_FLOAT_HELPER + "\n"
+    return preamble + body
 
 
 def _emit_item(item: lir.LirNode) -> str:
@@ -228,7 +240,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
             else:
                 rendered_args.append(_emit_expr(a))
         return f"{node.func}({', '.join(rendered_args)})"
-    from transpilers.passes.mir_to_zig_lir import _ZigIfExpr as _IE
+    from transpilers.passes.mir_to_zig_lir import _ZigIfExpr as _IE, _ZigPyFloat as _PF
     if isinstance(node, _IE):
         return f"if ({_emit_expr(node.test)}) {_emit_expr(node.then_)} else {_emit_expr(node.else_)}"
+    if isinstance(node, _PF):
+        return f"_py_float({_emit_expr(node.value)})"
     raise NotImplementedError(f"LIR node {type(node).__name__}")
