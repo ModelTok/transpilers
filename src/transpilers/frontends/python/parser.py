@@ -19,6 +19,7 @@ from __future__ import annotations
 import libcst as cst
 
 from transpilers.ir import hir
+from transpilers.frontends._markers import FlattenBlock, PassMarker
 
 
 class UnsupportedConstruct(Exception):
@@ -138,7 +139,7 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
         )
 
     if isinstance(node, cst.Pass):
-        return _PassMarker()
+        return PassMarker()
 
     if isinstance(node, cst.Expr):
         return _convert(node.value)
@@ -229,27 +230,12 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
                 # No `as`: the context expression is evaluated for side
                 # effect; we drop it.
             body_stmts = [_convert(s) for s in node.body.body]
-            return _WithBlock(stmts=prelude + body_stmts)
+            return FlattenBlock(stmts=prelude + body_stmts)
     raise UnsupportedConstruct(f"{type(node).__name__}")
 
 
-class _WithBlock(hir.HirNode):
-    """Private marker — `with` desugars to its body; callers flatten."""
-
-    def __init__(self, stmts: list[hir.HirNode]) -> None:
-        self.stmts = stmts
-
-
-class _PassMarker(hir.HirNode):
-    """Private marker for `pass` — filtered out during block conversion."""
-
-
-class _TupleAssign(hir.HirNode):
-    """Sequence of HirAssigns from tuple unpacking; flattened into the
-    enclosing block during conversion."""
-
-    def __init__(self, stmts: list[hir.HirNode]) -> None:
-        self.stmts = stmts
+# Block-flatten markers live in transpilers.frontends._markers — both
+# `with` desugar, tuple-unpacking, and the `pass` filter use them.
 
 
 def _tuple_assign(target: cst.Tuple, value: cst.BaseExpression) -> hir.HirNode:
@@ -292,7 +278,7 @@ def _tuple_assign(target: cst.Tuple, value: cst.BaseExpression) -> hir.HirNode:
             raise UnsupportedConstruct(
                 f"tuple unpacking slot {type(slot).__name__}"
             )
-    return _TupleAssign(stmts=stmts)
+    return FlattenBlock(stmts=stmts)
 
 
 def _convert_function(fn: cst.FunctionDef) -> hir.HirFunction:
@@ -313,22 +299,15 @@ def _convert_block(body: cst.BaseSuite) -> list[hir.HirNode]:
     out: list[hir.HirNode] = []
     for stmt in body.body:
         node = _convert(stmt)
-        # `with` desugars to its body — flatten here so the wrapper marker
-        # never reaches downstream passes.
-        if isinstance(node, _WithBlock):
+        if isinstance(node, FlattenBlock):
             out.extend(node.stmts)
             continue
-        # `a, b = b, a` desugars to a sequence of assigns; flatten the same way.
-        if isinstance(node, _TupleAssign):
-            out.extend(node.stmts)
-            continue
-        # Drop bare string-literal expression statements (docstrings).
-        # They have no runtime effect but leak into emit as raw quoted
-        # text on targets that don't have a comment-statement form.
+        # Drop bare string-literal expression statements (docstrings):
+        # no runtime effect but leak into emit as raw quoted text on
+        # targets without a comment-statement form.
         if isinstance(node, hir.HirStringLiteral):
             continue
-        # `pass` is a no-op statement; targets handle empty blocks themselves.
-        if isinstance(node, _PassMarker):
+        if isinstance(node, PassMarker):
             continue
         out.append(node)
     return out
