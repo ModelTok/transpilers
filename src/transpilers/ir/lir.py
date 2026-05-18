@@ -1265,3 +1265,18 @@ class FortranFieldAccess(LirNode):
 
     value: LirNode
     field: str
+
+
+@dataclass
+class FortranArrayLit(LirNode):
+    """`[1, 2, 3]` — Fortran 2003 array constructor."""
+
+    elements: list[LirNode]
+
+
+@dataclass
+class FortranSubscript(LirNode):
+    """`xs(i + 1)` — Fortran is 1-indexed; emitter adds the +1 offset."""
+
+    value: LirNode
+    index: LirNode

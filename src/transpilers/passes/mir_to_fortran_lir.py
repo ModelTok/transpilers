@@ -185,7 +185,17 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
     if isinstance(node, mir.MirStringLiteral):
         return lir.FortranStringLiteral(value=node.value)
     if isinstance(node, mir.MirCall):
+        # `len(xs)` → Fortran intrinsic `size(xs)` on arrays.
+        if node.func == "len" and len(node.args) == 1:
+            return lir.FortranCall(func="size", args=[_lower_expr(node.args[0])])
         return lir.FortranCall(func=node.func, args=[_lower_expr(a) for a in node.args])
+    if isinstance(node, mir.MirList):
+        return lir.FortranArrayLit(elements=[_lower_expr(e) for e in node.elements])
+    if isinstance(node, mir.MirSubscript):
+        return lir.FortranSubscript(
+            value=_lower_expr(node.value),
+            index=_lower_expr(node.index),
+        )
     if isinstance(node, mir.MirFieldAccess):
         return lir.FortranFieldAccess(value=_lower_expr(node.value), field=node.field)
     if isinstance(node, mir.MirStructInit):
@@ -229,7 +239,12 @@ def _fortran_type(ty: Type) -> str:
     if isinstance(ty, NoneT):
         return ""
     if isinstance(ty, ListT):
-        raise NotImplementedError("fortran array emission not yet supported")
+        # Assumed-shape array. The param declaration in `_emit_fn` produces:
+        #   `integer, dimension(:), intent(in) :: xs`
+        # For locals we'd need `allocatable` too; that's handled by tagging
+        # local list types with the allocatable attribute. Empty-list
+        # initialization via `xs = []` then auto-allocates.
+        return f"{_fortran_type(ty.elem)}, dimension(:)"
     if isinstance(ty, StructT):
         return f"type({ty.name})"
     if isinstance(ty, UnknownT):

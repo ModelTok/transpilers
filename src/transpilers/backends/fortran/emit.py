@@ -98,11 +98,19 @@ def _emit_fn(fn: lir.FortranFn) -> str:
 
     decl_lines = [f"{INDENT}implicit none"]
     for name, ty in fn.params:
+        # Array params are assumed-shape via `dimension(:)` — `intent(in)`
+        # places after the shape attribute is the conventional ordering.
         decl_lines.append(f"{INDENT}{ty}, intent(in) :: {name}")
     if not is_subroutine:
         decl_lines.append(f"{INDENT}{fn.return_type} :: {fn.result_name}")
     for name, ty in fn.locals:
-        decl_lines.append(f"{INDENT}{ty} :: {name}")
+        # Locals declared with array shape need `allocatable` so a later
+        # `xs = [...]` assignment triggers auto-(re)allocation under
+        # F2003 -frealloc-lhs (default in gfortran ≥ 4.7).
+        if "dimension(:)" in ty:
+            decl_lines.append(f"{INDENT}{ty}, allocatable :: {name}")
+        else:
+            decl_lines.append(f"{INDENT}{ty} :: {name}")
 
     body_lines = []
     for stmt in fn.body:
@@ -220,4 +228,13 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         # declaration order.
         args = ", ".join(_emit_expr(v) for _, v in node.field_values)
         return f"{node.name}({args})"
+    if isinstance(node, lir.FortranArrayLit):
+        elems = ", ".join(_emit_expr(e) for e in node.elements)
+        return f"[{elems}]"
+    if isinstance(node, lir.FortranSubscript):
+        # 1-indexed; bridge from our 0-based MIR with +1. Mirror the
+        # offset-folding done by `_emit_inclusive_stop` so `xs[i+1]`
+        # in source produces `xs(i + 2)` rather than `xs(i + 1 + 1)`.
+        idx = _emit_expr(node.index)
+        return f"{_emit_expr(node.value)}({idx} + 1)"
     raise NotImplementedError(f"LIR node {type(node).__name__}")
