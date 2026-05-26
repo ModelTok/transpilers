@@ -174,6 +174,20 @@ def transpile_cpp_to_c(source: str, *, llm_fill=None) -> str:
     return transpile(source, source_lang="cpp", target="c", llm_fill=llm_fill)
 
 
+def transpile_cpp_to_python_to_mojo(source: str, *, llm_fill=None) -> tuple[str, str]:
+    """Two-stage: C++ → Python (stage 1), Python → Mojo (stage 2).
+
+    Returns (python_intermediate, mojo_output).
+
+    The Python code produced in stage 1 acts as a pivot IR — an explicit,
+    readable intermediate that can be inspected or edited before the second
+    stage converts it to Mojo.
+    """
+    python_code = transpile(source, source_lang="cpp", target="python", llm_fill=llm_fill)
+    mojo_code = transpile(python_code, source_lang="python", target="mojo", llm_fill=llm_fill)
+    return python_code, mojo_code
+
+
 # Convenience wrappers for the new frontends. Targets are picked at the call
 # site; tests assemble the pairs they need.
 def transpile_java(source: str, target: str = "rust", *, llm_fill=None) -> str:
@@ -208,6 +222,20 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="ask the LLM to rename opaque locals (Ghidra `local_10` etc.); requires ANTHROPIC_API_KEY",
     )
+    parser.add_argument(
+        "--path",
+        choices=["direct", "python_pivot"],
+        default="direct",
+        help=(
+            "Translation path: 'direct' (default) performs a single-pass translation; "
+            "'python_pivot' routes C++ → Python → Mojo (requires --target mojo)."
+        ),
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="print intermediate output (e.g. the Python stage when using --path python_pivot)",
+    )
     args = parser.parse_args(argv)
 
     source_lang = args.source_lang or EXT_TO_SOURCE.get(args.source.suffix)
@@ -235,6 +263,47 @@ def main(argv: list[str] | None = None) -> int:
     client = LlmClient() if (args.infer_with_llm or args.llm_rename) else None
     llm_fill = make_llm_inferencer(client) if (client and args.infer_with_llm) else None
     rename_fill = make_llm_renamer(client) if (client and args.llm_rename) else None
+
+    # ------------------------------------------------------------------
+    # Two-stage python_pivot path: C++ → Python → Mojo
+    # ------------------------------------------------------------------
+    if args.path == "python_pivot":
+        if args.target != "mojo":
+            print(
+                "--path python_pivot requires --target mojo",
+                file=sys.stderr,
+            )
+            return 2
+        if source_lang != "cpp":
+            print(
+                "--path python_pivot requires a C++ source file",
+                file=sys.stderr,
+            )
+            return 2
+
+        python_ir, out = transpile_cpp_to_python_to_mojo(src_input, llm_fill=llm_fill)
+
+        if args.verbose:
+            sys.stderr.write("--- Python intermediate ---\n")
+            sys.stderr.write(python_ir)
+            sys.stderr.write("\n--- end Python intermediate ---\n")
+
+        sys.stdout.write(out)
+
+        if args.verify:
+            _, _, verify_fn = TARGETS["mojo"]
+            result = verify_fn(out)
+            if not result.ok:
+                sys.stderr.write("\n--- mojo compiler rejected emitted code ---\n")
+                sys.stderr.write(result.stderr)
+                return 1
+            sys.stderr.write("\n[verify] ok\n")
+
+        return 0
+
+    # ------------------------------------------------------------------
+    # Default direct path
+    # ------------------------------------------------------------------
     out = transpile(
         src_input,
         source_lang=source_lang,
