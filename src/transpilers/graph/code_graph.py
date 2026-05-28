@@ -35,13 +35,24 @@ except ImportError as exc:  # pragma: no cover
 # tree-sitter is optional — gracefully degrade to regex-based extraction.
 # ---------------------------------------------------------------------------
 _TREESITTER_AVAILABLE = False
+_TREESITTER_CPP_PARSER = None
 try:
+    # Prefer `tree_sitter_languages` when available (covers multiple langs
+    # from one package). It currently caps at Python 3.12, so on 3.13+ we
+    # fall back to the per-language `tree-sitter-cpp` package.
     import tree_sitter_languages  # type: ignore
     from tree_sitter import Language, Parser  # type: ignore
 
     _TREESITTER_AVAILABLE = True
 except Exception:
-    pass
+    try:
+        import tree_sitter_cpp  # type: ignore
+        from tree_sitter import Language, Parser  # type: ignore
+
+        _TREESITTER_CPP_PARSER = Parser(Language(tree_sitter_cpp.language()))
+        _TREESITTER_AVAILABLE = True
+    except Exception:
+        pass
 
 # ---------------------------------------------------------------------------
 # C++ patterns (regex fallback)
@@ -108,7 +119,10 @@ def _extract_cpp_regex(source: str) -> tuple[list[str], dict[str, list[str]]]:
 
 def _extract_cpp_treesitter(source: str) -> tuple[list[str], dict[str, list[str]]]:
     """Return (defined_functions, call_map) using tree-sitter."""
-    parser = tree_sitter_languages.get_parser("cpp")
+    if _TREESITTER_CPP_PARSER is not None:
+        parser = _TREESITTER_CPP_PARSER
+    else:
+        parser = tree_sitter_languages.get_parser("cpp")
     tree = parser.parse(source.encode())
 
     definitions: list[str] = []
