@@ -17,9 +17,43 @@ this works against any reasonably recent libclang.
 
 from __future__ import annotations
 
+import glob as _glob
+import os as _os
+
 import clang.cindex as ci
 
 from transpilers.ir import hir
+
+
+def _configure_libclang() -> None:
+    """Point clang bindings at the newest available libclang.dll on Windows.
+
+    The PyPI ``libclang`` wheel currently caps at 18.1.1 — too old to parse
+    libc++ 22 headers (it errors on ``__builtin_clzg`` etc.). If a newer
+    libclang.dll is installed alongside LLVM-MinGW or official LLVM, use
+    that instead so the parser matches the headers it walks.
+    """
+    if _os.name != "nt":
+        return
+    override = _os.environ.get("TRANSPILERS_LIBCLANG")
+    candidates: list[str] = [override] if override else []
+    local_app = _os.environ.get("LOCALAPPDATA", "")
+    if local_app:
+        candidates.extend(_glob.glob(_os.path.join(
+            local_app, "Microsoft", "WinGet", "Packages",
+            "MartinStorsjo.LLVM-MinGW.*", "llvm-mingw-*", "bin", "libclang.dll",
+        )))
+    candidates.append(r"C:\Program Files\LLVM\bin\libclang.dll")
+    for p in candidates:
+        if p and _os.path.isfile(p):
+            try:
+                ci.Config.set_library_file(p)
+            except Exception:
+                pass
+            return
+
+
+_configure_libclang()
 
 
 CursorKind = ci.CursorKind
@@ -27,6 +61,31 @@ CursorKind = ci.CursorKind
 
 class UnsupportedConstruct(Exception):
     pass
+
+
+# ---------------------------------------------------------------------------
+# Deferred postfix-increment/decrement effects
+#
+# When `i++` or `i--` appears in an expression position (e.g. `s[l++]`),
+# we emit the pre-increment value at the use site and push the increment
+# itself onto the current effect frame.  _convert_stmt drains the top frame
+# and appends the effects AFTER the statement.
+# ---------------------------------------------------------------------------
+
+_POSTFIX_EFFECT_STACK: list[list["hir.HirNode"]] = []
+
+
+def _push_postfix_frame() -> None:
+    _POSTFIX_EFFECT_STACK.append([])
+
+
+def _pop_postfix_frame() -> "list[hir.HirNode]":
+    return _POSTFIX_EFFECT_STACK.pop() if _POSTFIX_EFFECT_STACK else []
+
+
+def _record_postfix_effect(node: "hir.HirNode") -> None:
+    if _POSTFIX_EFFECT_STACK:
+        _POSTFIX_EFFECT_STACK[-1].append(node)
 
 
 # C++ types collapsed onto HIR annotation strings consumable by hir_to_mir.
@@ -103,6 +162,78 @@ SIMD_TYPE_ALIASES: dict[str, str] = {
 
 
 _SYSTEM_INCLUDE_CACHE: list[str] | None = None
+_HOST_TRIPLE_CACHE: str | None = None
+
+
+def _host_triple() -> str | None:
+    """Default target triple of the located clang. We pass this to libclang
+    so its built-in triple (which may differ — official LLVM on Windows
+    defaults to ``...msvc`` and would error on libc++ headers from a
+    MinGW install) matches the headers we're feeding it."""
+    global _HOST_TRIPLE_CACHE
+    if _HOST_TRIPLE_CACHE is not None:
+        return _HOST_TRIPLE_CACHE or None
+    import subprocess
+    clang = _find_clang()
+    if not clang:
+        _HOST_TRIPLE_CACHE = ""
+        return None
+    try:
+        out = subprocess.run(
+            [clang, "-print-target-triple"],
+            capture_output=True, text=True, timeout=5,
+        )
+        triple = out.stdout.strip()
+    except Exception:
+        triple = ""
+    _HOST_TRIPLE_CACHE = triple
+    return triple or None
+
+
+def _looks_like_path(s: str) -> bool:
+    """Match an absolute path on either POSIX (`/...`) or Windows (`C:/`,
+    `C:\\`). Reject lines like ``End of search list.`` or framework
+    directory annotations."""
+    if not s:
+        return False
+    if s.startswith("/"):
+        return True
+    # Windows drive letter, e.g. "C:\foo" or "C:/foo"
+    return len(s) >= 3 and s[1] == ":" and s[2] in ("/", "\\")
+
+
+def _find_clang() -> str | None:
+    """Locate a clang/clang++ binary. Prefers PATH, then well-known Windows
+    install locations dropped by winget (LLVM-MinGW, official LLVM) so that
+    a fresh install works without the user editing PATH."""
+    import glob
+    import os
+    import shutil
+
+    found = shutil.which("clang++") or shutil.which("clang")
+    if found:
+        return found
+
+    candidates: list[str] = []
+    env_override = os.environ.get("TRANSPILERS_CLANG")
+    if env_override:
+        candidates.append(env_override)
+
+    if os.name == "nt":
+        local_app = os.environ.get("LOCALAPPDATA", "")
+        if local_app:
+            # LLVM-MinGW (winget MartinStorsjo.LLVM-MinGW.{UCRT,MSVCRT})
+            candidates.extend(glob.glob(os.path.join(
+                local_app, "Microsoft", "WinGet", "Packages",
+                "MartinStorsjo.LLVM-MinGW.*", "llvm-mingw-*", "bin", "clang++.exe",
+            )))
+        # Official LLVM (winget LLVM.LLVM)
+        candidates.append(r"C:\Program Files\LLVM\bin\clang++.exe")
+
+    for p in candidates:
+        if p and os.path.isfile(p):
+            return p
+    return None
 
 
 def _system_include_args() -> list[str]:
@@ -113,10 +244,9 @@ def _system_include_args() -> list[str]:
     global _SYSTEM_INCLUDE_CACHE
     if _SYSTEM_INCLUDE_CACHE is not None:
         return _SYSTEM_INCLUDE_CACHE
-    import shutil
     import subprocess
 
-    clang = shutil.which("clang++") or shutil.which("clang")
+    clang = _find_clang()
     if not clang:
         _SYSTEM_INCLUDE_CACHE = []
         return []
@@ -126,7 +256,7 @@ def _system_include_args() -> list[str]:
             input="",
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=10,
         )
     except Exception:
         _SYSTEM_INCLUDE_CACHE = []
@@ -143,8 +273,11 @@ def _system_include_args() -> list[str]:
             break
         if in_block:
             p = line.strip()
-            if p and p.startswith("/"):
-                paths.append(p.split()[0])
+            # macOS prints framework dirs like `/path (framework directory)` —
+            # split on whitespace to pull out the leading path.
+            head = p.split()[0] if p else ""
+            if _looks_like_path(head):
+                paths.append(head)
     args: list[str] = []
     for p in paths:
         args.extend(["-isystem", p])
@@ -168,7 +301,11 @@ def parse_cpp(source: str) -> hir.HirModule:
         "-DUINT_MAX=4294967295U",
         "-DEXIT_SUCCESS=0", "-DEXIT_FAILURE=1",
     ]
-    parse_args = ["-std=c++17", "-x", "c++"] + predefs + _system_include_args()
+    triple_args = []
+    triple = _host_triple()
+    if triple:
+        triple_args = [f"--target={triple}"]
+    parse_args = ["-std=c++17", "-x", "c++"] + triple_args + predefs + _system_include_args()
     tu = index.parse(
         INPUT_NAME,
         args=parse_args,
@@ -194,6 +331,14 @@ def parse_cpp(source: str) -> hir.HirModule:
             continue
         if c.kind in (CursorKind.FUNCTION_DECL,):
             continue
+        if c.kind == CursorKind.VAR_DECL:
+            # Top-level globals (e.g. `const double KELVIN = 273.15`).
+            # Translate to module-level assignments so functions can reference them.
+            try:
+                body.append(_convert_var_decl(c))
+            except UnsupportedConstruct:
+                pass
+            continue
         if c.kind in (
             CursorKind.INCLUSION_DIRECTIVE,
             CursorKind.MACRO_DEFINITION,
@@ -202,10 +347,7 @@ def parse_cpp(source: str) -> hir.HirModule:
             CursorKind.USING_DIRECTIVE,
             CursorKind.USING_DECLARATION,
             CursorKind.TYPEDEF_DECL,
-            CursorKind.VAR_DECL,            # top-level globals
         ):
-            # Namespace wrappers we could walk into, but the corpus' uses
-            # don't need it for the immediate fix.
             continue
         raise UnsupportedConstruct(f"top-level {c.kind.name}")
     return hir.HirModule(source_lang="cpp", body=body)
@@ -291,10 +433,34 @@ def _convert_compound(cursor: ci.Cursor) -> list[hir.HirNode]:
 
 
 def _convert_stmt(cursor: ci.Cursor) -> list[hir.HirNode]:
+    _push_postfix_frame()
+    result = _convert_stmt_inner(cursor)
+    effects = _pop_postfix_frame()
+    return result + effects
+
+
+def _convert_stmt_inner(cursor: ci.Cursor) -> list[hir.HirNode]:
     kind = cursor.kind
     if kind == CursorKind.RETURN_STMT:
         kids = list(cursor.get_children())
-        return [hir.HirReturn(value=_convert_expr(kids[0]) if kids else None)]
+        if not kids:
+            return [hir.HirReturn(value=None)]
+        child = _strip_unexposed(kids[0])
+        # `return (lhs = rhs)` — assignment-in-return. Desugar to assign + return lhs.
+        if child.kind == CursorKind.BINARY_OPERATOR:
+            try:
+                op = _binop_token(child)
+            except UnsupportedConstruct:
+                op = ""
+            if op == "=":
+                bk = list(child.get_children())
+                try:
+                    assign = _convert_assignment_stmt(child)
+                    return_val = _lhs_as_subscript_or_name(bk[0])
+                    return [assign, hir.HirReturn(value=return_val)]
+                except UnsupportedConstruct:
+                    pass
+        return [hir.HirReturn(value=_convert_expr(kids[0]))]
     if kind == CursorKind.DECL_STMT:
         out: list[hir.HirNode] = []
         for c in cursor.get_children():
@@ -332,7 +498,7 @@ def _convert_stmt(cursor: ci.Cursor) -> list[hir.HirNode]:
         # that involve operator overloads) in UNEXPOSED. Drill in.
         kids = list(cursor.get_children())
         if len(kids) == 1:
-            return _convert_stmt(kids[0])
+            return _convert_stmt_inner(kids[0])
     raise UnsupportedConstruct(f"stmt {kind.name}")
 
 
@@ -482,24 +648,40 @@ def _convert_for_range(cursor: ci.Cursor) -> list[hir.HirNode]:
     """`for (auto x : xs)` → indexed loop with x = xs[i] inside.
 
     libclang exposes the children as: VAR_DECL (loop var), iterable expr,
-    then COMPOUND_STMT body. Lacking a foreach in our HIR, we desugar to
-    `for i in range(len(xs)): x = xs[i]; <body>`.
+    then COMPOUND_STMT body (or a bare statement when no braces).
+    Desugars to `for i in range(len(xs)): x = xs[i]; <body>`.
     """
     kids = list(cursor.get_children())
     var_decl = next((c for c in kids if c.kind == CursorKind.VAR_DECL), None)
     body_cursor = next((c for c in kids if c.kind == CursorKind.COMPOUND_STMT), None)
-    # The iterable expression is the first non-VAR_DECL, non-body child.
+    # Iterable: first non-VAR_DECL, non-COMPOUND_STMT, non-NULL_STMT child.
     iter_cursor = next(
         (c for c in kids
          if c.kind not in (CursorKind.VAR_DECL, CursorKind.COMPOUND_STMT, CursorKind.NULL_STMT)),
         None,
     )
+    # Single-statement body (no braces): the last child that isn't the loop
+    # variable or the iterable.
+    if body_cursor is None and iter_cursor is not None:
+        candidates = [
+            c for c in kids
+            if c.kind not in (CursorKind.VAR_DECL, CursorKind.NULL_STMT)
+            and c is not iter_cursor
+        ]
+        body_cursor = candidates[-1] if candidates else None
+
     if var_decl is None or iter_cursor is None or body_cursor is None:
         raise UnsupportedConstruct("malformed range-for")
+
     iter_expr = _convert_expr(iter_cursor)
     var_name = var_decl.spelling
-    idx_name = f"__xpile_idx"
-    body = _convert_compound(body_cursor)
+    idx_name = "__xpile_idx"
+
+    if body_cursor.kind == CursorKind.COMPOUND_STMT:
+        body = _convert_compound(body_cursor)
+    else:
+        body = _convert_stmt(body_cursor)
+
     bind = hir.HirAssign(
         target=var_name,
         value=hir.HirSubscript(value=iter_expr, index=hir.HirName(name=idx_name)),
@@ -762,13 +944,24 @@ def _convert_unary_expr(cursor: ci.Cursor) -> hir.HirNode:
         # I/O-heavy corpus parse.
         return _convert_expr(kids[0])
     if op == "~":
-        return hir.HirUnaryOp(op="-", operand=_convert_expr(kids[0]))
+        return hir.HirUnaryOp(op="~", operand=_convert_expr(kids[0]))
     if op in ("++", "--"):
-        # Refuse rather than silently drop the side effect (#4): a
-        # source `arr[i++] = 0` would lower to `arr[i] = 0` and loop
-        # forever in the target. Statement-position increments are
-        # handled separately by _convert_unary_stmt.
-        raise UnsupportedConstruct(f"postfix {op!r} in expression position")
+        # Post-increment/decrement in expression position (e.g. `s[l++]`):
+        # return the PRE-increment value and defer the side effect to a
+        # statement appended after the enclosing expression-statement.
+        # _convert_stmt drains the postfix-effect stack after each statement.
+        target_name = _decl_name(kids[0])
+        operand = _convert_expr(kids[0])
+        if target_name is not None:
+            sign = "+" if op == "++" else "-"
+            _record_postfix_effect(hir.HirAssign(
+                target=target_name,
+                value=hir.HirIntLiteral(value=1),
+                annotation=None,
+                augmented_op=sign,
+            ))
+            return operand
+        raise UnsupportedConstruct(f"postfix {op!r} on complex expression")
     raise UnsupportedConstruct(f"unary op {op!r} as expression")
 
 
@@ -790,8 +983,50 @@ def _convert_unary_stmt(cursor: ci.Cursor) -> hir.HirNode:
     )
 
 
+_TUPLE_CONSTRUCTORS = frozenset({"tuple", "pair", "make_pair", "make_tuple"})
+_LIST_CONSTRUCTORS = frozenset({"vector", "array", "deque", "list"})
+
+
+def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
+    """Convert an assignment LHS cursor to an expression for use in `return lhs`."""
+    lhs = _strip_unexposed(lhs)
+    if lhs.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR:
+        lk = list(lhs.get_children())
+        if len(lk) == 2:
+            return hir.HirSubscript(value=_convert_expr(lk[0]), index=_convert_expr(lk[1]))
+    if lhs.kind == CursorKind.CALL_EXPR:
+        # operator[] overload: obj = first child, index = last meaningful arg
+        lk = list(lhs.get_children())
+        # Filter out TYPE_REF / operator-ref cursors; keep object + index
+        args = [c for c in lk if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)]
+        # First is typically the object; last meaningful arg is the index
+        meaningful = [a for a in args if not (a.kind == CursorKind.DECL_REF_EXPR and "operator" in a.spelling)]
+        if len(meaningful) >= 2:
+            return hir.HirSubscript(value=_convert_expr(meaningful[0]), index=_convert_expr(meaningful[-1]))
+    if lhs.kind == CursorKind.MEMBER_REF_EXPR:
+        lk = list(lhs.get_children())
+        obj = _convert_expr(lk[0]) if lk else hir.HirName(name="self")
+        return hir.HirFieldAccess(value=obj, field=lhs.spelling)
+    return _convert_expr(lhs)
+
+
 def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
+
+    # Detect tuple/pair constructor: cursor.spelling is the type name ('tuple',
+    # 'pair', etc.) and the first child is NOT a callee reference but an argument.
+    if cursor.spelling in _TUPLE_CONSTRUCTORS and kids:
+        first = _strip_unexposed(kids[0])
+        if first.kind not in (CursorKind.DECL_REF_EXPR, CursorKind.MEMBER_REF_EXPR):
+            elements = [_convert_expr(c) for c in kids]
+            return hir.HirCall(func="tuple", args=[hir.HirList(elements=elements)])
+
+    if cursor.spelling in _LIST_CONSTRUCTORS and kids:
+        first = _strip_unexposed(kids[0])
+        if first.kind not in (CursorKind.DECL_REF_EXPR, CursorKind.MEMBER_REF_EXPR):
+            elements = [_convert_expr(c) for c in kids]
+            return hir.HirList(elements=elements)
+
     if not kids:
         # libclang's CALL_EXPR exposes no children for operator-overload
         # calls like `cin >> n` / `cout << x`. Lose the I/O side effect

@@ -202,17 +202,24 @@ def test_java_subscript_lhs():
 # ---------- C++ frontend ----------
 
 
-def test_cpp_postfix_in_expr_raises():
-    """Issue #4: postfix ++/-- in expression context must raise rather
-    than silently drop the side effect."""
-    from transpilers.cli.main import transpile_cpp_to_rust
-    from transpilers.frontends.cpp.parser import UnsupportedConstruct
+def test_cpp_postfix_in_expr_defers_effect():
+    """Issue #4: postfix ++/-- in expression context must NOT silently drop
+    the side effect.  The old behaviour raised; the new behaviour defers the
+    increment to a statement after the expression so the pre-increment value
+    is used at the use site (correct post-increment semantics)."""
+    from transpilers.cli.main import transpile
     src = textwrap.dedent(
         """
-        int next(int i) {
-            return i++;
+        int postfix_add(int i) {
+            int x = i++;
+            return x;
         }
         """
     ).lstrip()
-    with pytest.raises(UnsupportedConstruct):
-        transpile_cpp_to_rust(src)
+    # Must not raise and must produce valid Python that returns the pre-increment value.
+    out = transpile(src, source_lang="cpp", target="python")
+    ns: dict = {}
+    exec(compile(out, "<test>", "exec"), ns)  # noqa: S102
+    fn = ns.get("postfix_add")
+    assert fn is not None, f"function not found in:\n{out}"
+    assert fn(3) == 3, f"expected pre-increment value 3, got {fn(3)}\n{out}"

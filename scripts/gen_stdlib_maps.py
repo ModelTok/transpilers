@@ -138,6 +138,42 @@ except ImportError as _imp_err:
 
 OUTPUT_DEFAULT = _REPO_ROOT / "src" / "transpilers" / "stdlib_maps" / "auto_generated.yaml"
 
+# ---------------------------------------------------------------------------
+# Corpus harvesting
+# ---------------------------------------------------------------------------
+
+_CPP_STD_RE = re.compile(r"\bstd::([a-zA-Z_][a-zA-Z0-9_:]*)")
+_CPP_EXTS = {".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h", ".c"}
+
+
+def harvest_corpus(corpus_path: Path, top_n: int = 200) -> dict[str, int]:
+    """Scan C++ files under *corpus_path* for std:: usages.
+
+    Parameters
+    ----------
+    corpus_path:
+        Root directory of a C++ corpus (e.g. EnergyPlus source tree).
+    top_n:
+        Return only the top-N most frequent APIs.
+
+    Returns
+    -------
+    dict mapping ``"std::<name>"`` to occurrence count, sorted by descending frequency.
+    """
+    counts: dict[str, int] = {}
+    for f in corpus_path.rglob("*"):
+        if f.suffix not in _CPP_EXTS or not f.is_file():
+            continue
+        try:
+            text = f.read_text(errors="replace")
+        except OSError:
+            continue
+        for m in _CPP_STD_RE.finditer(text):
+            api = f"std::{m.group(1)}"
+            counts[api] = counts.get(api, 0) + 1
+    sorted_counts = sorted(counts.items(), key=lambda x: -x[1])
+    return dict(sorted_counts[:top_n])
+
 
 # ---------------------------------------------------------------------------
 # Zim search helpers
@@ -257,9 +293,15 @@ def generate(
     output: Path = OUTPUT_DEFAULT,
     dry_run: bool = False,
     verbose: bool = False,
+    corpus_path: Path | None = None,
 ) -> None:
-    """Generate auto_generated.yaml from Zim archives (or hardcoded hints)."""
+    """Generate auto_generated.yaml from Zim archives (or hardcoded hints).
 
+    When *corpus_path* is given, the C++ corpus is scanned for std:: usages
+    first.  Any API found in the corpus but absent from the hardcoded hints
+    tables is added as a stub entry (empty target list) so the maps cover
+    everything the corpus actually uses.
+    """
     zim_files = find_zim_files(zim_dir)
     has_python_zim = any("docs.python.org" in f.name for f in zim_files)
     has_mojo_zim = any("mojolang.org" in f.name for f in zim_files)
@@ -281,6 +323,19 @@ def generate(
         )
 
     use_zim = libzim_available and bool(zim_files)
+
+    # Augment hint tables from corpus if provided.
+    if corpus_path is not None:
+        if verbose:
+            print(f"Harvesting std:: usages from corpus: {corpus_path}", file=sys.stderr)
+        corpus_counts = harvest_corpus(corpus_path)
+        if verbose:
+            print(f"  Found {len(corpus_counts)} distinct std:: APIs in corpus", file=sys.stderr)
+        for api in corpus_counts:
+            if api not in CPP_TO_PYTHON_HINTS:
+                CPP_TO_PYTHON_HINTS[api] = []
+            if api not in CPP_TO_MOJO_HINTS:
+                CPP_TO_MOJO_HINTS[api] = []
 
     # Build refined mapping tables.
     cpp_to_python: dict[str, list[str]] = {}
@@ -370,6 +425,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print each Zim search query.",
     )
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help=(
+            "Path to a C++ corpus directory (e.g. EnergyPlus src/).  "
+            "Scans for std:: usages and adds any missing APIs as stub entries "
+            "so the generated maps cover the corpus before the main transpile run."
+        ),
+    )
     args = parser.parse_args(argv)
 
     generate(
@@ -377,6 +443,7 @@ def main(argv: list[str] | None = None) -> int:
         output=args.output,
         dry_run=args.dry_run,
         verbose=args.verbose,
+        corpus_path=args.corpus,
     )
     return 0
 
