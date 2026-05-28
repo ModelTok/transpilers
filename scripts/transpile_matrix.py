@@ -34,6 +34,28 @@ EXT_MAP = {
     "ts": "typescript", "vb": "vb",
 }
 
+_CPP_EXTS = {".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h"}
+_PY_EXTS = {".py"}
+
+
+def _topo_ordered(root: pathlib.Path, files: list[pathlib.Path]) -> list[pathlib.Path]:
+    """Return files in dependency order (callees before callers) via the call graph."""
+    try:
+        _src = pathlib.Path(__file__).resolve().parent.parent / "src"
+        import sys
+        if str(_src) not in sys.path:
+            sys.path.insert(0, str(_src))
+        from transpilers.graph.code_graph import file_topological_order
+        cpp_count = sum(1 for f in files if f.suffix in _CPP_EXTS)
+        py_count = sum(1 for f in files if f.suffix in _PY_EXTS)
+        lang = "cpp" if cpp_count >= py_count else "python"
+        ordered = file_topological_order(root, lang=lang)
+        ordered_strs = {str(f) for f in ordered}
+        tail = [f for f in files if str(f) not in ordered_strs]
+        return ordered + tail
+    except Exception:
+        return files
+
 
 def _compile_rust(src: str, td: pathlib.Path) -> tuple[bool, str]:
     p = td / "lib.rs"
@@ -70,9 +92,14 @@ def main(argv: list[str]) -> int:
     target = args[1] if len(args) > 1 else "rust"
     results: list[tuple[str, str, str]] = []
     compiler = COMPILERS.get(target) if compile_outputs else None
-    for f in sorted(root.rglob("*")):
-        if not f.is_file():
-            continue
+
+    all_files = [
+        f for f in sorted(root.rglob("*"))
+        if f.is_file() and EXT_MAP.get(f.suffix.lstrip("."))
+    ]
+    ordered_files = _topo_ordered(root, all_files)
+
+    for f in ordered_files:
         src = EXT_MAP.get(f.suffix.lstrip("."))
         if not src:
             continue

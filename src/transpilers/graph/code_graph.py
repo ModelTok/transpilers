@@ -380,3 +380,68 @@ def load_graph(path: str | Path) -> "nx.DiGraph":
     path = Path(path)
     data = json.loads(path.read_text())
     return nx.node_link_graph(data, directed=True, multigraph=False)
+
+
+# ---------------------------------------------------------------------------
+# File-level topological ordering
+# ---------------------------------------------------------------------------
+
+def file_topological_order(path: str | Path, lang: str = "cpp") -> list[Path]:
+    """Return source files under *path* in dependency order (callees before callers).
+
+    Projects the function-level call graph to file-level edges: file A depends
+    on file B if any function in A calls any function defined in B.  Files with
+    no detected cross-file dependencies come first.  Cycles (mutual recursion
+    across files) are broken by SCC condensation.
+
+    Parameters
+    ----------
+    path:
+        Directory (or single file) to analyse.
+    lang:
+        ``"cpp"`` or ``"python"``.
+
+    Returns
+    -------
+    list[Path]
+        Source files ordered so that dependency files precede their dependents.
+        Files absent from the call graph (no parsed functions) are appended
+        last in sorted order.
+    """
+    path = Path(path)
+    G = build_graph(path, lang=lang)
+
+    # Build file-level directed graph: caller-file → callee-file.
+    file_graph: "nx.DiGraph" = nx.DiGraph()
+    for node, data in G.nodes(data=True):
+        fp = data.get("file", "")
+        if fp:
+            file_graph.add_node(fp)
+
+    for caller, callee in G.edges():
+        cf = G.nodes[caller].get("file", "")
+        df = G.nodes[callee].get("file", "")
+        if cf and df and cf != df:
+            file_graph.add_edge(cf, df)
+
+    # Topological sort with SCC condensation for cycles.
+    condensed = nx.condensation(file_graph)
+    ordered_files: list[Path] = []
+    seen: set[str] = set()
+    for scc_idx in reversed(list(nx.topological_sort(condensed))):
+        for fp in sorted(condensed.nodes[scc_idx]["members"]):
+            if fp not in seen:
+                ordered_files.append(Path(fp))
+                seen.add(fp)
+
+    # Append files with no parsed functions (not in graph) last.
+    if path.is_dir():
+        extensions = {
+            "cpp": {".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h"},
+            "python": {".py"},
+        }.get(lang, set())
+        for fp in sorted(path.rglob("*")):
+            if fp.is_file() and fp.suffix in extensions and str(fp) not in seen:
+                ordered_files.append(fp)
+
+    return ordered_files

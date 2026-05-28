@@ -114,12 +114,13 @@ def transpile(
     target: str = "rust",
     llm_fill=None,
     llm_rename_fill=None,
+    ir_hints=None,
 ) -> str:
     parse = FRONTENDS[source_lang]
     lower, emit, _ = TARGETS[target]
     hir_mod = parse(source)
     mir_mod = hir_to_mir(hir_mod)
-    infer_types(mir_mod, llm_fill=llm_fill)
+    infer_types(mir_mod, llm_fill=llm_fill, ir_hints=ir_hints)
     if llm_rename_fill is not None:
         llm_rename(mir_mod, llm_fill=llm_rename_fill)
     return emit(lower(mir_mod))
@@ -174,7 +175,7 @@ def transpile_cpp_to_c(source: str, *, llm_fill=None) -> str:
     return transpile(source, source_lang="cpp", target="c", llm_fill=llm_fill)
 
 
-def transpile_cpp_to_python_to_mojo(source: str, *, llm_fill=None) -> tuple[str, str]:
+def transpile_cpp_to_python_to_mojo(source: str, *, llm_fill=None, ir_hints=None) -> tuple[str, str]:
     """Two-stage: C++ → Python (stage 1), Python → Mojo (stage 2).
 
     Returns (python_intermediate, mojo_output).
@@ -183,7 +184,7 @@ def transpile_cpp_to_python_to_mojo(source: str, *, llm_fill=None) -> tuple[str,
     readable intermediate that can be inspected or edited before the second
     stage converts it to Mojo.
     """
-    python_code = transpile(source, source_lang="cpp", target="python", llm_fill=llm_fill)
+    python_code = transpile(source, source_lang="cpp", target="python", llm_fill=llm_fill, ir_hints=ir_hints)
     mojo_code = transpile(python_code, source_lang="python", target="mojo", llm_fill=llm_fill)
     return python_code, mojo_code
 
@@ -221,6 +222,14 @@ def main(argv: list[str] | None = None) -> int:
         "--llm-rename",
         action="store_true",
         help="ask the LLM to rename opaque locals (Ghidra `local_10` etc.); requires ANTHROPIC_API_KEY",
+    )
+    parser.add_argument(
+        "--ir-augment",
+        action="store_true",
+        help=(
+            "compile the C/C++ source to LLVM IR and use it to pre-populate type holes "
+            "before inference (eliminates most UnknownT without LLM calls; requires clang)"
+        ),
     )
     parser.add_argument(
         "--path",
@@ -264,6 +273,11 @@ def main(argv: list[str] | None = None) -> int:
     llm_fill = make_llm_inferencer(client) if (client and args.infer_with_llm) else None
     rename_fill = make_llm_renamer(client) if (client and args.llm_rename) else None
 
+    ir_hints = None
+    if args.ir_augment and source_lang in ("c", "cpp"):
+        from transpilers.passes.ir_preload import extract_ir_types
+        ir_hints = extract_ir_types(args.source)
+
     # ------------------------------------------------------------------
     # Two-stage python_pivot path: C++ → Python → Mojo
     # ------------------------------------------------------------------
@@ -281,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
 
-        python_ir, out = transpile_cpp_to_python_to_mojo(src_input, llm_fill=llm_fill)
+        python_ir, out = transpile_cpp_to_python_to_mojo(src_input, llm_fill=llm_fill, ir_hints=ir_hints)
 
         if args.verbose:
             sys.stderr.write("--- Python intermediate ---\n")
@@ -310,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         target=args.target,
         llm_fill=llm_fill,
         llm_rename_fill=rename_fill,
+        ir_hints=ir_hints,
     )
     sys.stdout.write(out)
 
