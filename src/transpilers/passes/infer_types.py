@@ -39,6 +39,7 @@ from transpilers.ir.types import (
 
 LlmFill = Callable[[str, dict], Type]
 FnMap = dict[str, mir.MirFunction]
+IrHints = dict[str, "tuple[list[Type], Type]"]
 
 
 ARITH_OPS = {"+", "-", "*", "/", "%"}
@@ -46,7 +47,14 @@ MAX_ITER = 8
 MAX_MODULE_ITER = 6
 
 
-def infer_types(module: mir.MirModule, *, llm_fill: LlmFill | None = None) -> mir.MirModule:
+def infer_types(
+    module: mir.MirModule,
+    *,
+    llm_fill: LlmFill | None = None,
+    ir_hints: IrHints | None = None,
+) -> mir.MirModule:
+    if ir_hints:
+        _apply_ir_hints(module, ir_hints)
     fn_map: FnMap = {fn.name: fn for fn in module.functions}
     last = None
     for _ in range(MAX_MODULE_ITER):
@@ -63,6 +71,30 @@ def infer_types(module: mir.MirModule, *, llm_fill: LlmFill | None = None) -> mi
         for fn in module.functions:
             _llm_fallback(fn, llm_fill)
     return module
+
+
+def _apply_ir_hints(module: mir.MirModule, hints: IrHints) -> None:
+    """Pre-seed MIR function parameter/return types from LLVM IR type data.
+
+    Tries exact name match first, then a substring heuristic for C++ mangled names.
+    Only fills UnknownT slots — never overwrites an already-resolved type.
+    """
+    for fn in module.functions:
+        hit = hints.get(fn.name)
+        if hit is None:
+            # Heuristic: mangled C++ name contains the unmangled base name.
+            for mangled, pair in hints.items():
+                if len(fn.name) > 2 and fn.name in mangled:
+                    hit = pair
+                    break
+        if hit is None:
+            continue
+        ptypes, rtype = hit
+        for i, p in enumerate(fn.params):
+            if i < len(ptypes) and isinstance(p.ty, UnknownT) and not isinstance(ptypes[i], UnknownT):
+                fn.params[i] = replace(p, ty=ptypes[i])
+        if isinstance(fn.return_type, UnknownT) and not isinstance(rtype, UnknownT):
+            fn.return_type = rtype
 
 
 def _module_snapshot(module: mir.MirModule) -> tuple:

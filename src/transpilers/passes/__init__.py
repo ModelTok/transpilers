@@ -2,6 +2,7 @@
 
 from .hir_to_mir import hir_to_mir
 from .infer_types import infer_types
+from .ir_preload import extract_ir_types
 from .llm_rename import llm_rename
 from .mir_to_c_lir import mir_to_c_lir
 from .mir_to_fortran_lir import mir_to_fortran_lir
@@ -12,6 +13,7 @@ from .mir_to_rust_lir import mir_to_rust_lir
 from .mir_to_zig_lir import mir_to_zig_lir
 
 __all__ = [
+    "extract_ir_types",
     "hir_to_mir",
     "infer_types",
     "llm_rename",

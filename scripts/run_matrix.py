@@ -199,10 +199,27 @@ def evaluate(py_path: pathlib.Path, targets: list[str]) -> dict[str, str]:
     return results
 
 
+def _topo_ordered_py(root: pathlib.Path, files: list[pathlib.Path]) -> list[pathlib.Path]:
+    """Return Python files in dependency order via the call graph."""
+    try:
+        import sys
+        _src = pathlib.Path(__file__).resolve().parent.parent / "src"
+        if str(_src) not in sys.path:
+            sys.path.insert(0, str(_src))
+        from transpilers.graph.code_graph import file_topological_order
+        ordered = file_topological_order(root, lang="python")
+        ordered_strs = {str(f) for f in ordered}
+        tail = [f for f in files if str(f) not in ordered_strs]
+        return ordered + tail
+    except Exception:
+        return files
+
+
 def main(argv: list[str]) -> int:
     root = pathlib.Path(argv[1] if len(argv) > 1 else "examples/algorithms")
     targets = ["rust", "zig", "c", "go", "python", "fortran", "mojo"]
-    py_files = sorted(p for p in root.rglob("*.py") if "main()" in p.read_text())
+    raw_py_files = sorted(p for p in root.rglob("*.py") if "main()" in p.read_text())
+    py_files = _topo_ordered_py(root, raw_py_files)
 
     width_file = max(len(p.name) for p in py_files) + 2
     col_w = 14
