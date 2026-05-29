@@ -33,6 +33,47 @@ CursorKind = ci.CursorKind
 
 CursorKind = ci.CursorKind
 
+_TypeKind = ci.TypeKind
+_INTEGRAL_KINDS = frozenset(
+    getattr(_TypeKind, k) for k in (
+        "BOOL", "CHAR_U", "UCHAR", "CHAR16", "CHAR32", "USHORT", "UINT",
+        "ULONG", "ULONGLONG", "UINT128", "CHAR_S", "SCHAR", "WCHAR",
+        "SHORT", "INT", "LONG", "LONGLONG", "INT128", "ENUM",
+    ) if getattr(_TypeKind, k, None) is not None
+)
+_FLOATING_KINDS = frozenset(
+    getattr(_TypeKind, k) for k in ("FLOAT", "DOUBLE", "LONGDOUBLE", "FLOAT128")
+    if getattr(_TypeKind, k, None) is not None
+)
+
+def _is_integral_type(t) -> bool:
+    try:
+        return t.get_canonical().kind in _INTEGRAL_KINDS
+    except Exception:
+        return False
+
+def _is_floating_type(t) -> bool:
+    try:
+        return t.get_canonical().kind in _FLOATING_KINDS
+    except Exception:
+        return False
+
+def _operand_is_floating(cursor) -> bool:
+    # clang inserts implicit-cast UNEXPOSED/PAREN wrappers whose type already
+    # reflects the destination (e.g. `int`), so the cast operand's own type
+    # lies. Drill through transparent wrappers to the real value's type.
+    cur = cursor
+    for _ in range(8):
+        if _is_floating_type(cur.type):
+            return True
+        if cur.kind not in (CursorKind.UNEXPOSED_EXPR, CursorKind.PAREN_EXPR):
+            break
+        kids = [k for k in cur.get_children() if k.kind != CursorKind.TYPE_REF]
+        if not kids:
+            break
+        cur = kids[-1]
+    return _is_floating_type(cur.type)
+
 _POSTFIX_EFFECT_STACK: list[list["hir.HirNode"]] = []
 
 def _push_postfix_frame() -> None:
@@ -594,14 +635,28 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
         return hir.HirIntLiteral(value=0)
     if kind in (CursorKind.CSTYLE_CAST_EXPR, CursorKind.CXX_STATIC_CAST_EXPR,
                 CursorKind.CXX_FUNCTIONAL_CAST_EXPR):
-        # `(T)x` / `static_cast<T>(x)` / `T(x)` — drop the cast and pass the
-        # value through (type inference / target coercion handle the rest).
+        # `(T)x` / `static_cast<T>(x)` / `T(x)`.
+        #
+        # A float->int cast in C truncates toward zero; dropping it would
+        # silently change semantics (e.g. `(int)(t/5.0)` becomes a float).
+        # When the destination is integral and the operand is floating, wrap
+        # the value in `Int(...)` (Mojo's Int(Float) truncates toward zero,
+        # matching C). All other casts are dropped — type inference / target
+        # coercion handle widening.
         kids = list(cursor.get_children())
+        inner = None
         for c in kids[::-1]:
             if c.kind != CursorKind.TYPE_REF:
-                return _convert_expr(c)
-        if kids:
-            return _convert_expr(kids[-1])
+                inner = c
+                break
+        if inner is None and kids:
+            inner = kids[-1]
+        if inner is None:
+            return hir.HirIntLiteral(value=0)
+        value = _convert_expr(inner)
+        if _is_integral_type(cursor.type) and _operand_is_floating(inner):
+            return hir.HirCall(func="Int", args=[value])
+        return value
     if kind == CursorKind.CONDITIONAL_OPERATOR:
         # `cond ? a : b` — three children. Lower as a __ternary__ builtin
         # call so each backend folds it into a target-native if-expression.
