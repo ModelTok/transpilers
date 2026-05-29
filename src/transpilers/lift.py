@@ -47,24 +47,64 @@ def src(c) -> str:
         return c.spelling or "?"
 
 
-def _toks_to_py(ts: list[str]) -> str:
-    """Best-effort: concatenate a member/operand token stream into Python.
+# tokens we can faithfully re-emit from a degraded AST node (no type info)
+_TOK_OK = re.compile(
+    r"[A-Za-z_]\w*"                                  # identifiers
+    r"|->|\.|::|\(|\)|\[|\]|,"                        # access / call / subscript
+    r"|&&|\|\||!"                                     # logical
+    r"|==|!=|<=|>=|<|>"                               # comparison
+    r"|\+|-|\*|/|%"                                   # arithmetic
+    r"|[0-9][0-9.eExXa-fA-F+]*"                       # numeric literal
+    r'|".*"|\'.*\''                                   # string / char literal
+)
+# binary operators that want surrounding whitespace in the emitted Python
+_SPACED = {"==", "!=", "<=", ">=", "<", ">", "+", "-", "*", "/", "%"}
+_LOGIC = {"&&": " and ", "||": " or "}
 
-    Handles the dominant degraded-AST case (identifier chains like
-    `state.dataCoolTower->GetInputFlag`) without any type resolution.
+
+def _toks_to_py(ts: list[str]) -> str:
+    """Best-effort: turn a degraded operand token stream into Python.
+
+    Handles identifier/member chains (`state.dataX->Field`), ObjexxFCL
+    array-member access (`Arr(i).Field` -> `arr(i).field`, the 1-based
+    subscript is kept faithfully as a call for Phase-1), namespaced calls
+    (`Util::SameString(a,b)` -> `same_string(a, b)`, `std::abs(x)` ->
+    `abs(x)`; the namespace qualifier is dropped, only the final identifier
+    is kept + snaked), and embedded operators/literals.
     """
     out = []
-    for t in ts:
+    i, n = 0, len(ts)
+    while i < n:
+        t = ts[i]
+        nxt = ts[i + 1] if i + 1 < n else None
         if t in ("->", "."):
             out.append(".")
+        elif t == "::":
+            # namespace qualifier: drop it, the previous identifier too
+            if out and re.fullmatch(r"[A-Za-z_]\w*", out[-1]):
+                out.pop()
         elif t == "this":
             out.append("self")
-        elif re.fullmatch(r"[A-Za-z_]\w*", t):
-            out.append(snake(t))
         elif t in ("true", "false"):
             out.append("True" if t == "true" else "False")
+        elif t in ("nullptr", "NULL"):
+            out.append("None")
+        elif t == "!":
+            out.append("not ")
+        elif t in _LOGIC:
+            out.append(_LOGIC[t])
+        elif t == ",":
+            out.append(", ")
+        elif t in _SPACED:
+            out.append(f" {t} ")
+        elif re.fullmatch(r"[A-Za-z_]\w*", t):
+            # snake unless it's a namespace qualifier (next token is `::`)
+            out.append(t if nxt == "::" else snake(t))
+        elif t and (t[0].isdigit()):
+            out.append(t.rstrip("uUlLfF"))
         else:
             out.append(t)
+        i += 1
     return "".join(out)
 
 
@@ -126,7 +166,9 @@ class _Lifter:
 
     def _tok_fallback(self, c) -> str:
         ts = toks(c)
-        if ts and all(re.fullmatch(r"[A-Za-z_]\w*|->|\.|\[|\]|[0-9]+", t) for t in ts):
+        # only re-emit when EVERY token is one we know how to translate, and
+        # the expression isn't an assignment (handled structurally elsewhere)
+        if ts and "=" not in ts and all(_TOK_OK.fullmatch(t) for t in ts):
             return _toks_to_py(ts)
         return self.todo_expr(c)
 
