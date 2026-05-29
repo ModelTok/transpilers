@@ -47,11 +47,10 @@ def _record_postfix_effect(node: "hir.HirNode") -> None:
 
 INPUT_NAME = "input.cpp"
 
-# Force-included preamble so single-function snippets extracted for migration
-# parse without their original #includes. These declarations let libclang
-# resolve common <cmath> calls and <cstdint> types; because they live in a
-# separate file (not INPUT_NAME) `_from_input` filters them out of the output.
-_PREAMBLE_NAME = "_transpilers_preamble.h"
+# Prepended preamble so single-function snippets extracted for migration parse
+# without their original #includes. These declarations let libclang resolve
+# common <cmath> calls, <cstdint> types, and min/max; the top-level loop skips
+# TYPEDEF_DECL and non-definition FUNCTION_DECL, so they never reach the output.
 _PREAMBLE = """
 typedef signed char int8_t; typedef short int16_t; typedef int int32_t;
 typedef long long int64_t; typedef unsigned char uint8_t;
@@ -66,8 +65,33 @@ double sinh(double); double cosh(double); double tanh(double);
 double fabs(double); double ceil(double); double floor(double); double round(double);
 double trunc(double); double fmod(double, double); double hypot(double, double);
 double fmin(double, double); double fmax(double, double); double fma(double, double, double);
-int abs(int); long labs(long);
+double max(double, double); double min(double, double);
+int max(int, int); int min(int, int); int abs(int); long labs(long);
+namespace std {
+using ::exp; using ::log; using ::log10; using ::log2; using ::sqrt; using ::cbrt;
+using ::pow; using ::sin; using ::cos; using ::tan; using ::asin; using ::acos;
+using ::atan; using ::atan2; using ::sinh; using ::cosh; using ::tanh;
+using ::fabs; using ::ceil; using ::floor; using ::round; using ::trunc;
+using ::fmod; using ::hypot; using ::fmin; using ::fmax; using ::fma;
+using ::max; using ::min; using ::abs; using ::labs;
+}
 """
+
+
+def _project_preamble() -> str:
+    """Project-specific declarations to prepend (e.g. EnergyPlus `Real64`), so
+    domain typedefs resolve without baking them into the general core preamble.
+      $TRANSPILERS_CPP_PREAMBLE       — inline declaration text
+      $TRANSPILERS_CPP_PREAMBLE_FILE  — path to a declarations file
+    """
+    inline = _os.environ.get("TRANSPILERS_CPP_PREAMBLE", "")
+    path = _os.environ.get("TRANSPILERS_CPP_PREAMBLE_FILE", "")
+    if path and _os.path.isfile(path):
+        try:
+            inline += "\n" + open(path, encoding="utf-8").read()
+        except OSError:
+            pass
+    return ("\n" + inline + "\n") if inline else ""
 
 def parse_cpp(source: str) -> hir.HirModule:
     index = ci.Index.create()
@@ -97,7 +121,7 @@ def parse_cpp(source: str) -> hir.HirModule:
     tu = index.parse(
         INPUT_NAME,
         args=parse_args,
-        unsaved_files=[(INPUT_NAME, _PREAMBLE + source)],
+        unsaved_files=[(INPUT_NAME, _PREAMBLE + _project_preamble() + source)],
         options=ci.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
     )
     _check_diagnostics(tu)
