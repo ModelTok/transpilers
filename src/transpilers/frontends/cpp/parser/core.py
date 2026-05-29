@@ -592,9 +592,10 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
         # `NULL` / `nullptr` — lower as a zero literal. Lossy (no real null
         # type), but suffices for comparisons like `p == NULL`.
         return hir.HirIntLiteral(value=0)
-    if kind == CursorKind.CSTYLE_CAST_EXPR or kind == CursorKind.CXX_STATIC_CAST_EXPR:
-        # `(T)x` / `static_cast<T>(x)` — drop the cast and pass the value
-        # through.
+    if kind in (CursorKind.CSTYLE_CAST_EXPR, CursorKind.CXX_STATIC_CAST_EXPR,
+                CursorKind.CXX_FUNCTIONAL_CAST_EXPR):
+        # `(T)x` / `static_cast<T>(x)` / `T(x)` — drop the cast and pass the
+        # value through (type inference / target coercion handle the rest).
         kids = list(cursor.get_children())
         for c in kids[::-1]:
             if c.kind != CursorKind.TYPE_REF:
