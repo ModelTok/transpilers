@@ -21,6 +21,7 @@ dependencies = [
 
 [project.scripts]
 transpile = "transpilers.cli.main:main"
+transpile-levels = "transpilers.levels:main"
 
 [build-system]
 requires = ["hatchling"]
