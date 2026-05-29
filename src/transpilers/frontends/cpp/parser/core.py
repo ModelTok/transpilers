@@ -31,8 +31,6 @@ from .simd import _lift_simd_intrinsic
 
 CursorKind = ci.CursorKind
 
-CursorKind = ci.CursorKind
-
 _TypeKind = ci.TypeKind
 _INTEGRAL_KINDS = frozenset(
     getattr(_TypeKind, k) for k in (
