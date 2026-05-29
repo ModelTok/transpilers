@@ -143,20 +143,27 @@ class _Lifter:
         ref = c.referenced
         opname = (ref.spelling if ref else "") or c.spelling or ""
         if opname.startswith("operator"):
-            op = opname[len("operator"):]; rest = argl[1:]
+            op = opname[len("operator"):]
+            recv = argl[0] if argl else None          # receiver is the object
+            rest = argl[1:]
             if op in ("->", "*") and rest: return self.e(rest[-1])
-            if op == "[]" and len(rest) >= 2: return f"{self.e(rest[0])}[{self.e(rest[1])}]"
-            if op == "()" and rest:
-                return f"{self.e(rest[0])}({', '.join(self.e(a) for a in rest[1:])})"
+            if op == "[]" and recv is not None and rest: return f"{self.e(recv)}[{self.e(rest[0])}]"
+            if op == "()" and recv is not None:
+                return f"{self.e(recv)}({', '.join(self.e(a) for a in rest)})"
             if op in ("+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=") and len(rest) == 2:
                 return f"{self.e(rest[0])} {op} {self.e(rest[1])}"
             return self.e(rest[-1]) if rest else "None"
         if argl and argl[0].kind == K.MEMBER_REF_EXPR:
             recv = argl[0]; meth = snake(recv.spelling)
-            rk = list(recv.get_children()); base = self.e(rk[0]) if rk else "self"
             rest = [self.e(a) for a in argl[1:]]
+            if not meth:        # name-degraded method -> recover the whole receiver chain from tokens
+                return f"{self._tok_fallback(recv)}({', '.join(rest)})"
+            rk = list(recv.get_children()); base = self.e(rk[0]) if rk else "self"
             if meth == "size" and not rest: return f"len({base})"
             return f"{base}.{meth}({', '.join(rest)})"
+        # free call (or call through a name-degraded callee -> recover from tokens)
+        if not opname and argl:
+            return f"{self._tok_fallback(argl[0])}({', '.join(self.e(a) for a in argl[1:])})"
         name = snake(opname) if opname else "_call"
         return f"{name}({', '.join(self.e(a) for a in argl[1:])})"
 

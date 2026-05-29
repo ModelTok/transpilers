@@ -27,6 +27,17 @@ def test_lift_member_chain_recovered_from_tokens():
     assert "state.data_cool_tower.get_input_flag" in out
 
 
+def test_lift_recovers_degraded_method_and_array_access():
+    # Method calls + ObjexxFCL-style array access through name-degraded chains
+    # (no types) must recover the member names from tokens, not vanish.
+    out, _ = lift_source(
+        "void f(EnergyPlusData &state){ "
+        "  auto x = state.dataCoolTower->CoolTowerSys(i); "
+        "  int n = state.dataCoolTower->CoolTowerSys.size(); }")
+    assert "state.data_cool_tower.cool_tower_sys(i)" in out
+    assert "state.data_cool_tower.cool_tower_sys.size()" in out
+
+
 def test_lift_never_refuses_unknown():
     # A construct the lifter can't handle yet must still produce output + TODO.
     out, _ = lift_source("void g(){ try { foo(); } catch (...) { } }")
