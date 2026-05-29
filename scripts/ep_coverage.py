@@ -74,21 +74,34 @@ def categorize(err: str) -> str:
     return e[:60]
 
 def main():
-    files = _files(sys.argv[1:])
+    argv = sys.argv[1:]
+    emit_path = None
+    if "--emit" in argv:
+        i = argv.index("--emit"); emit_path = argv[i + 1]; del argv[i:i + 2]
+    files = _files(argv)
     print(f"# EnergyPlus -> Mojo coverage  (preamble: {os.environ['TRANSPILERS_CPP_PREAMBLE']})")
     tot = ok = ok_loc = tot_loc = 0
     fails = collections.Counter(); fail_loc = collections.Counter()
+    emitted = []
     for path in files:
         fns = extract_functions(path)
         for name, text, loc in fns:
             tot += 1; tot_loc += loc
             try:
-                transpile(text, source_lang="cpp", target="mojo")
+                out = transpile(text, source_lang="cpp", target="mojo")
                 ok += 1; ok_loc += loc
+                if emit_path:
+                    emitted.append(f"# from {os.path.basename(path)}: {name}\n{out.strip()}\n")
             except Exception as ex:
                 cat = categorize(str(ex))
                 fails[cat] += 1; fail_loc[cat] += loc
         print(f"  {os.path.basename(path):28s} {len(fns):4d} fns")
+    if emit_path and emitted:
+        with open(emit_path, "w") as f:
+            f.write("# Auto-transpiled EnergyPlus numeric kernels (C++ -> Mojo via transpilers).\n"
+                    "# Pure functions only; state-coupled code is hand-ported separately.\n\n")
+            f.write("\n".join(emitted))
+        print(f"\nemitted {len(emitted)} Mojo functions -> {emit_path}")
     print(f"\nTRANSPILED: {ok}/{tot} functions ({100*ok//max(tot,1)}%)  "
           f"| LOC {ok_loc}/{tot_loc} ({100*ok_loc//max(tot_loc,1)}%)")
     print("\nTop failure categories (count, loc):")
