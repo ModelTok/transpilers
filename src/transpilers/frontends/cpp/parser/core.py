@@ -47,6 +47,28 @@ def _record_postfix_effect(node: "hir.HirNode") -> None:
 
 INPUT_NAME = "input.cpp"
 
+# Force-included preamble so single-function snippets extracted for migration
+# parse without their original #includes. These declarations let libclang
+# resolve common <cmath> calls and <cstdint> types; because they live in a
+# separate file (not INPUT_NAME) `_from_input` filters them out of the output.
+_PREAMBLE_NAME = "_transpilers_preamble.h"
+_PREAMBLE = """
+typedef signed char int8_t; typedef short int16_t; typedef int int32_t;
+typedef long long int64_t; typedef unsigned char uint8_t;
+typedef unsigned short uint16_t; typedef unsigned int uint32_t;
+typedef unsigned long long uint64_t; typedef unsigned long size_t;
+typedef long ssize_t; typedef long ptrdiff_t;
+double exp(double); double log(double); double log10(double); double log2(double);
+double sqrt(double); double cbrt(double); double pow(double, double);
+double sin(double); double cos(double); double tan(double);
+double asin(double); double acos(double); double atan(double); double atan2(double, double);
+double sinh(double); double cosh(double); double tanh(double);
+double fabs(double); double ceil(double); double floor(double); double round(double);
+double trunc(double); double fmod(double, double); double hypot(double, double);
+double fmin(double, double); double fmax(double, double); double fma(double, double, double);
+int abs(int); long labs(long);
+"""
+
 def parse_cpp(source: str) -> hir.HirModule:
     index = ci.Index.create()
     # Pull system include paths from the host clang invocation so libclang
@@ -68,10 +90,14 @@ def parse_cpp(source: str) -> hir.HirModule:
     if triple:
         triple_args = [f"--target={triple}"]
     parse_args = ["-std=c++17", "-x", "c++"] + triple_args + predefs + _system_include_args()
+    # Prepend the declaration preamble: its typedefs (TYPEDEF_DECL) and bare
+    # function declarations (non-definition FUNCTION_DECL) are skipped by the
+    # top-level loop below, so they never reach the output — they only let
+    # libclang resolve <cmath>/<cstdint> names in include-less snippets.
     tu = index.parse(
         INPUT_NAME,
         args=parse_args,
-        unsaved_files=[(INPUT_NAME, source)],
+        unsaved_files=[(INPUT_NAME, _PREAMBLE + source)],
         options=ci.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
     )
     _check_diagnostics(tu)
