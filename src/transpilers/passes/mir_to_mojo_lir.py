@@ -25,13 +25,27 @@ from transpilers.ir.types import (
 )
 
 
+# <cmath> functions that live in Mojo's `math` module -> emit as `math.<name>`
+# (with an `import math` header). Names not here that are Mojo builtins map to
+# the builtin directly (no import).
+_MATH_FNS = frozenset({
+    "exp", "log", "log2", "log10", "sqrt", "cbrt", "pow", "fmod", "hypot",
+    "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+    "sinh", "cosh", "tanh", "ceil", "floor", "trunc",
+})
+_BUILTIN_MAP = {"fabs": "abs", "fmin": "min", "fmax": "max"}
+_used_math: set[str] = set()
+
+
 def mir_to_mojo_lir(module: mir.MirModule) -> lir.MojoModule:
+    _used_math.clear()
     items: list[lir.LirNode] = []
     for struct in module.structs:
         items.append(_lower_struct(struct))
     for fn in module.functions:
         items.append(_lower_function(fn))
-    return lir.MojoModule(items=items)
+    imports = ["math"] if _used_math else []
+    return lir.MojoModule(items=items, imports=imports)
 
 
 def _lower_struct(s: mir.MirStruct) -> lir.MojoStruct:
@@ -224,6 +238,12 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
         return lir.MojoMethodCall(receiver=args[0], method="sqrt", args=[])
     if node.func == "simd_abs" and len(args) == 1:
         return lir.MojoCall(func="abs", args=args)
+    # <cmath> intrinsics -> Mojo `math.<name>` (+ `import math`).
+    if node.func in _MATH_FNS:
+        _used_math.add(node.func)
+        return lir.MojoCall(func=f"math.{node.func}", args=args)
+    if node.func in _BUILTIN_MAP:
+        return lir.MojoCall(func=_BUILTIN_MAP[node.func], args=args)
     # Print/abs/min/max identity (already Mojo builtins).
     return lir.MojoCall(func=node.func, args=args)
 
