@@ -25,8 +25,7 @@ from dataclasses import dataclass
 from transpilers.ir import hir
 
 
-class UnsupportedConstruct(Exception):
-    pass
+from transpilers.frontends.errors import UnsupportedConstruct
 
 
 VB_TYPE_ALIASES: dict[str, str] = {
