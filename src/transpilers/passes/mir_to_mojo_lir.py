@@ -10,6 +10,8 @@ the format!() detour Rust needs.
 
 from __future__ import annotations
 
+import re
+
 from transpilers.ir import lir, mir
 from transpilers.ir.types import (
     BoolT,
@@ -216,6 +218,11 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
     args = [_lower_expr(a) for a in node.args]
     if node.func == "__ternary__" and len(args) == 3:
         return _MojoIfExpr(test=args[0], then_=args[1], else_=args[2])
+    # ObjexxFCL integer-power helpers (pervasive in EnergyPlus): pow_2(x) -> x**2.
+    _pn = re.fullmatch(r"pow_(\d+)", node.func)
+    if _pn and len(args) == 1:
+        return lir.MojoBinOp(op="**", left=args[0],
+                             right=lir.MojoIntLiteral(value=int(_pn.group(1))))
     if node.func == "len":
         if len(args) != 1:
             raise ValueError("len() takes exactly one argument")
