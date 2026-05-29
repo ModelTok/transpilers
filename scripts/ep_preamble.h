@@ -6,3 +6,6 @@ typedef int Int;
 // ObjexxFCL integer-power helpers (mapped to ** by the Mojo backend).
 double pow_2(double); double pow_3(double); double pow_4(double);
 double pow_5(double); double pow_6(double); double pow_7(double);
+// ObjexxFCL / Fortran scalar intrinsics (mapped by the Mojo backend).
+double mod(double, double); int mod(int, int);
+double sign(double, double); int sign(int, int);

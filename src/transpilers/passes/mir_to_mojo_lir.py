@@ -223,6 +223,12 @@ def _lower_call(node: mir.MirCall) -> lir.LirNode:
     if _pn and len(args) == 1:
         return lir.MojoBinOp(op="**", left=args[0],
                              right=lir.MojoIntLiteral(value=int(_pn.group(1))))
+    # ObjexxFCL/Fortran scalar intrinsics.
+    if node.func == "mod" and len(args) == 2:          # mod(a, b) -> a % b
+        return lir.MojoBinOp(op="%", left=args[0], right=args[1])
+    if node.func == "sign" and len(args) == 2:         # Fortran SIGN(a,b) == copysign
+        _used_math.add("copysign")
+        return lir.MojoCall(func="math.copysign", args=args)
     if node.func == "len":
         if len(args) != 1:
             raise ValueError("len() takes exactly one argument")
