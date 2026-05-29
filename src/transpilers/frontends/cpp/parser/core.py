@@ -14,7 +14,6 @@ refuse rather than emit broken code.
 Operator extraction uses tokens (not libclang's BinaryOperator extension), so
 this works against any reasonably recent libclang.
 """
-
 from __future__ import annotations
 
 import glob as _glob
@@ -24,266 +23,29 @@ import clang.cindex as ci
 
 from transpilers.ir import hir
 
-
-def _configure_libclang() -> None:
-    """Point clang bindings at the newest available libclang.dll on Windows.
-
-    The PyPI ``libclang`` wheel currently caps at 18.1.1 — too old to parse
-    libc++ 22 headers (it errors on ``__builtin_clzg`` etc.). If a newer
-    libclang.dll is installed alongside LLVM-MinGW or official LLVM, use
-    that instead so the parser matches the headers it walks.
-    """
-    if _os.name != "nt":
-        return
-    override = _os.environ.get("TRANSPILERS_LIBCLANG")
-    candidates: list[str] = [override] if override else []
-    local_app = _os.environ.get("LOCALAPPDATA", "")
-    if local_app:
-        candidates.extend(_glob.glob(_os.path.join(
-            local_app, "Microsoft", "WinGet", "Packages",
-            "MartinStorsjo.LLVM-MinGW.*", "llvm-mingw-*", "bin", "libclang.dll",
-        )))
-    candidates.append(r"C:\Program Files\LLVM\bin\libclang.dll")
-    for p in candidates:
-        if p and _os.path.isfile(p):
-            try:
-                ci.Config.set_library_file(p)
-            except Exception:
-                pass
-            return
-
-
-_configure_libclang()
-
+from .errors import UnsupportedConstruct
+from .libclang_config import *  # noqa: F401,F403  (_system_include_args, _host_triple, ...)
+from .types import *  # noqa: F401,F403  (CPP type aliases + _type_text)
+from .tokens import *  # noqa: F401,F403  (op sets + token/loc helpers)
+from .simd import _lift_simd_intrinsic
 
 CursorKind = ci.CursorKind
 
-
-class UnsupportedConstruct(Exception):
-    pass
-
-
-# ---------------------------------------------------------------------------
-# Deferred postfix-increment/decrement effects
-#
-# When `i++` or `i--` appears in an expression position (e.g. `s[l++]`),
-# we emit the pre-increment value at the use site and push the increment
-# itself onto the current effect frame.  _convert_stmt drains the top frame
-# and appends the effects AFTER the statement.
-# ---------------------------------------------------------------------------
+CursorKind = ci.CursorKind
 
 _POSTFIX_EFFECT_STACK: list[list["hir.HirNode"]] = []
-
 
 def _push_postfix_frame() -> None:
     _POSTFIX_EFFECT_STACK.append([])
 
-
 def _pop_postfix_frame() -> "list[hir.HirNode]":
     return _POSTFIX_EFFECT_STACK.pop() if _POSTFIX_EFFECT_STACK else []
-
 
 def _record_postfix_effect(node: "hir.HirNode") -> None:
     if _POSTFIX_EFFECT_STACK:
         _POSTFIX_EFFECT_STACK[-1].append(node)
 
-
-# C++ types collapsed onto HIR annotation strings consumable by hir_to_mir.
-CPP_TYPE_ALIASES: dict[str, str] = {
-    # Integer family — collapse all width/signedness variants onto `int`.
-    "int": "int",
-    "signed": "int",
-    "signed int": "int",
-    "unsigned": "int",
-    "unsigned int": "int",
-    "long": "int",
-    "signed long": "int",
-    "unsigned long": "int",
-    "long long": "int",
-    "signed long long": "int",
-    "unsigned long long": "int",
-    "short": "int",
-    "signed short": "int",
-    "unsigned short": "int",
-    "char": "int",
-    "signed char": "int",
-    "unsigned char": "int",
-    # stdint-style names that show up after `#include <cstdint>`.
-    "int8_t": "int",
-    "int16_t": "int",
-    "int32_t": "int",
-    "int64_t": "int",
-    "uint8_t": "int",
-    "uint16_t": "int",
-    "uint32_t": "int",
-    "uint64_t": "int",
-    "size_t": "int",
-    "std::size_t": "int",
-    "ssize_t": "int",
-    "ptrdiff_t": "int",
-    "std::ptrdiff_t": "int",
-    # Floating-point.
-    "float": "float",
-    "double": "float",
-    "long double": "float",
-    # Booleans / void.
-    "bool": "bool",
-    "_Bool": "bool",
-    "void": "None",
-    # String shapes — collapse onto our StrT.
-    "char *": "str",
-    "const char *": "str",
-    "std::string": "str",
-    "std::string_view": "str",
-    "string_view": "str",
-    "basic_string": "str",
-    "basic_string_view": "str",
-    "std::basic_string": "str",
-    "std::basic_string_view": "str",
-}
-
 INPUT_NAME = "input.cpp"
-
-
-# Intel SIMD intrinsic vector types — alias to portable `simd[T, N]`
-# annotations. The Mojo target emits `SIMD[DType.X, N]` directly; other
-# targets fall back via the type lattice.
-SIMD_TYPE_ALIASES: dict[str, str] = {
-    "__m256d": "simd[float, 4]",
-    "__m256":  "simd[float, 8]",
-    "__m256i": "simd[int, 8]",
-    "__m128d": "simd[float, 2]",
-    "__m128":  "simd[float, 4]",
-    "__m128i": "simd[int, 4]",
-    "__m512d": "simd[float, 8]",
-    "__m512":  "simd[float, 16]",
-    "__m512i": "simd[int, 16]",
-}
-
-
-_SYSTEM_INCLUDE_CACHE: list[str] | None = None
-_HOST_TRIPLE_CACHE: str | None = None
-
-
-def _host_triple() -> str | None:
-    """Default target triple of the located clang. We pass this to libclang
-    so its built-in triple (which may differ — official LLVM on Windows
-    defaults to ``...msvc`` and would error on libc++ headers from a
-    MinGW install) matches the headers we're feeding it."""
-    global _HOST_TRIPLE_CACHE
-    if _HOST_TRIPLE_CACHE is not None:
-        return _HOST_TRIPLE_CACHE or None
-    import subprocess
-    clang = _find_clang()
-    if not clang:
-        _HOST_TRIPLE_CACHE = ""
-        return None
-    try:
-        out = subprocess.run(
-            [clang, "-print-target-triple"],
-            capture_output=True, text=True, timeout=5,
-        )
-        triple = out.stdout.strip()
-    except Exception:
-        triple = ""
-    _HOST_TRIPLE_CACHE = triple
-    return triple or None
-
-
-def _looks_like_path(s: str) -> bool:
-    """Match an absolute path on either POSIX (`/...`) or Windows (`C:/`,
-    `C:\\`). Reject lines like ``End of search list.`` or framework
-    directory annotations."""
-    if not s:
-        return False
-    if s.startswith("/"):
-        return True
-    # Windows drive letter, e.g. "C:\foo" or "C:/foo"
-    return len(s) >= 3 and s[1] == ":" and s[2] in ("/", "\\")
-
-
-def _find_clang() -> str | None:
-    """Locate a clang/clang++ binary. Prefers PATH, then well-known Windows
-    install locations dropped by winget (LLVM-MinGW, official LLVM) so that
-    a fresh install works without the user editing PATH."""
-    import glob
-    import os
-    import shutil
-
-    found = shutil.which("clang++") or shutil.which("clang")
-    if found:
-        return found
-
-    candidates: list[str] = []
-    env_override = os.environ.get("TRANSPILERS_CLANG")
-    if env_override:
-        candidates.append(env_override)
-
-    if os.name == "nt":
-        local_app = os.environ.get("LOCALAPPDATA", "")
-        if local_app:
-            # LLVM-MinGW (winget MartinStorsjo.LLVM-MinGW.{UCRT,MSVCRT})
-            candidates.extend(glob.glob(os.path.join(
-                local_app, "Microsoft", "WinGet", "Packages",
-                "MartinStorsjo.LLVM-MinGW.*", "llvm-mingw-*", "bin", "clang++.exe",
-            )))
-        # Official LLVM (winget LLVM.LLVM)
-        candidates.append(r"C:\Program Files\LLVM\bin\clang++.exe")
-
-    for p in candidates:
-        if p and os.path.isfile(p):
-            return p
-    return None
-
-
-def _system_include_args() -> list[str]:
-    """Ask the host `clang` for its system header search paths and return
-    them as `-isystem` args. libclang's bundled headers (the `clang/<ver>/
-    include/` directory) ship with `stddef.h`, `stdint.h`, etc. — adding
-    them lets the corpus's `#include <stddef.h>` actually resolve."""
-    global _SYSTEM_INCLUDE_CACHE
-    if _SYSTEM_INCLUDE_CACHE is not None:
-        return _SYSTEM_INCLUDE_CACHE
-    import subprocess
-
-    clang = _find_clang()
-    if not clang:
-        _SYSTEM_INCLUDE_CACHE = []
-        return []
-    try:
-        out = subprocess.run(
-            [clang, "-E", "-x", "c++", "-v", "-"],
-            input="",
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except Exception:
-        _SYSTEM_INCLUDE_CACHE = []
-        return []
-    # Output between "#include <...> search starts here:" and "End of search list."
-    lines = out.stderr.splitlines()
-    paths: list[str] = []
-    in_block = False
-    for line in lines:
-        if "search starts here" in line:
-            in_block = True
-            continue
-        if "End of search list" in line:
-            break
-        if in_block:
-            p = line.strip()
-            # macOS prints framework dirs like `/path (framework directory)` —
-            # split on whitespace to pull out the leading path.
-            head = p.split()[0] if p else ""
-            if _looks_like_path(head):
-                paths.append(head)
-    args: list[str] = []
-    for p in paths:
-        args.extend(["-isystem", p])
-    _SYSTEM_INCLUDE_CACHE = args
-    return args
-
 
 def parse_cpp(source: str) -> hir.HirModule:
     index = ci.Index.create()
@@ -352,7 +114,6 @@ def parse_cpp(source: str) -> hir.HirModule:
         raise UnsupportedConstruct(f"top-level {c.kind.name}")
     return hir.HirModule(source_lang="cpp", body=body)
 
-
 def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
     """Subset: public fields (`int x;`), public methods. No constructors,
     destructors, inheritance, templates, operator overloads, references.
@@ -381,7 +142,6 @@ def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
         raise UnsupportedConstruct(f"class member {c.kind.name}")
     return hir.HirStruct(name=name, fields=fields, methods=methods)
 
-
 def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
     params: list[hir.HirParam] = [hir.HirParam(name="self", annotation=struct_name)]
     body: list[hir.HirNode] = []
@@ -397,17 +157,14 @@ def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
         body=body,
     )
 
-
 def _check_diagnostics(tu: ci.TranslationUnit) -> None:
     fatal = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
     if fatal:
         msgs = "\n".join(f"  {d.spelling}" for d in fatal[:5])
         raise UnsupportedConstruct(f"libclang parse errors:\n{msgs}")
 
-
 def _from_input(cursor: ci.Cursor) -> bool:
     return cursor.location.file is not None and cursor.location.file.name == INPUT_NAME
-
 
 def _convert_function(cursor: ci.Cursor) -> hir.HirFunction:
     params: list[hir.HirParam] = []
@@ -424,20 +181,17 @@ def _convert_function(cursor: ci.Cursor) -> hir.HirFunction:
         body=body,
     )
 
-
 def _convert_compound(cursor: ci.Cursor) -> list[hir.HirNode]:
     out: list[hir.HirNode] = []
     for c in cursor.get_children():
         out.extend(_convert_stmt(c))
     return out
 
-
 def _convert_stmt(cursor: ci.Cursor) -> list[hir.HirNode]:
     _push_postfix_frame()
     result = _convert_stmt_inner(cursor)
     effects = _pop_postfix_frame()
     return result + effects
-
 
 def _convert_stmt_inner(cursor: ci.Cursor) -> list[hir.HirNode]:
     kind = cursor.kind
@@ -501,7 +255,6 @@ def _convert_stmt_inner(cursor: ci.Cursor) -> list[hir.HirNode]:
             return _convert_stmt_inner(kids[0])
     raise UnsupportedConstruct(f"stmt {kind.name}")
 
-
 def _convert_var_decl(cursor: ci.Cursor) -> hir.HirNode:
     annotation = _type_text(cursor.type)
     kids = list(cursor.get_children())
@@ -529,11 +282,7 @@ def _convert_var_decl(cursor: ci.Cursor) -> hir.HirNode:
     init = _convert_expr(kids[-1]) if kids else hir.HirIntLiteral(value=0)
     return hir.HirAssign(target=cursor.spelling, value=init, annotation=annotation)
 
-
-# Names of structs/classes parsed in the current translation unit. Populated
-# in parse_cpp before walking function bodies.
 _KNOWN_STRUCT_NAMES: set[str] = set()
-
 
 def _convert_if(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
@@ -545,7 +294,6 @@ def _convert_if(cursor: ci.Cursor) -> hir.HirNode:
     if len(kids) >= 3:
         orelse = _convert_stmt(kids[2])
     return hir.HirIf(test=cond, body=body, orelse=orelse)
-
 
 def _convert_while(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
@@ -569,18 +317,6 @@ def _convert_while(cursor: ci.Cursor) -> hir.HirNode:
             return hir.HirWhile(test=cond, body=[update, *body])
     cond = _convert_expr(test_cursor)
     return hir.HirWhile(test=cond, body=body)
-
-
-def _strip_unexposed(cursor: ci.Cursor) -> ci.Cursor:
-    """Recurse past UNEXPOSED_EXPR wrappers libclang inserts for things
-    like implicit conversions — they hide the real operator kind."""
-    while cursor.kind == CursorKind.UNEXPOSED_EXPR:
-        inner = list(cursor.get_children())
-        if not inner:
-            return cursor
-        cursor = inner[0]
-    return cursor
-
 
 def _convert_switch(cursor: ci.Cursor) -> list[hir.HirNode]:
     """`switch (x) { case A: ...; break; case B: ...; ... default: ...; }`
@@ -643,7 +379,6 @@ def _convert_switch(cursor: ci.Cursor) -> list[hir.HirNode]:
         )]
     return chain
 
-
 def _convert_for_range(cursor: ci.Cursor) -> list[hir.HirNode]:
     """`for (auto x : xs)` → indexed loop with x = xs[i] inside.
 
@@ -697,7 +432,6 @@ def _convert_for_range(cursor: ci.Cursor) -> list[hir.HirNode]:
     )
     return [loop]
 
-
 def _convert_for(cursor: ci.Cursor) -> list[hir.HirNode]:
     """C-style for desugars at the frontend: init; while(cond) { body; step; }."""
     kids = list(cursor.get_children())
@@ -726,9 +460,6 @@ def _convert_for(cursor: ci.Cursor) -> list[hir.HirNode]:
         inner.extend(_convert_stmt(step_part))
     out.append(hir.HirWhile(test=cond, body=inner))
     return out
-
-
-# ---------- expressions ----------
 
 def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
     kind = cursor.kind
@@ -867,13 +598,6 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
         return hir.HirIntLiteral(value=0)
     raise UnsupportedConstruct(f"expr {kind.name}")
 
-
-COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
-ARITH_OPS = {"+", "-", "*", "/", "%"}
-LOGICAL_OPS = {"&&", "||"}
-ASSIGN_OPS = {"=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>="}
-
-
 def _convert_binop(cursor: ci.Cursor) -> hir.HirNode:
     op = _binop_token(cursor)
     kids = list(cursor.get_children())
@@ -888,7 +612,6 @@ def _convert_binop(cursor: ci.Cursor) -> hir.HirNode:
     if op in ("&", "|", "^", "<<", ">>"):
         return hir.HirBinOp(op=op, left=left, right=right)
     raise UnsupportedConstruct(f"binary op {op!r}")
-
 
 def _convert_assignment_stmt(cursor: ci.Cursor) -> hir.HirNode:
     """A BINARY_OPERATOR (or COMPOUND_ASSIGNMENT_OPERATOR) at statement position
@@ -929,7 +652,6 @@ def _convert_assignment_stmt(cursor: ci.Cursor) -> hir.HirNode:
     aug = None if op == "=" else op[:-1]
     return hir.HirAssign(target=target, value=rhs, annotation=None, augmented_op=aug)
 
-
 def _convert_unary_expr(cursor: ci.Cursor) -> hir.HirNode:
     op = _unary_token(cursor)
     kids = list(cursor.get_children())
@@ -964,7 +686,6 @@ def _convert_unary_expr(cursor: ci.Cursor) -> hir.HirNode:
         raise UnsupportedConstruct(f"postfix {op!r} on complex expression")
     raise UnsupportedConstruct(f"unary op {op!r} as expression")
 
-
 def _convert_unary_stmt(cursor: ci.Cursor) -> hir.HirNode:
     """`i++` / `i--` as a statement."""
     op = _unary_token(cursor)
@@ -982,10 +703,9 @@ def _convert_unary_stmt(cursor: ci.Cursor) -> hir.HirNode:
         augmented_op=sign,
     )
 
-
 _TUPLE_CONSTRUCTORS = frozenset({"tuple", "pair", "make_pair", "make_tuple"})
-_LIST_CONSTRUCTORS = frozenset({"vector", "array", "deque", "list"})
 
+_LIST_CONSTRUCTORS = frozenset({"vector", "array", "deque", "list"})
 
 def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
     """Convert an assignment LHS cursor to an expression for use in `return lhs`."""
@@ -1008,7 +728,6 @@ def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
         obj = _convert_expr(lk[0]) if lk else hir.HirName(name="self")
         return hir.HirFieldAccess(value=obj, field=lhs.spelling)
     return _convert_expr(lhs)
-
 
 def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
@@ -1067,178 +786,3 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     return hir.HirCall(func=name, args=args)
 
 
-_SIMD_BINOP = {
-    "add": "+", "sub": "-", "mul": "*", "div": "/",
-    "and": "&", "or": "|", "xor": "^",
-}
-
-
-def _lift_simd_intrinsic(name: str, args: list[hir.HirNode]) -> hir.HirNode | None:
-    """Recognize Intel SIMD intrinsics and lift them to semantic HIR
-    operations. Returns None if the name doesn't match an intrinsic
-    pattern; the caller falls back to a plain HirCall."""
-    if not name.startswith(("_mm_", "_mm128_", "_mm256_", "_mm512_")):
-        return None
-    parts = [p for p in name.split("_") if p]
-    if len(parts) < 2:
-        return None
-    op = parts[1]
-    if op in _SIMD_BINOP and len(args) == 2:
-        return hir.HirBinOp(op=_SIMD_BINOP[op], left=args[0], right=args[1])
-    if op == "set" and args:
-        # Intel's `_mm256_set_pd(d, c, b, a)` reverses lane order.
-        return hir.HirCall(func="simd_pack", args=list(reversed(args)))
-    if op == "set1" and len(args) == 1:
-        return hir.HirCall(func="simd_splat", args=args)
-    if op == "setzero" and not args:
-        return hir.HirCall(func="simd_zero", args=[])
-    if op in ("sqrt", "abs", "ceil", "floor") and len(args) == 1:
-        return hir.HirCall(func=f"simd_{op}", args=args)
-    return None
-
-
-def _decl_name(cursor: ci.Cursor) -> str | None:
-    """Find the identifier name behind a DeclRefExpr / nested unwrapping."""
-    if cursor.kind == CursorKind.DECL_REF_EXPR:
-        return cursor.spelling
-    if cursor.kind in (CursorKind.UNEXPOSED_EXPR, CursorKind.PAREN_EXPR):
-        kids = list(cursor.get_children())
-        if len(kids) == 1:
-            return _decl_name(kids[0])
-    return None
-
-
-# ---------- operator-token extraction ----------
-
-def _binop_token(cursor: ci.Cursor) -> str:
-    """The operator token sits between the two child cursors. We slice
-    tokens by their source position to find it.
-
-    BINARY_OPERATOR has no direct `.operator` accessor in older libclang
-    bindings; we use tokens for portability."""
-    kids = list(cursor.get_children())
-    if len(kids) != 2:
-        raise UnsupportedConstruct(f"binary operator with {len(kids)} children")
-    left_end = kids[0].extent.end
-    right_start = kids[1].extent.start
-    for tok in cursor.get_tokens():
-        loc = tok.location
-        if _loc_ge(loc, left_end) and _loc_lt(loc, right_start):
-            return tok.spelling
-    raise UnsupportedConstruct("could not locate binary-operator token")
-
-
-def _unary_token(cursor: ci.Cursor) -> str:
-    """For a unary op, the operator is either before or after the single
-    operand. We pick whichever non-operand token we find first within the
-    cursor's extent."""
-    kids = list(cursor.get_children())
-    if len(kids) != 1:
-        raise UnsupportedConstruct(f"unary operator with {len(kids)} children")
-    operand = kids[0]
-    o_start, o_end = operand.extent.start, operand.extent.end
-    for tok in cursor.get_tokens():
-        loc = tok.location
-        if not (_loc_ge(loc, o_start) and _loc_lt(loc, o_end)):
-            return tok.spelling
-    raise UnsupportedConstruct("could not locate unary-operator token")
-
-
-def _loc_ge(a: ci.SourceLocation, b: ci.SourceLocation) -> bool:
-    return (a.line, a.column) >= (b.line, b.column)
-
-
-def _loc_lt(a: ci.SourceLocation, b: ci.SourceLocation) -> bool:
-    return (a.line, a.column) < (b.line, b.column)
-
-
-# ---------- type text ----------
-
-_VECTOR_ELEM_ALIASES = {
-    "int": "int", "long": "int", "long long": "int", "short": "int",
-    "unsigned": "int", "unsigned int": "int", "unsigned long": "int",
-    "char": "int", "unsigned char": "int", "signed char": "int",
-    "size_t": "int", "ptrdiff_t": "int",
-    "float": "float", "double": "float", "long double": "float",
-    "bool": "bool",
-    "string": "str", "std::string": "str",
-}
-
-
-def _type_text(t: ci.Type) -> str:
-    spelling = t.spelling
-    # Strip cv-qualifiers and references for the alias lookup.
-    cleaned = spelling.replace("const ", "").replace("volatile ", "").strip()
-    if cleaned in CPP_TYPE_ALIASES:
-        return CPP_TYPE_ALIASES[cleaned]
-    if cleaned in SIMD_TYPE_ALIASES:
-        return SIMD_TYPE_ALIASES[cleaned]
-    # std::string family → str.
-    if cleaned in ("string", "std::string", "std::basic_string<char>"):
-        return "str"
-    # std::vector<T> → list[T]. Recursive in case T is itself a template.
-    if cleaned.startswith(("vector<", "std::vector<")) and cleaned.endswith(">"):
-        inner = cleaned.split("<", 1)[1][:-1].strip()
-        # Recurse via a fresh _type_text would need a ci.Type; just map the
-        # common element-types directly.
-        return f"list[{_VECTOR_ELEM_ALIASES.get(inner, inner)}]"
-    # Array types — `int[]`, `int[10]`, `int[n]`. Drop the size; carry the
-    # element type as a list.
-    if "[" in cleaned and cleaned.endswith("]"):
-        head = cleaned[: cleaned.index("[")].strip()
-        if head in _VECTOR_ELEM_ALIASES:
-            return f"list[{_VECTOR_ELEM_ALIASES[head]}]"
-    # Array libclang kinds.
-    if t.kind in (ci.TypeKind.CONSTANTARRAY, ci.TypeKind.INCOMPLETEARRAY, ci.TypeKind.VARIABLEARRAY):
-        try:
-            return f"list[{_type_text(t.element_type)}]"
-        except UnsupportedConstruct:
-            return "list[int]"
-    # Best-effort fallback: collapse on the canonical kind.
-    kind = t.kind
-    INTEGER_KINDS = {
-        ci.TypeKind.INT, ci.TypeKind.LONG, ci.TypeKind.LONGLONG,
-        ci.TypeKind.SHORT, ci.TypeKind.SCHAR, ci.TypeKind.UCHAR,
-        ci.TypeKind.CHAR_S, ci.TypeKind.CHAR_U,
-        ci.TypeKind.UINT, ci.TypeKind.ULONG, ci.TypeKind.ULONGLONG, ci.TypeKind.USHORT,
-    }
-    if kind in INTEGER_KINDS:
-        return "int"
-    if kind in (ci.TypeKind.FLOAT, ci.TypeKind.DOUBLE, ci.TypeKind.LONGDOUBLE):
-        return "float"
-    if kind == ci.TypeKind.BOOL:
-        return "bool"
-    if kind == ci.TypeKind.VOID:
-        return "None"
-    # Struct/class types: pass the bare name through so HIR→MIR resolves it
-    # against the struct registry (HirStruct names land in StructT(name)).
-    if kind == ci.TypeKind.RECORD:
-        return cleaned
-    # Pointers and references — common in C-style C++. We don't model
-    # pointer lifetimes; collapse onto the pointee's type.
-    if kind in (ci.TypeKind.POINTER, ci.TypeKind.LVALUEREFERENCE, ci.TypeKind.RVALUEREFERENCE):
-        try:
-            return _type_text(t.get_pointee())
-        except UnsupportedConstruct:
-            return "int"
-    # User-defined typedefs (`typedef long long siz`) — resolve through
-    # the canonical type so aliases for primitive types still translate.
-    if kind == ci.TypeKind.TYPEDEF:
-        canonical = t.get_canonical()
-        if canonical.kind != kind:
-            try:
-                return _type_text(canonical)
-            except UnsupportedConstruct:
-                pass
-        return "int"
-    # `auto x = ...` — libclang exposes the deduced type via the canonical
-    # form. Recurse so we get the real type.
-    if kind in (ci.TypeKind.AUTO, ci.TypeKind.ELABORATED, ci.TypeKind.UNEXPOSED):
-        canonical = t.get_canonical()
-        if canonical.kind != kind:  # avoid infinite recursion
-            try:
-                return _type_text(canonical)
-            except UnsupportedConstruct:
-                pass
-        return "int"
-    raise UnsupportedConstruct(f"C++ type {spelling!r} (kind={kind.name})")

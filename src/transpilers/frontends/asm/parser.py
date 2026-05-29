@@ -34,8 +34,7 @@ from transpilers.ir import hir
 from transpilers.frontends.c import parse_c
 
 
-class UnsupportedConstruct(Exception):
-    pass
+from transpilers.frontends.errors import UnsupportedConstruct
 
 
 GHIDRA_HOME = Path(os.environ.get("GHIDRA_INSTALL_DIR", "/opt/ghidra"))
