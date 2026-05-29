@@ -22,7 +22,11 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_mojo(module: lir.MojoModule) -> str:
-    return "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    body = "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    imports = getattr(module, "imports", None)
+    if imports:
+        return "\n".join(f"import {m}" for m in imports) + "\n\n" + body
+    return body
 
 
 def _emit_item(item: lir.LirNode) -> str:

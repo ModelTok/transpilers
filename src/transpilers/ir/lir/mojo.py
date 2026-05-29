@@ -37,6 +37,7 @@ class MojoFieldAccess(LirNode):
 @dataclass
 class MojoModule(LirNode):
     items: list[LirNode] = field(default_factory=list)
+    imports: list[str] = field(default_factory=list)
 
 @dataclass
 class MojoFn(LirNode):
