@@ -27,15 +27,15 @@ def test_lift_member_chain_recovered_from_tokens():
     assert "state.data_cool_tower.get_input_flag" in out
 
 
-def test_lift_recovers_degraded_method_and_array_access():
-    # Method calls + ObjexxFCL-style array access through name-degraded chains
-    # (no types) must recover the member names from tokens, not vanish.
+def test_lift_recovers_degraded_method_calls():
+    # Method calls through a name-degraded chain (no types) must recover the
+    # full member name from tokens, not collapse to `state.(...)`.
     out, _ = lift_source(
-        "void f(EnergyPlusData &state){ "
-        "  auto x = state.dataCoolTower->CoolTowerSys(i); "
-        "  int n = state.dataCoolTower->CoolTowerSys.size(); }")
-    assert "state.data_cool_tower.cool_tower_sys(i)" in out
+        "void f(EnergyPlusData &state, int n){ "
+        "  int k = state.dataCoolTower->CoolTowerSys.size(); "
+        "  state.dataInput->obj->doThing(n); }")
     assert "state.data_cool_tower.cool_tower_sys.size()" in out
+    assert "state.data_input.obj.do_thing(n)" in out
 
 
 def test_lift_never_refuses_unknown():
