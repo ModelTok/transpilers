@@ -138,4 +138,12 @@ class GoBreak(LirNode): pass
 class GoContinue(LirNode): pass
 
 
-__all__ = ['GoFieldAssign', 'GoStructInit', 'GoSubscriptAssign', 'GoModule', 'GoFn', 'GoReturn', 'GoBinOp', 'GoCompare', 'GoBoolOp', 'GoUnary', 'GoName', 'GoIntLiteral', 'GoFloatLiteral', 'GoBoolLiteral', 'GoStringLiteral', 'GoIf', 'GoWhile', 'GoForRange', 'GoDecl', 'GoReassign', 'GoCall', 'GoStruct', 'GoFieldAccess', 'GoBreak', 'GoContinue']
+@dataclass
+class GoRaw(LirNode):
+    """Unsupported-construct hole; emitted as a target-appropriate
+    `TODO[port]` stub preserving the original source snippet."""
+
+    snippet: str
+
+
+__all__ = ['GoFieldAssign', 'GoStructInit', 'GoSubscriptAssign', 'GoModule', 'GoFn', 'GoReturn', 'GoBinOp', 'GoCompare', 'GoBoolOp', 'GoUnary', 'GoName', 'GoIntLiteral', 'GoFloatLiteral', 'GoBoolLiteral', 'GoStringLiteral', 'GoIf', 'GoWhile', 'GoForRange', 'GoDecl', 'GoReassign', 'GoCall', 'GoStruct', 'GoFieldAccess', 'GoBreak', 'GoContinue', 'GoRaw']

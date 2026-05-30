@@ -163,4 +163,12 @@ class FortranCycle(LirNode):
     """Fortran's continue-equivalent is `cycle`."""
 
 
-__all__ = ['FortranFieldAssign', 'FortranStructInit', 'FortranSubscriptAssign', 'FortranModule', 'FortranFn', 'FortranAssign', 'FortranReturn', 'FortranBinOp', 'FortranCompare', 'FortranBoolOp', 'FortranUnary', 'FortranName', 'FortranIntLiteral', 'FortranFloatLiteral', 'FortranBoolLiteral', 'FortranStringLiteral', 'FortranIf', 'FortranWhile', 'FortranForRange', 'FortranCall', 'FortranType', 'FortranFieldAccess', 'FortranArrayLit', 'FortranSubscript', 'FortranExit', 'FortranCycle']
+@dataclass
+class FortranRaw(LirNode):
+    """Unsupported-construct hole; emitted as a target-appropriate
+    `TODO[port]` stub preserving the original source snippet."""
+
+    snippet: str
+
+
+__all__ = ['FortranFieldAssign', 'FortranStructInit', 'FortranSubscriptAssign', 'FortranModule', 'FortranFn', 'FortranAssign', 'FortranReturn', 'FortranBinOp', 'FortranCompare', 'FortranBoolOp', 'FortranUnary', 'FortranName', 'FortranIntLiteral', 'FortranFloatLiteral', 'FortranBoolLiteral', 'FortranStringLiteral', 'FortranIf', 'FortranWhile', 'FortranForRange', 'FortranCall', 'FortranType', 'FortranFieldAccess', 'FortranArrayLit', 'FortranSubscript', 'FortranExit', 'FortranCycle', 'FortranRaw']

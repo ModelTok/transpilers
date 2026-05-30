@@ -164,4 +164,12 @@ class ZigBreak(LirNode): pass
 class ZigContinue(LirNode): pass
 
 
-__all__ = ['ZigFieldAssign', 'ZigStructInit', 'ZigSubscriptAssign', 'ZigModule', 'ZigFn', 'ZigReturn', 'ZigBinOp', 'ZigCompare', 'ZigBoolOp', 'ZigUnary', 'ZigName', 'ZigIntLiteral', 'ZigFloatLiteral', 'ZigBoolLiteral', 'ZigStringLiteral', 'ZigIf', 'ZigWhile', 'ZigForRange', 'ZigVar', 'ZigReassign', 'ZigArrayLit', 'ZigIndex', 'ZigMethodCall', 'ZigCall', 'ZigStruct', 'ZigFieldAccess', 'ZigBreak', 'ZigContinue']
+@dataclass
+class ZigRaw(LirNode):
+    """Unsupported-construct hole; emitted as a target-appropriate
+    `TODO[port]` stub preserving the original source snippet."""
+
+    snippet: str
+
+
+__all__ = ['ZigFieldAssign', 'ZigStructInit', 'ZigSubscriptAssign', 'ZigModule', 'ZigFn', 'ZigReturn', 'ZigBinOp', 'ZigCompare', 'ZigBoolOp', 'ZigUnary', 'ZigName', 'ZigIntLiteral', 'ZigFloatLiteral', 'ZigBoolLiteral', 'ZigStringLiteral', 'ZigIf', 'ZigWhile', 'ZigForRange', 'ZigVar', 'ZigReassign', 'ZigArrayLit', 'ZigIndex', 'ZigMethodCall', 'ZigCall', 'ZigStruct', 'ZigFieldAccess', 'ZigBreak', 'ZigContinue', 'ZigRaw']
