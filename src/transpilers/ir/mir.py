@@ -37,6 +37,18 @@ class MirParam(MirNode):
 
 
 @dataclass
+class MirRaw(MirNode):
+    """Unsupported-construct hole carrying the original source snippet.
+
+    Lowered 1:1 from HirRaw; each target's MIR->LIR pass maps it to its
+    dialect's `<Prefix>Raw` node, which the backend emits as a `TODO[port]`
+    stub. Valid in statement and expression position."""
+
+    snippet: str
+    ty: Type = field(default_factory=UnknownT)
+
+
+@dataclass
 class MirReturn(MirNode):
     value: MirNode | None
 
