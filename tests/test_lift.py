@@ -38,6 +38,40 @@ def test_lift_recovers_degraded_method_calls():
     assert "state.data_input.obj.do_thing(n)" in out
 
 
+def test_lift_array_member_after_call_recovered():
+    # gap 1: ObjexxFCL array-member access `Arr(i).Field` (member AFTER an
+    # operator() call) must recover the full chain from tokens, type-less.
+    # The 1-based subscript is kept faithfully as a call `arr(i)` (Phase-1).
+    out, _ = lift_source(
+        "void f(State &state, int i){ "
+        "  double t = state.dataZ->zoneHeatBalance(i).MAT; "
+        "  if (Zone(i).OutDryBulbTemp > 5.0) return; }")
+    assert "t = state.data_z.zone_heat_balance(i).mat" in out
+    assert "if zone(i).out_dry_bulb_temp > 5.0:" in out
+
+
+def test_lift_nested_array_member_chain_recovered():
+    # gap 1: chained array-member-after-call `Storage(i).Avail(j)`.
+    out, _ = lift_source(
+        "void f(State &state, int i, int j){ "
+        "  double a = state.dataW->WaterStorage(i).VdotAvailDemand(j); }")
+    assert "a = state.data_w.water_storage(i).vdot_avail_demand(j)" in out
+
+
+def test_lift_namespaced_call_in_condition_recovered():
+    # gap 2: UNEXPOSED_EXPR wrapping namespaced calls in conditions.
+    # std::abs -> abs (Python builtin); Ns::Func -> snaked func, namespace
+    # qualifier dropped. Type-less so the whole comparison degrades to a
+    # token stream.
+    out, _ = lift_source(
+        "double f(double x, const char* a, const char* b){ "
+        "  if (std::abs(x) > 1.0) return 1.0; "
+        "  while (Util::SameString(a, b)) return 2.0; "
+        "  return 0.0; }")
+    assert "if abs(x) > 1.0:" in out
+    assert "while same_string(a, b):" in out
+
+
 def test_lift_never_refuses_unknown():
     # A construct the lifter can't handle yet must still produce output + TODO.
     out, _ = lift_source("void g(){ try { foo(); } catch (...) { } }")
