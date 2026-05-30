@@ -35,6 +35,19 @@ class HirParam(HirNode):
 
 
 @dataclass
+class HirRaw(HirNode):
+    """An unsupported construct, preserved verbatim as a source snippet.
+
+    The never-refuse contract: when a frontend hits a statement or expression
+    it can't lower, it emits one of these instead of aborting the whole
+    function. Downstream passes carry the snippet through to the backend, which
+    emits a target-appropriate `TODO[port]` stub. Valid in both statement and
+    expression position."""
+
+    snippet: str
+
+
+@dataclass
 class HirReturn(HirNode):
     value: HirNode | None
 
