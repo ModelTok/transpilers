@@ -88,8 +88,15 @@ def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
     return "\n".join(_emit_stmt(n, depth) for n in nodes)
 
 
+def _flatten_snippet(snippet: str) -> str:
+    """Collapse a multi-line source snippet to a single comment-safe line."""
+    return " ".join(snippet.split()).replace("*/", "* /")
+
+
 def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     pad = INDENT * depth
+    if isinstance(node, lir.GoRaw):
+        return f"{pad}_ = 0 /* TODO[port]: {_flatten_snippet(node.snippet)} */"
     if isinstance(node, lir.GoBreak):
         return f"{pad}break"
     if isinstance(node, lir.GoContinue):
@@ -149,6 +156,8 @@ def _paren(child: lir.LirNode, parent_op: str, *, on_right: bool) -> str:
 def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
+    if isinstance(node, lir.GoRaw):
+        return f"0 /* TODO[port]: {_flatten_snippet(node.snippet)} */"
     if isinstance(node, lir.GoBinOp):
         return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.GoCompare):

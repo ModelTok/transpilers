@@ -86,8 +86,15 @@ def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
     return "\n".join(lines)
 
 
+def _flatten_snippet(snippet: str) -> str:
+    """Collapse a multi-line source snippet to a single comment-safe line."""
+    return " ".join(snippet.split()).replace("*/", "* /")
+
+
 def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     pad = INDENT * depth
+    if isinstance(node, lir.RustRaw):
+        return f"{pad}/* TODO[port]: {_flatten_snippet(node.snippet)} */ unimplemented!();"
     if isinstance(node, lir.RustReturn):
         return f"{pad}return {_emit_expr(node.value)};" if node.value else f"{pad}return;"
     if isinstance(node, lir.RustBreak):
@@ -151,6 +158,8 @@ def _paren(child: lir.LirNode, parent_op: str, *, on_right: bool) -> str:
 def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
+    if isinstance(node, lir.RustRaw):
+        return f"/* TODO[port]: {_flatten_snippet(node.snippet)} */ Default::default()"
     if isinstance(node, lir.RustBinOp):
         # `x as i64` style casts are emitted as binops with op="as".
         if node.op == "as":
