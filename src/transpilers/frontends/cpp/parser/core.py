@@ -276,10 +276,36 @@ def _convert_compound(cursor: ci.Cursor) -> list[hir.HirNode]:
         out.extend(_convert_stmt(c))
     return out
 
+def _cursor_snippet(cursor: ci.Cursor) -> str:
+    """Best-effort original source text for a cursor, for a HirRaw hole.
+
+    Joins the cursor's tokens (whitespace-insensitive but faithful enough to
+    show what was skipped). Falls back to the cursor kind name when no tokens
+    are available (e.g. macro-expanded or implicit nodes)."""
+    try:
+        toks = [t.spelling for t in cursor.get_tokens()]
+    except Exception:  # pragma: no cover - defensive
+        toks = []
+    text = " ".join(toks).strip()
+    if not text:
+        return f"<{cursor.kind.name}>"
+    # Cap very large snippets so a single unsupported block doesn't bloat output.
+    if len(text) > 400:
+        text = text[:400] + " ..."
+    return text
+
+
 def _convert_stmt(cursor: ci.Cursor) -> list[hir.HirNode]:
+    """Never-refuse statement conversion: a caught UnsupportedConstruct is
+    turned into a HirRaw hole carrying the source snippet, so one unsupported
+    statement no longer aborts the whole function body."""
     _push_postfix_frame()
-    result = _convert_stmt_inner(cursor)
-    effects = _pop_postfix_frame()
+    try:
+        result = _convert_stmt_inner(cursor)
+    except UnsupportedConstruct:
+        result = [hir.HirRaw(snippet=_cursor_snippet(cursor))]
+    finally:
+        effects = _pop_postfix_frame()
     return result + effects
 
 def _convert_stmt_inner(cursor: ci.Cursor) -> list[hir.HirNode]:
@@ -303,7 +329,7 @@ def _convert_stmt_inner(cursor: ci.Cursor) -> list[hir.HirNode]:
                     return [assign, hir.HirReturn(value=return_val)]
                 except UnsupportedConstruct:
                     pass
-        return [hir.HirReturn(value=_convert_expr(kids[0]))]
+        return [hir.HirReturn(value=_convert_expr_stmt(kids[0]))]
     if kind == CursorKind.DECL_STMT:
         out: list[hir.HirNode] = []
         for c in cursor.get_children():
@@ -327,7 +353,7 @@ def _convert_stmt_inner(cursor: ci.Cursor) -> list[hir.HirNode]:
     if kind == CursorKind.UNARY_OPERATOR:
         return [_convert_unary_stmt(cursor)]
     if kind == CursorKind.CALL_EXPR:
-        return [_convert_expr(cursor)]
+        return [_convert_expr_stmt(cursor)]
     if kind == CursorKind.BREAK_STMT:
         return [hir.HirBreak()]
     if kind == CursorKind.CONTINUE_STMT:
@@ -549,6 +575,21 @@ def _convert_for(cursor: ci.Cursor) -> list[hir.HirNode]:
         inner.extend(_convert_stmt(step_part))
     out.append(hir.HirWhile(test=cond, body=inner))
     return out
+
+def _convert_expr_stmt(cursor: ci.Cursor) -> hir.HirNode:
+    """Never-refuse expression conversion at a statement boundary.
+
+    Used where an expression is lowered in statement position (a bare
+    expression statement, a return value). A caught UnsupportedConstruct
+    becomes a HirRaw hole instead of aborting the enclosing function. Internal
+    recursive expression conversion still uses `_convert_expr` (which raises),
+    so the existing per-node fallbacks that probe alternative children keep
+    working."""
+    try:
+        return _convert_expr(cursor)
+    except UnsupportedConstruct:
+        return hir.HirRaw(snippet=_cursor_snippet(cursor))
+
 
 def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
     kind = cursor.kind
