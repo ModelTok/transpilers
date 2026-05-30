@@ -3,6 +3,19 @@
 Hybrid algorithmic + LLM source-to-source transpiler. **N-to-M** across
 many languages with a single shared IR pipeline.
 
+## Two engines, four granularities
+
+- **Strict pipeline** (`transpile`, `transpilers.cli.main`): source → HIR → MIR
+  (typed; `infer_types` + LLM fill) → LIR → target. **Verified** — refuses
+  constructs it can't model rather than emit wrong code. Best for kernels.
+- **Never-refuse lift** (`transpilers.lift`): whole-file C++ → Python 1:1,
+  emitting `# TODO[lift]` stubs for gaps instead of refusing. Built for
+  "lift the whole repo now, refactor later"; ~96% mechanical on EnergyPlus.
+
+Run at any granularity with `transpile-levels` (`transpilers.levels`):
+**object** (one class/function/method/var) · **file** · **module** (`.hh`+`.cc`)
+· **folder/repo** (`#include`-ordered). `--engine {strict|lift}`.
+
 ## Status
 
 **Eleven frontends**: Python, C, C++, Java, C#, TypeScript, JavaScript,
