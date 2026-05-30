@@ -4,6 +4,10 @@ C has no mut/const split — every variable is mutable. Mutability inference
 is therefore irrelevant; declarations always emit the bare `<ty> <name> =
 <value>;` form. For-range uses native C syntax. Strings are literals only;
 concat raises (would need allocator-aware emission, same as Zig).
+
+Structure is shared with the other backends via ``_mir_lower_base``; this
+module supplies the C spec plus the `self`-pointer field access, method-name
+mangling, slice-literal construction, and the builtin call table.
 """
 
 from __future__ import annotations
@@ -11,152 +15,115 @@ from __future__ import annotations
 from transpilers.ir import lir, mir
 from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
-
-def mir_to_c_lir(module: mir.MirModule) -> lir.CModule:
-    items: list[lir.LirNode] = []
-    for s in module.structs:
-        items.append(_lower_struct(s))
-    for fn in module.functions:
-        items.append(_lower_function(fn))
-    return lir.CModule(items=items)
+from ._mir_lower_base import MirLoweringBase, is_string_concat
 
 
-def _lower_struct(s: mir.MirStruct) -> lir.CStruct:
-    methods: list[lir.CFn] = []
-    for m in s.methods:
-        # C has no method binding; emit as a free function `Struct_method`
-        # whose first parameter is `Struct *self`. Rename the function so
-        # different structs can have methods of the same name without
-        # colliding.
-        lowered = _lower_function(m)
-        lowered.name = f"{s.name}_{lowered.name}"
-        methods.append(lowered)
-    return lir.CStruct(
-        name=s.name,
-        fields=[(f.name, _c_type(f.ty)) for f in s.fields],
-        methods=methods,
-    )
+class _CLowering(MirLoweringBase):
+    prefix = "C"
+    module_cls = lir.CModule
 
+    def type_str(self, ty: Type) -> str:
+        return _c_type(ty)
 
-def _lower_function(fn: mir.MirFunction) -> lir.CFn:
-    params = [(p.name, _c_type(p.ty)) for p in fn.params]
-    ret = _c_type(fn.return_type)
-    declared: set[str] = {p.name for p in fn.params}
-    body = [_lower_stmt(n, declared) for n in fn.body]
-    return lir.CFn(name=fn.name, params=params, return_type=ret, body=body)
+    # -- struct: methods become free `Struct_method` functions ------------- #
 
+    def lower_struct_items(self, s: mir.MirStruct) -> list[lir.LirNode]:
+        methods: list[lir.CFn] = []
+        for m in s.methods:
+            # C has no method binding; emit as a free function `Struct_method`
+            # whose first parameter is `Struct *self`. Rename so different
+            # structs can share method names without colliding.
+            lowered = self.lower_function(m)
+            lowered.name = f"{s.name}_{lowered.name}"
+            methods.append(lowered)
+        return [
+            lir.CStruct(
+                name=s.name,
+                fields=[(f.name, _c_type(f.ty)) for f in s.fields],
+                methods=methods,
+            )
+        ]
 
-def _lower_stmt(node: mir.MirNode, declared: set[str]) -> lir.LirNode:
-    if isinstance(node, mir.MirReturn):
-        return lir.CReturn(value=_lower_expr(node.value) if node.value else None)
-    if isinstance(node, mir.MirBreak):
-        return lir.CBreak()
-    if isinstance(node, mir.MirContinue):
-        return lir.CContinue()
-    if isinstance(node, mir.MirFieldAssign):
+    # -- field access/assign go through self-pointer ----------------------- #
+
+    def lower_field_assign(self, node: mir.MirFieldAssign):
         via_ptr = isinstance(node.obj, mir.MirName) and node.obj.name == "self"
         return lir.CFieldAssign(
-            obj=_lower_expr(node.obj),
+            obj=self.lower_expr(node.obj),
             field=node.field,
-            value=_lower_expr(node.value),
+            value=self.lower_expr(node.value),
             via_pointer=via_ptr,
         )
-    if isinstance(node, mir.MirSubscriptAssign):
-        return lir.CSubscriptAssign(
-            obj=_lower_expr(node.obj),
-            index=_lower_expr(node.index),
-            value=_lower_expr(node.value),
-        )
-    if isinstance(node, mir.MirAssign):
-        return _lower_assign(node, declared)
-    if isinstance(node, mir.MirIf):
-        return lir.CIf(
-            test=_lower_expr(node.test),
-            body=[_lower_stmt(n, declared) for n in node.body],
-            orelse=[_lower_stmt(n, declared) for n in node.orelse],
-        )
-    if isinstance(node, mir.MirWhile):
-        return lir.CWhile(
-            test=_lower_expr(node.test),
-            body=[_lower_stmt(n, declared) for n in node.body],
-        )
-    if isinstance(node, mir.MirForRange):
-        return lir.CForRange(
-            target=node.target,
-            start=_lower_expr(node.start),
-            stop=_lower_expr(node.stop),
-            step=_lower_expr(node.step) if node.step else None,
-            body=[_lower_stmt(n, declared) for n in node.body],
-        )
-    return _lower_expr(node)
 
-
-def _lower_assign(node: mir.MirAssign, declared: set[str]) -> lir.LirNode:
-    if node.augmented_op is not None:
-        rhs = lir.CBinOp(op=node.augmented_op, left=lir.CName(name=node.target), right=_lower_expr(node.value))
-        return lir.CReassign(name=node.target, value=rhs)
-    if node.target in declared:
-        return lir.CReassign(name=node.target, value=_lower_expr(node.value))
-    declared.add(node.target)
-    ty = _c_type(node.ty) if not isinstance(node.ty, UnknownT) else "int64_t"
-    return lir.CDecl(name=node.target, ty=ty, value=_lower_expr(node.value))
-
-
-def _lower_expr(node: mir.MirNode) -> lir.LirNode:
-    if isinstance(node, mir.MirBinOp) and node.op == "//":
-        # C: integer division is `/` on integer types.
-        return lir.CBinOp(op="/", left=_lower_expr(node.left), right=_lower_expr(node.right))
-    if isinstance(node, mir.MirFieldAccess):
+    def lower_field_access(self, node: mir.MirFieldAccess):
         via_ptr = isinstance(node.value, mir.MirName) and node.value.name == "self"
-        return lir.CFieldAccess(value=_lower_expr(node.value), field=node.field, via_pointer=via_ptr)
-    if isinstance(node, mir.MirStructInit):
-        return lir.CStructInit(
-            name=node.name,
-            field_values=[(n, _lower_expr(v)) for n, v in node.field_values],
-        )
-    if isinstance(node, mir.MirMethodCall):
-        # `obj.method(args)` → `Struct_method(&obj, args)`. We need the
-        # struct name to mangle; pull it from the receiver's type.
+        return lir.CFieldAccess(value=self.lower_expr(node.value), field=node.field, via_pointer=via_ptr)
+
+    # -- assign: every local is a plain decl / reassign -------------------- #
+
+    def lower_assign(self, node: mir.MirAssign, declared: set[str], mut: set[str]):
+        if node.augmented_op is not None:
+            rhs = lir.CBinOp(
+                op=node.augmented_op,
+                left=lir.CName(name=node.target),
+                right=self.lower_expr(node.value),
+            )
+            return lir.CReassign(name=node.target, value=rhs)
+        if node.target in declared:
+            return lir.CReassign(name=node.target, value=self.lower_expr(node.value))
+        declared.add(node.target)
+        ty = _c_type(node.ty) if not isinstance(node.ty, UnknownT) else "int64_t"
+        return lir.CDecl(name=node.target, ty=ty, value=self.lower_expr(node.value))
+
+    # -- expressions ------------------------------------------------------- #
+
+    def lower_expr_special(self, node: mir.MirNode):
+        if isinstance(node, mir.MirBinOp) and node.op == "//":
+            # C: integer division is `/` on integer types.
+            return lir.CBinOp(op="/", left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+        return None
+
+    def lower_method_call(self, node: mir.MirMethodCall):
+        # `obj.method(args)` → `Struct_method(&obj, args)`. We need the struct
+        # name to mangle; pull it from the receiver's type.
         recv = node.receiver
         recv_ty = getattr(recv, "ty", UnknownT())
         if isinstance(recv_ty, StructT):
-            struct_name = recv_ty.name
-            lowered_recv = _lower_expr(recv)
             return lir.CCall(
-                func=f"{struct_name}_{node.method}",
-                args=[_AddressOf(lowered_recv)] + [_lower_expr(a) for a in node.args],
+                func=f"{recv_ty.name}_{node.method}",
+                args=[_AddressOf(self.lower_expr(recv))] + [self.lower_expr(a) for a in node.args],
             )
-        # Without type info we can't safely mangle; raise rather than guess.
         raise NotImplementedError(f"C method call on receiver with type {recv_ty}")
-    if isinstance(node, mir.MirBinOp):
-        if _is_string_concat(node):
+
+    def lower_binop(self, node: mir.MirBinOp):
+        if is_string_concat(node):
             raise NotImplementedError(
                 "string concatenation in C requires allocator-aware emission "
                 "(snprintf or asprintf), not yet supported"
             )
-        return lir.CBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
-    if isinstance(node, mir.MirCompare):
-        return lir.CCompare(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
-    if isinstance(node, mir.MirBoolOp):
+        return lir.CBinOp(op=node.op, left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+
+    def lower_boolop(self, node: mir.MirBoolOp):
         op = "&&" if node.op == "and" else "||"
-        return lir.CBoolOp(op=op, left=_lower_expr(node.left), right=_lower_expr(node.right))
-    if isinstance(node, mir.MirUnaryOp):
-        op = "!" if node.op == "not" else "-"
-        return lir.CUnary(op=op, operand=_lower_expr(node.operand))
-    if isinstance(node, mir.MirName):
-        return lir.CName(name=node.name)
-    if isinstance(node, mir.MirIntLiteral):
-        return lir.CIntLiteral(value=node.value)
-    if isinstance(node, mir.MirFloatLiteral):
-        return lir.CFloatLiteral(value=node.value)
-    if isinstance(node, mir.MirBoolLiteral):
-        return lir.CBoolLiteral(value=node.value)
-    if isinstance(node, mir.MirStringLiteral):
-        return lir.CStringLiteral(value=node.value)
-    if isinstance(node, mir.MirNullLiteral):
+        return lir.CBoolOp(op=op, left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+
+    def lower_null(self, node: mir.MirNullLiteral):
         return lir.CName(name="NULL")
-    if isinstance(node, mir.MirCall):
-        args = [_lower_expr(a) for a in node.args]
+
+    def lower_list(self, node: mir.MirList):
+        # Compound-literal slice. The inner `(elem_t[]){...}` array lives in
+        # automatic storage when this expression appears in a function body —
+        # long-lived enough for the slice's lifetime in that scope.
+        elem_ty = _c_list_elem_type(node.ty)
+        slice_ty = _c_type(node.ty)
+        return _CSliceLiteral(
+            slice_ty=slice_ty,
+            elem_ty=elem_ty,
+            elements=[self.lower_expr(e) for e in node.elements],
+        )
+
+    def lower_call(self, node: mir.MirCall):
+        args = [self.lower_expr(a) for a in node.args]
         if node.func == "__ternary__" and len(args) == 3:
             return lir.CTernary(test=args[0], then_=args[1], else_=args[2])
         if node.func == "len":
@@ -187,7 +154,6 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
                         else_=lir.CStringLiteral(value="False"),
                     ))
                 elif isinstance(ty, FloatT):
-                    # Delegate to the _py_float helper in the preamble.
                     fmt_parts.append("%s")
                     final_args.append(_CPyFloat(value=lowered))
                 else:
@@ -202,7 +168,6 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
             # C's stdlib has abs/labs/llabs — use llabs for int64.
             return lir.CCall(func="llabs", args=args)
         if node.func == "min" and len(args) == 2:
-            # No stdlib min in pure C; emit a ternary.
             return lir.CTernary(test=lir.CCompare(op="<", left=args[0], right=args[1]),
                                 then_=args[0], else_=args[1])
         if node.func == "max" and len(args) == 2:
@@ -213,20 +178,13 @@ def _lower_expr(node: mir.MirNode) -> lir.LirNode:
         if node.func == "float" and len(args) == 1:
             return lir.CCall(func="(double)", args=args)
         return lir.CCall(func=node.func, args=args)
-    if isinstance(node, mir.MirSubscript):
-        return lir.CIndex(value=_lower_expr(node.value), index=_lower_expr(node.index))
-    if isinstance(node, mir.MirList):
-        # Compound-literal slice. The inner `(elem_t[]){...}` array lives
-        # in automatic storage when this expression appears in a function
-        # body — long-lived enough for the slice's lifetime in that scope.
-        elem_ty = _c_list_elem_type(node.ty)
-        slice_ty = _c_type(node.ty)
-        return _CSliceLiteral(
-            slice_ty=slice_ty,
-            elem_ty=elem_ty,
-            elements=[_lower_expr(e) for e in node.elements],
-        )
-    raise NotImplementedError(f"MIR expr {type(node).__name__}")
+
+
+_LOWERING = _CLowering()
+
+
+def mir_to_c_lir(module: mir.MirModule) -> lir.CModule:
+    return _LOWERING.lower_module(module)
 
 
 def _c_list_elem_type(ty) -> str:
@@ -264,14 +222,6 @@ class _CPyFloat(lir.LirNode):
 
     def __init__(self, value: lir.LirNode) -> None:
         self.value = value
-
-
-def _is_string_concat(node: mir.MirBinOp) -> bool:
-    return (
-        node.op == "+"
-        and isinstance(getattr(node.left, "ty", None), StrT)
-        and isinstance(getattr(node.right, "ty", None), StrT)
-    )
 
 
 def _c_type(ty: Type) -> str:
