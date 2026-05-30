@@ -160,4 +160,12 @@ class MojoBreak(LirNode): pass
 class MojoContinue(LirNode): pass
 
 
-__all__ = ['MojoFieldAssign', 'MojoStructInit', 'MojoSubscriptAssign', 'MojoStruct', 'MojoFieldAccess', 'MojoModule', 'MojoFn', 'MojoReturn', 'MojoBinOp', 'MojoCompare', 'MojoBoolOp', 'MojoUnary', 'MojoName', 'MojoIntLiteral', 'MojoFloatLiteral', 'MojoBoolLiteral', 'MojoStringLiteral', 'MojoIf', 'MojoWhile', 'MojoForRange', 'MojoVar', 'MojoReassign', 'MojoList', 'MojoIndex', 'MojoCall', 'MojoMethodCall', 'MojoBreak', 'MojoContinue']
+@dataclass
+class MojoRaw(LirNode):
+    """Unsupported-construct hole; emitted as a target-appropriate
+    `TODO[port]` stub preserving the original source snippet."""
+
+    snippet: str
+
+
+__all__ = ['MojoFieldAssign', 'MojoStructInit', 'MojoSubscriptAssign', 'MojoStruct', 'MojoFieldAccess', 'MojoModule', 'MojoFn', 'MojoReturn', 'MojoBinOp', 'MojoCompare', 'MojoBoolOp', 'MojoUnary', 'MojoName', 'MojoIntLiteral', 'MojoFloatLiteral', 'MojoBoolLiteral', 'MojoStringLiteral', 'MojoIf', 'MojoWhile', 'MojoForRange', 'MojoVar', 'MojoReassign', 'MojoList', 'MojoIndex', 'MojoCall', 'MojoMethodCall', 'MojoBreak', 'MojoContinue', 'MojoRaw']

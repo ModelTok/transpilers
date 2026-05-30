@@ -252,6 +252,8 @@ class MirLoweringBase:
     # -- statements -------------------------------------------------------- #
 
     def lower_stmt(self, node: mir.MirNode, declared: set[str], mut: set[str]):
+        if isinstance(node, mir.MirRaw):
+            return self.lower_raw(node)
         if isinstance(node, mir.MirReturn):
             return self.lower_return(node)
         if isinstance(node, mir.MirBreak):
@@ -311,6 +313,8 @@ class MirLoweringBase:
     # -- expressions ------------------------------------------------------- #
 
     def lower_expr(self, node: mir.MirNode):
+        if isinstance(node, mir.MirRaw):
+            return self.lower_raw(node)
         special = self.lower_expr_special(node)
         if special is not None:
             return special
@@ -401,3 +405,9 @@ class MirLoweringBase:
 
     def lower_null(self, node: mir.MirNullLiteral):  # pragma: no cover - abstract
         raise NotImplementedError
+
+    def lower_raw(self, node: mir.MirRaw):
+        """Map a never-refuse hole onto the dialect's ``<Prefix>Raw`` node.
+        Identical for every target, so no per-target override is needed; the
+        backend's emitter decides how to render the stub."""
+        return self.ns.Raw(snippet=node.snippet)

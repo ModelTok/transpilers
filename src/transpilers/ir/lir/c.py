@@ -161,4 +161,12 @@ class CBreak(LirNode): pass
 class CContinue(LirNode): pass
 
 
-__all__ = ['CFieldAssign', 'CStructInit', 'CSubscriptAssign', 'CModule', 'CFn', 'CReturn', 'CBinOp', 'CCompare', 'CBoolOp', 'CUnary', 'CName', 'CIntLiteral', 'CFloatLiteral', 'CBoolLiteral', 'CStringLiteral', 'CIf', 'CWhile', 'CForRange', 'CDecl', 'CReassign', 'CIndex', 'CCall', 'CTernary', 'CStruct', 'CFieldAccess', 'CBreak', 'CContinue']
+@dataclass
+class CRaw(LirNode):
+    """Unsupported-construct hole; emitted as a target-appropriate
+    `TODO[port]` stub preserving the original source snippet."""
+
+    snippet: str
+
+
+__all__ = ['CFieldAssign', 'CStructInit', 'CSubscriptAssign', 'CModule', 'CFn', 'CReturn', 'CBinOp', 'CCompare', 'CBoolOp', 'CUnary', 'CName', 'CIntLiteral', 'CFloatLiteral', 'CBoolLiteral', 'CStringLiteral', 'CIf', 'CWhile', 'CForRange', 'CDecl', 'CReassign', 'CIndex', 'CCall', 'CTernary', 'CStruct', 'CFieldAccess', 'CBreak', 'CContinue', 'CRaw']

@@ -134,4 +134,12 @@ class PyBreak(LirNode): pass
 class PyContinue(LirNode): pass
 
 
-__all__ = ['PyFieldAssign', 'PyStructInit', 'PySubscriptAssign', 'PyModule', 'PyFn', 'PyReturn', 'PyBinOp', 'PyCompare', 'PyBoolOp', 'PyUnary', 'PyName', 'PyIntLiteral', 'PyFloatLiteral', 'PyBoolLiteral', 'PyStringLiteral', 'PyIf', 'PyWhile', 'PyForRange', 'PyAssign', 'PyCall', 'PyClass', 'PyFieldAccess', 'PyBreak', 'PyContinue']
+@dataclass
+class PyRaw(LirNode):
+    """Unsupported-construct hole; emitted as a target-appropriate
+    `TODO[port]` stub preserving the original source snippet."""
+
+    snippet: str
+
+
+__all__ = ['PyFieldAssign', 'PyStructInit', 'PySubscriptAssign', 'PyModule', 'PyFn', 'PyReturn', 'PyBinOp', 'PyCompare', 'PyBoolOp', 'PyUnary', 'PyName', 'PyIntLiteral', 'PyFloatLiteral', 'PyBoolLiteral', 'PyStringLiteral', 'PyIf', 'PyWhile', 'PyForRange', 'PyAssign', 'PyCall', 'PyClass', 'PyFieldAccess', 'PyBreak', 'PyContinue', 'PyRaw']

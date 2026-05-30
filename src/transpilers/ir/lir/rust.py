@@ -197,4 +197,12 @@ class RustBreak(LirNode): pass
 class RustContinue(LirNode): pass
 
 
-__all__ = ['RustModule', 'RustFn', 'RustReturn', 'RustBinOp', 'RustName', 'RustIntLiteral', 'RustFloatLiteral', 'RustBoolLiteral', 'RustStringLiteral', 'RustCompare', 'RustBoolOp', 'RustUnary', 'RustIf', 'RustWhile', 'RustForRange', 'RustLet', 'RustReassign', 'RustVec', 'RustIndex', 'RustMethodCall', 'RustCall', 'RustStruct', 'RustImpl', 'RustFieldAccess', 'RustFieldAssign', 'RustStructInit', 'RustSubscriptAssign', 'RustFormat', 'RustMacro', 'RustMethodChain', 'RustBreak', 'RustContinue']
+@dataclass
+class RustRaw(LirNode):
+    """Unsupported-construct hole; emitted as a target-appropriate
+    `TODO[port]` stub preserving the original source snippet."""
+
+    snippet: str
+
+
+__all__ = ['RustModule', 'RustFn', 'RustReturn', 'RustBinOp', 'RustName', 'RustIntLiteral', 'RustFloatLiteral', 'RustBoolLiteral', 'RustStringLiteral', 'RustCompare', 'RustBoolOp', 'RustUnary', 'RustIf', 'RustWhile', 'RustForRange', 'RustLet', 'RustReassign', 'RustVec', 'RustIndex', 'RustMethodCall', 'RustCall', 'RustStruct', 'RustImpl', 'RustFieldAccess', 'RustFieldAssign', 'RustStructInit', 'RustSubscriptAssign', 'RustFormat', 'RustMacro', 'RustMethodChain', 'RustBreak', 'RustContinue', 'RustRaw']
