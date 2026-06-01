@@ -15,3 +15,6 @@ src/transpilers/llm/cache/*
 
 
 .claude/
+
+# generated sweep artifacts
+scripts/ep_*.json

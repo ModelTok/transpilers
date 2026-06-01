@@ -62,7 +62,11 @@ class _MojoLowering(MirLoweringBase):
             items.extend(self.lower_struct_items(struct))
         for fn in module.functions:
             items.append(self.lower_function(fn))
-        imports = ["math"] if self._used_math else []
+        # Idiomatic Mojo uses `from math import sqrt, exp` (explicit names), not
+        # `import math` + qualified `math.sqrt` (module-qualified access is not
+        # the standard form). Only the actually-used names are imported.
+        imports = ([f"from math import {', '.join(sorted(self._used_math))}"]
+                   if self._used_math else [])
         return lir.MojoModule(items=items, imports=imports)
 
     # -- function signature: var/mut param decoration --------------------- #
@@ -139,7 +143,7 @@ class _MojoLowering(MirLoweringBase):
             return lir.MojoBinOp(op="%", left=args[0], right=args[1])
         if node.func == "sign" and len(args) == 2:         # Fortran SIGN(a,b) == copysign
             self._used_math.add("copysign")
-            return lir.MojoCall(func="math.copysign", args=args)
+            return lir.MojoCall(func="copysign", args=args)
         if node.func == "len":
             if len(args) != 1:
                 raise ValueError("len() takes exactly one argument")
@@ -160,10 +164,10 @@ class _MojoLowering(MirLoweringBase):
             return lir.MojoMethodCall(receiver=args[0], method="sqrt", args=[])
         if node.func == "simd_abs" and len(args) == 1:
             return lir.MojoCall(func="abs", args=args)
-        # <cmath> intrinsics -> Mojo `math.<name>` (+ `import math`).
+        # <cmath> intrinsics -> Mojo math fns via `from math import <name>`.
         if node.func in _MATH_FNS:
             self._used_math.add(node.func)
-            return lir.MojoCall(func=f"math.{node.func}", args=args)
+            return lir.MojoCall(func=node.func, args=args)
         if node.func in _BUILTIN_MAP:
             return lir.MojoCall(func=_BUILTIN_MAP[node.func], args=args)
         # Print/abs/min/max identity (already Mojo builtins).

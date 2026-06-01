@@ -18,6 +18,7 @@ Lift conventions:
 """
 from __future__ import annotations
 
+import keyword
 import os
 import re
 import clang.cindex as ci
@@ -28,10 +29,18 @@ K = ci.CursorKind
 IND = "    "
 
 
+_SOFT_KW = {"match", "case", "type"}  # contextual keywords / common shadows
+
+
 def snake(name: str) -> str:
     name = name.split("::")[-1]
     s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name)
-    return s.lower() if s else name
+    s = s.lower() if s else name
+    # C++ identifiers like `is`, `in`, `class`, `lambda` are Python keywords —
+    # suffix `_` so the emitted name/attribute is valid Python.
+    if keyword.iskeyword(s) or s in _SOFT_KW:
+        s += "_"
+    return s
 
 
 def toks(c) -> list[str]:
@@ -60,9 +69,107 @@ _TOK_OK = re.compile(
 # binary operators that want surrounding whitespace in the emitted Python
 _SPACED = {"==", "!=", "<=", ">=", "<", ">", "+", "-", "*", "/", "%"}
 _LOGIC = {"&&": " and ", "||": " or "}
+# operators `e()` may legitimately emit for a BINARY_OPERATOR; anything else
+# means a degraded/macro-mangled node — fall back rather than emit garbage.
+_PY_BINOPS = {"+", "-", "*", "/", "%", "//", "**", "==", "!=", "<", "<=",
+              ">", ">=", "and", "or", "&", "|", "^", "<<", ">>"}
+
+
+_CAST_NAMES = {"static_cast", "dynamic_cast", "reinterpret_cast", "const_cast"}
+_PRIM_TYPES = {"int", "long", "short", "char", "double", "float", "bool",
+               "unsigned", "signed", "size_t", "void", "const",
+               "Real64", "Real32", "Int", "Int64", "int64_t", "int32_t"}
+_ASSIGN_OPS = {"=", "+=", "-=", "*=", "/=", "%="}
+
+
+def _strip_casts(ts: list[str]) -> list[str]:
+    """Drop cast wrappers from a token stream so they don't re-emit as Python
+    comparisons/garbage: `dynamic_cast < T * > ( e )` -> `( e )` and the C-style
+    `( int ) x` -> `x` (only when the parens wrap primitive type tokens)."""
+    out, i, n = [], 0, len(ts)
+    while i < n:
+        if ts[i] in _CAST_NAMES and i + 1 < n and ts[i + 1] == "<":
+            depth, j = 0, i + 1
+            while j < n:
+                if ts[j] == "<":
+                    depth += 1
+                elif ts[j] == ">":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                j += 1
+            i = j + 1  # skip past the closing '>' ; the following (expr) stays
+            continue
+        # C-style cast `( <primitive-types> ) expr` -> `expr`
+        if ts[i] == "(":
+            j = i + 1
+            while j < n and ts[j] in _PRIM_TYPES or (j < n and ts[j] == "*"):
+                j += 1
+            if j > i + 1 and j < n and ts[j] == ")" and all(
+                    t in _PRIM_TYPES or t == "*" for t in ts[i + 1:j]):
+                i = j + 1  # drop `( types )`, keep the cast operand
+                continue
+        out.append(ts[i])
+        i += 1
+    return out
+
+
+def _balanced(ts: list[str]) -> bool:
+    """True iff `()` and `[]` are balanced and never close before opening.
+
+    Degraded macro expansions (e.g. ObjexxFCL `EP_SIZE_CHECK(...)`) recover into
+    token streams like `nsides ) 0` — every token is individually translatable
+    but the result is unbalanced garbage. Reject those so the lifter emits a
+    valid TODO instead of unparseable Python."""
+    p = b = 0
+    for t in ts:
+        if t == "(":
+            p += 1
+        elif t == ")":
+            p -= 1
+            if p < 0:
+                return False
+        elif t == "[":
+            b += 1
+        elif t == "]":
+            b -= 1
+            if b < 0:
+                return False
+    return p == 0 and b == 0
+
+
+def _to_lvalue(s: str) -> str:
+    """Rewrite a trailing call `…name(idx)` -> subscript `…name[idx]` so a
+    token-recovered expression is valid as an assignment target (ObjexxFCL
+    1-based `()` indexing). Shared by the AST and token paths."""
+    if not s.endswith(")"):
+        return s
+    depth = 0
+    for i in range(len(s) - 1, -1, -1):
+        if s[i] == ")":
+            depth += 1
+        elif s[i] == "(":
+            depth -= 1
+            if depth == 0:
+                inner = s[i + 1:-1]
+                return s[:i] + "[" + inner + "]" if inner else s
+    return s
 
 
 def _toks_to_py(ts: list[str]) -> str:
+    ts = _strip_casts(ts)
+    # Top-level assignment in a token-recovered statement: the LHS may be a
+    # call-style ObjexxFCL element (`arr(i) += 1`) — fix it to a subscript.
+    depth = 0
+    for idx, t in enumerate(ts):
+        if t in "([":
+            depth += 1
+        elif t in ")]":
+            depth -= 1
+        elif depth == 0 and t in _ASSIGN_OPS:
+            lhs = _to_lvalue(_toks_to_py(ts[:idx]))
+            rhs = _toks_to_py(ts[idx + 1:])
+            return f"{lhs} {t} {rhs}"
     """Best-effort: turn a degraded operand token stream into Python.
 
     Handles identifier/member chains (`state.dataX->Field`), ObjexxFCL
@@ -115,14 +222,22 @@ class _Lifter:
 
     def todo_expr(self, c, why="") -> str:
         self.todo += 1
-        return f"None  # TODO[lift]: {c.kind.name}{(' ' + why) if why else ''} :: {' '.join(src(c).split())[:80]}"
+        # Expression position: a `#` comment would swallow the rest of an
+        # enclosing line (e.g. other call args), producing invalid Python. Emit
+        # a sentinel CALL that preserves the snippet and stays syntactically
+        # valid. `__todo__` is defined in the lifted module preamble.
+        snip = " ".join(src(c).split())[:80].replace("\\", "\\\\").replace('"', '\\"')
+        tag = f"{c.kind.name}{(' ' + why) if why else ''}: {snip}"
+        return f'__todo__("{tag}")'
 
     # ----------------------------- expressions ----------------------------- #
     def e(self, c) -> str:
         self.nodes += 1
         k = c.kind
         if k in (K.UNEXPOSED_EXPR, K.PAREN_EXPR, K.CXX_STATIC_CAST_EXPR,
-                 K.CSTYLE_CAST_EXPR, K.CXX_FUNCTIONAL_CAST_EXPR):
+                 K.CSTYLE_CAST_EXPR, K.CXX_FUNCTIONAL_CAST_EXPR,
+                 K.CXX_DYNAMIC_CAST_EXPR, K.CXX_CONST_CAST_EXPR,
+                 K.CXX_REINTERPRET_CAST_EXPR):
             kids = [x for x in c.get_children() if x.kind != K.TYPE_REF]
             return self.e(kids[-1]) if kids else self._tok_fallback(c)
         if k in (K.INTEGER_LITERAL, K.FLOATING_LITERAL):
@@ -146,10 +261,19 @@ class _Lifter:
             return self._tok_fallback(c)
         if k == K.ARRAY_SUBSCRIPT_EXPR:
             a, i = list(c.get_children()); return f"{self.e(a)}[{self.e(i)}]"
+        if k == K.INIT_LIST_EXPR:
+            # C++ brace-init `{a, b, c}` -> Python list (faithful Phase-1 form;
+            # works for aggregate/vector/array init and {key, value} pairs).
+            return "[" + ", ".join(self.e(x) for x in c.get_children()) + "]"
         if k in (K.BINARY_OPERATOR, K.COMPOUND_ASSIGNMENT_OPERATOR):
             kids = list(c.get_children())
             if len(kids) == 2:
-                return f"{self.e(kids[0])} {self._binop(c)} {self.e(kids[1])}"
+                op = self._binop(c)
+                if op in _PY_BINOPS:
+                    return f"{self.e(kids[0])} {op} {self.e(kids[1])}"
+                # degraded operator (e.g. macro expansion gives `)`): don't emit
+                # garbage like `nsides ) 0` — recover from tokens or TODO.
+                return self._tok_fallback(c)
         if k == K.UNARY_OPERATOR:
             kids = list(c.get_children()); op = (toks(c) or ["?"])[0]
             inner = self.e(kids[0]) if kids else "None"
@@ -162,13 +286,31 @@ class _Lifter:
                 return f"({self.e(kids[1])} if {self.e(kids[0])} else {self.e(kids[2])})"
         if k == K.CALL_EXPR:
             return self._call(c)
+        if k == K.LAMBDA_EXPR:
+            return self._lambda(c)
         return self._tok_fallback(c)
+
+    def _lambda(self, c) -> str:
+        """C++ lambda -> Python `lambda`. Faithful only for the single-`return`
+        body shape (pervasive in EnergyPlus root-finder callbacks, e.g.
+        `[&](Real64 x){ return f(x); }`); multi-statement bodies degrade to a
+        TODO so we never emit invalid syntax."""
+        params = [snake(a.spelling) or "arg"
+                  for a in c.get_children() if a.kind == K.PARM_DECL]
+        body = next((x for x in c.get_children() if x.kind == K.COMPOUND_STMT), None)
+        stmts = [x for x in body.get_children()] if body is not None else []
+        if len(stmts) == 1 and stmts[0].kind == K.RETURN_STMT:
+            rk = list(stmts[0].get_children())
+            expr = self.e(rk[0]) if rk else "None"
+            return f"lambda {', '.join(params)}: {expr}"
+        return self.todo_expr(c)
 
     def _tok_fallback(self, c) -> str:
         ts = toks(c)
         # only re-emit when EVERY token is one we know how to translate, and
         # the expression isn't an assignment (handled structurally elsewhere)
-        if ts and "=" not in ts and all(_TOK_OK.fullmatch(t) for t in ts):
+        if (ts and "=" not in ts and _balanced(ts)
+                and all(_TOK_OK.fullmatch(t) for t in ts)):
             return _toks_to_py(ts)
         return self.todo_expr(c)
 
@@ -228,18 +370,49 @@ class _Lifter:
             return out or [p + "pass"]
         if k == K.RETURN_STMT:
             kids = list(c.get_children())
-            return [p + ("return " + self.e(kids[0]) if kids else "return")]
+            if not kids:
+                return [p + "return"]
+            # `return (x = y);` -> hoist the assignment, return the value.
+            hoist, val = self._hoist_cond(kids[0], ind)
+            return hoist + [p + "return " + val]
         if k == K.IF_STMT:
             kids = list(c.get_children())
-            out = [f"{p}if {self.e(kids[0])}:"] + self._body(kids[1], ind + 1)
+            pre = []
+            # C++17 if-with-initializer: `if (auto x = f(); cond)` -> hoist the
+            # init DECL_STMT above the `if` (else it'd be read as the condition).
+            while kids and kids[0].kind == K.DECL_STMT:
+                pre += self.stmt(kids[0], ind)
+                kids = kids[1:]
+            # C-idiom `if ((x = f()) == 0)`: hoist the embedded assignment above
+            # the `if` (a bare `=` inside a condition is a Python syntax error).
+            hoist, cond = self._hoist_cond(kids[0], ind)
+            out = pre + hoist + [f"{p}if {cond}:"] + self._body(kids[1], ind + 1)
             if len(kids) > 2:
                 out += [f"{p}else:"] + self._body(kids[2], ind + 1)
             return out
         if k == K.WHILE_STMT:
             kids = list(c.get_children())
-            return [f"{p}while {self.e(kids[0])}:"] + self._body(kids[-1], ind + 1)
+            hoist, cond = self._hoist_cond(kids[0], ind + 1)
+            if hoist:           # assignment in the test -> while True/break form
+                out = [f"{p}while True:"] + hoist
+                out += [f"{p}{IND}if not ({cond}):", f"{p}{IND}{IND}break"]
+                out += self._body(kids[-1], ind + 1)
+                return out
+            return [f"{p}while {cond}:"] + self._body(kids[-1], ind + 1)
         if k == K.FOR_STMT:
             return self._for(c, ind)
+        if k == K.SWITCH_STMT:
+            return self._switch(c, ind)
+        if k == K.DO_STMT:
+            # `do { body } while (cond);` -> `while True: body; if not cond: break`
+            kids = list(c.get_children())
+            body = next((x for x in kids if x.kind == K.COMPOUND_STMT), None)
+            cond = next((x for x in kids if x.kind != K.COMPOUND_STMT), None)
+            out = [f"{p}while True:"]
+            out += self.stmt(body, ind + 1) if body is not None else [p + IND + "pass"]
+            if cond is not None:
+                out += [f"{p}{IND}if not ({self.e(cond)}):", f"{p}{IND}{IND}break"]
+            return out
         if k == K.BREAK_STMT:
             return [p + "break"]
         if k == K.CONTINUE_STMT:
@@ -248,7 +421,9 @@ class _Lifter:
             return []
         if k in (K.CALL_EXPR, K.BINARY_OPERATOR, K.COMPOUND_ASSIGNMENT_OPERATOR,
                  K.UNARY_OPERATOR, K.UNEXPOSED_EXPR, K.MEMBER_REF_EXPR, K.PAREN_EXPR):
-            return [p + self._exprstmt(c)]
+            # C++ comma operator `a, b, c;` -> one Python statement per operand.
+            parts = self._comma_split(c)
+            return [p + self._exprstmt(x) for x in parts]
         self.todo += 1
         return [f"{p}pass  # TODO[lift]: {k.name} :: {' '.join(src(c).split())[:70]}"]
 
@@ -270,13 +445,168 @@ class _Lifter:
         out.append(p + IND + self._exprstmt(inc))
         return out
 
+    def _comma_split(self, c) -> list:
+        """Flatten a top-level C++ comma-operator expression into its operands.
+        Non-comma expressions return `[c]` unchanged."""
+        if c.kind in (K.UNEXPOSED_EXPR, K.PAREN_EXPR):
+            kids = [x for x in c.get_children() if x.kind != K.TYPE_REF]
+            if len(kids) == 1:
+                return self._comma_split(kids[0])
+        if c.kind == K.BINARY_OPERATOR:
+            kids = list(c.get_children())
+            if len(kids) == 2 and self._binop(c) == ",":
+                return self._comma_split(kids[0]) + self._comma_split(kids[1])
+        return [c]
+
+    def _hoist_cond(self, c, ind):
+        """Split assignment-expressions out of a condition.
+
+        C uses `if ((x = f()) == 0)`; Python has no assignment expression with an
+        attribute/subscript target, so emit `x = f()` as a pre-statement and use
+        `x` in the condition. Returns (pre_lines, cond_str)."""
+        p = ind * IND
+        pre: list[str] = []
+
+        def rewrite(cur) -> str:
+            if cur.kind in (K.UNEXPOSED_EXPR, K.PAREN_EXPR):
+                kids = [x for x in cur.get_children() if x.kind != K.TYPE_REF]
+                return rewrite(kids[-1]) if kids else self.e(cur)
+            if cur.kind == K.BINARY_OPERATOR:
+                kids = list(cur.get_children())
+                if len(kids) == 2:
+                    op = self._binop(cur)
+                    if op == "=":
+                        lhs = self._lvalue(self.e(kids[0]))
+                        pre.append(f"{p}{lhs} = {self.e(kids[1])}")
+                        return lhs
+                    if op in ("and", "or", "==", "!=", "<", "<=", ">", ">="):
+                        return f"{rewrite(kids[0])} {op} {rewrite(kids[1])}"
+            return self.e(cur)
+
+        cond = rewrite(c)
+        return pre, cond
+
+    def _flatten_switch(self, node, items):
+        """Linearise clang's nested switch body into ordered items:
+        ('case', value_cursor) | ('default', None) | ('stmt', cursor)."""
+        k = node.kind
+        if k == K.CASE_STMT:
+            cc = list(node.get_children())
+            items.append(("case", cc[0]))
+            if len(cc) > 1:
+                self._flatten_switch(cc[1], items)
+        elif k == K.DEFAULT_STMT:
+            items.append(("default", None))
+            cc = list(node.get_children())
+            if cc:
+                self._flatten_switch(cc[0], items)
+        else:
+            items.append(("stmt", node))
+
+    def _switch(self, c, ind):
+        """`switch(x){case A: ...; break; default: ...}` -> if/elif/else on x.
+
+        Fallthrough is not modelled (Phase-1): each `case`/`default` label run
+        becomes its own branch; trailing `break` is dropped. Stacked labels
+        (`case A: case B:`) collapse into `x == A or x == B`."""
+        p = ind * IND
+        kids = list(c.get_children())
+        body = next((x for x in reversed(kids) if x.kind == K.COMPOUND_STMT), None)
+        # C++17 switch-with-initializer: hoist any leading init DECL_STMT(s).
+        pre, rest = [], [x for x in kids if x is not body]
+        while rest and rest[0].kind == K.DECL_STMT:
+            pre += self.stmt(rest[0], ind)
+            rest = rest[1:]
+        cond = rest[0] if rest else None
+        if body is None or cond is None:
+            self.todo += 1
+            return [f"{p}pass  # TODO[lift]: SWITCH_STMT :: {' '.join(src(c).split())[:60]}"]
+        subj = self.e(cond)
+        items = []
+        for ch in body.get_children():
+            self._flatten_switch(ch, items)
+        # group consecutive labels + their following statements into branches
+        groups = []  # each: {"default": bool, "values": [...], "stmts": [...]}
+        cur = None
+        for kind, payload in items:
+            if kind in ("case", "default"):
+                if cur is None or cur["stmts"]:
+                    cur = {"default": False, "values": [], "stmts": []}
+                    groups.append(cur)
+                if kind == "default":
+                    cur["default"] = True
+                else:
+                    cur["values"].append(payload)
+            else:
+                if cur is None:
+                    cur = {"default": False, "values": [], "stmts": []}
+                    groups.append(cur)
+                cur["stmts"].append(payload)
+        # default branch must be last for valid if/elif/else ordering
+        groups.sort(key=lambda g: g["default"])
+        out, emitted_if = [], False
+        for g in groups:
+            stmt_lines = []
+            for s in g["stmts"]:
+                if s.kind == K.BREAK_STMT:
+                    continue
+                stmt_lines += self.stmt(s, ind + 1)
+            stmt_lines = stmt_lines or [p + IND + "pass"]
+            if g["default"] and not g["values"]:
+                if emitted_if:
+                    out.append(f"{p}else:")
+                    out += stmt_lines
+                else:                       # default-only switch: emit unguarded
+                    out += [ln[len(IND):] if ln.startswith(IND) else ln for ln in stmt_lines]
+            else:
+                conds = " or ".join(f"{subj} == {self.e(v)}" for v in g["values"]) or "True"
+                out.append(f"{p}{'if' if not emitted_if else 'elif'} {conds}:")
+                out += stmt_lines
+                emitted_if = True
+        return pre + (out or [p + "pass"])
+
+    @staticmethod
+    def _lvalue(s: str) -> str:
+        """Make an emitted expression usable as an assignment target.
+
+        ObjexxFCL indexes with `()` (1-based), so the lifter renders element
+        access as a call `arr(i)`. As an LHS that's invalid Python (can't assign
+        to a call), so rewrite the trailing call `…name(idx)` -> subscript
+        `…name[idx]`. A target ending in `.field` is left alone (valid setattr)."""
+        if not s.endswith(")"):
+            return s
+        depth = 0
+        for i in range(len(s) - 1, -1, -1):
+            if s[i] == ")":
+                depth += 1
+            elif s[i] == "(":
+                depth -= 1
+                if depth == 0:
+                    inner = s[i + 1:-1]
+                    return s[:i] + "[" + inner + "]" if inner else s
+        return s
+
+    @staticmethod
+    def _assign_op(c):
+        """Find an assignment operator token at paren-depth 0 (robust against
+        `_binop`'s token-index heuristic, which mis-splits some nodes)."""
+        depth = 0
+        for t in toks(c):
+            if t in ("(", "[", "{"):
+                depth += 1
+            elif t in (")", "]", "}"):
+                depth -= 1
+            elif depth == 0 and t in _ASSIGN_OPS:
+                return t
+        return None
+
     def _exprstmt(self, c) -> str:
         if c.kind in (K.BINARY_OPERATOR, K.COMPOUND_ASSIGNMENT_OPERATOR):
             kids = list(c.get_children())
             if len(kids) == 2:
-                op = self._binop(c)
-                if op == "=" or op.endswith("="):
-                    return f"{self.e(kids[0])} {op} {self.e(kids[1])}"
+                op = self._assign_op(c)
+                if op:
+                    return f"{self._lvalue(self.e(kids[0]))} {op} {self.e(kids[1])}"
         if c.kind == K.UNARY_OPERATOR:
             t = toks(c); kids = list(c.get_children())
             if "++" in t: return f"{self.e(kids[0])} += 1"
@@ -325,7 +655,13 @@ def _default_for(t) -> str:
 # ----------------------------- public API ---------------------------------- #
 def _emit(tu, path) -> tuple[str, dict]:
     lf = _Lifter()
-    lines = [f'"""Lifted 1:1 from {os.path.basename(path)} (Phase-1 C++->Python lift)."""', ""]
+    lines = [
+        f'"""Lifted 1:1 from {os.path.basename(path)} (Phase-1 C++->Python lift)."""',
+        "",
+        "def __todo__(_snippet):  # placeholder for not-yet-lifted constructs",
+        '    raise NotImplementedError(_snippet)',
+        "",
+    ]
 
     def from_file(c):
         f = c.location.file

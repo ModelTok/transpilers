@@ -25,7 +25,11 @@ def emit_mojo(module: lir.MojoModule) -> str:
     body = "\n\n".join(_emit_item(item) for item in module.items) + "\n"
     imports = getattr(module, "imports", None)
     if imports:
-        return "\n".join(f"import {m}" for m in imports) + "\n\n" + body
+        # Entries may be bare module names (`math`) or full statements
+        # (`from math import sqrt`); emit the latter verbatim.
+        lines = [m if m.startswith(("from ", "import ")) else f"import {m}"
+                 for m in imports]
+        return "\n".join(lines) + "\n\n" + body
     return body
 
 
