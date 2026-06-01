@@ -32,6 +32,27 @@ IND = "    "
 _SOFT_KW = {"match", "case", "type"}  # contextual keywords / common shadows
 
 
+_OP_DUNDER = {
+    "operator==": "__eq__", "operator!=": "__ne__", "operator<": "__lt__",
+    "operator<=": "__le__", "operator>": "__gt__", "operator>=": "__ge__",
+    "operator()": "__call__", "operator[]": "__getitem__",
+    "operator+": "__add__", "operator-": "__sub__", "operator*": "__mul__",
+    "operator/": "__truediv__", "operator%": "__mod__",
+    "operator+=": "__iadd__", "operator-=": "__isub__", "operator*=": "__imul__",
+    "operator bool": "__bool__", "operator<<": "__lshift__",
+}
+
+
+def _py_method_name(spelling: str) -> str:
+    """C++ method name -> Python identifier, mapping operator overloads to the
+    matching dunder (`operator==` -> `__eq__`) so the emitted `def` is valid."""
+    if spelling in _OP_DUNDER:
+        return _OP_DUNDER[spelling]
+    if spelling.startswith("operator"):       # unmapped operator -> safe name
+        return "_op_" + re.sub(r"\W+", "_", spelling[len("operator"):]).strip("_")
+    return snake(spelling)
+
+
 def snake(name: str) -> str:
     name = name.split("::")[-1]
     s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name)
@@ -78,7 +99,9 @@ _PY_BINOPS = {"+", "-", "*", "/", "%", "//", "**", "==", "!=", "<", "<=",
 _CAST_NAMES = {"static_cast", "dynamic_cast", "reinterpret_cast", "const_cast"}
 _PRIM_TYPES = {"int", "long", "short", "char", "double", "float", "bool",
                "unsigned", "signed", "size_t", "void", "const",
-               "Real64", "Real32", "Int", "Int64", "int64_t", "int32_t"}
+               "Real64", "Real32", "Int", "Int64", "int64_t", "int32_t",
+               "intptr_t", "uintptr_t", "ptrdiff_t", "wchar_t", "uint8_t",
+               "uint32_t", "uint64_t", "int8_t", "int16_t", "uint16_t"}
 _ASSIGN_OPS = {"=", "+=", "-=", "*=", "/=", "%="}
 
 
@@ -114,6 +137,14 @@ def _strip_casts(ts: list[str]) -> list[str]:
     return out
 
 
+def _num(t: str) -> str:
+    """Strip C numeric suffixes, but NOT from hex literals — `F`/`f` are hex
+    digits there, so `0xFF`.rstrip('uUlLfF') would wrongly become `0x`."""
+    if t[:2].lower() == "0x":
+        return t.rstrip("uUlL")          # only u/U/l/L are hex suffixes
+    return t.rstrip("uUlLfF")
+
+
 def _balanced(ts: list[str]) -> bool:
     """True iff `()` and `[]` are balanced and never close before opening.
 
@@ -136,6 +167,19 @@ def _balanced(ts: list[str]) -> bool:
             if b < 0:
                 return False
     return p == 0 and b == 0
+
+
+def _valid_target(s: str) -> bool:
+    """True iff `s` is a legal Python assignment target (name / attribute /
+    subscript / tuple). Degraded ObjexxFCL LHS recovery can yield `k + 1` or
+    `1` (array name lost) — reject those so we don't emit `k + 1 = v`."""
+    if not s:
+        return False
+    try:
+        compile(f"{s} = 0", "<lhs>", "exec")
+        return True
+    except (SyntaxError, ValueError):
+        return False
 
 
 def _to_lvalue(s: str) -> str:
@@ -202,13 +246,19 @@ def _toks_to_py(ts: list[str]) -> str:
             out.append(_LOGIC[t])
         elif t == ",":
             out.append(", ")
+        elif t in ("*", "&") and (not out or out[-1].strip() in
+                                  ("", "(", "[", ",", "+", "-", "*", "/", "%",
+                                   "==", "!=", "<", "<=", ">", ">=",
+                                   "and", "or", "not", "return", "=")):
+            pass  # prefix `*`/`&` (deref / address-of) — no-op once pointers
+            # collapse to values; drop so `(*ptr).f` -> `(ptr).f`
         elif t in _SPACED:
             out.append(f" {t} ")
         elif re.fullmatch(r"[A-Za-z_]\w*", t):
             # snake unless it's a namespace qualifier (next token is `::`)
             out.append(t if nxt == "::" else snake(t))
         elif t and (t[0].isdigit()):
-            out.append(t.rstrip("uUlLfF"))
+            out.append(_num(t))
         else:
             out.append(t)
         i += 1
@@ -241,7 +291,7 @@ class _Lifter:
             kids = [x for x in c.get_children() if x.kind != K.TYPE_REF]
             return self.e(kids[-1]) if kids else self._tok_fallback(c)
         if k in (K.INTEGER_LITERAL, K.FLOATING_LITERAL):
-            t = toks(c); return (t[0].rstrip("uUlLfF") if t else "0")
+            t = toks(c); return (_num(t[0]) if t else "0")
         if k == K.CXX_BOOL_LITERAL_EXPR:
             return "True" if (toks(c) or ["false"])[0] == "true" else "False"
         if k == K.STRING_LITERAL:
@@ -331,9 +381,20 @@ class _Lifter:
             recv = argl[0] if argl else None          # receiver is the object
             rest = argl[1:]
             if op in ("->", "*") and rest: return self.e(rest[-1])
-            if op == "[]" and recv is not None and rest: return f"{self.e(recv)}[{self.e(rest[0])}]"
+            if op == "[]" and recv is not None and rest:
+                base = self.e(recv)
+                if base:
+                    return f"{base}[{self.e(rest[0])}]"
+                return self._tok_fallback(c)
             if op == "()" and recv is not None:
-                return f"{self.e(recv)}({', '.join(self.e(a) for a in rest)})"
+                # ObjexxFCL `arr(i)` element access. When the array base emits
+                # empty (name-degraded recv), recovering only the index yields
+                # garbage like `(k+1)` -> `k+1` as an LHS. Recover the whole call
+                # from tokens (its extent still covers the array name).
+                base = self.e(recv)
+                if base:
+                    return f"{base}({', '.join(self.e(a) for a in rest)})"
+                return self._tok_fallback(c)
             if op in ("+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=") and len(rest) == 2:
                 return f"{self.e(rest[0])} {op} {self.e(rest[1])}"
             return self.e(rest[-1]) if rest else "None"
@@ -600,17 +661,35 @@ class _Lifter:
                 return t
         return None
 
+    def _resolve_target(self, node):
+        """Resolve a legal Python assignment target for an lvalue node, or None.
+        Tries the structured emit, then verbatim token recovery (which keeps a
+        degraded ObjexxFCL array name), validating each via `compile`."""
+        lhs = self._lvalue(self.e(node))
+        if _valid_target(lhs):
+            return lhs
+        lhs = self._lvalue(self._tok_fallback(node))
+        return lhs if _valid_target(lhs) else None
+
+    def _todo_stmt(self, c, why) -> str:
+        self.todo += 1
+        return f"pass  # TODO[lift]: {why} :: {' '.join(src(c).split())[:55]}"
+
     def _exprstmt(self, c) -> str:
         if c.kind in (K.BINARY_OPERATOR, K.COMPOUND_ASSIGNMENT_OPERATOR):
             kids = list(c.get_children())
             if len(kids) == 2:
                 op = self._assign_op(c)
                 if op:
-                    return f"{self._lvalue(self.e(kids[0]))} {op} {self.e(kids[1])}"
+                    rhs = self.e(kids[1])           # eval RHS before target
+                    lhs = self._resolve_target(kids[0])
+                    return f"{lhs} {op} {rhs}" if lhs else self._todo_stmt(c, "assign target")
         if c.kind == K.UNARY_OPERATOR:
             t = toks(c); kids = list(c.get_children())
-            if "++" in t: return f"{self.e(kids[0])} += 1"
-            if "--" in t: return f"{self.e(kids[0])} -= 1"
+            if "++" in t or "--" in t:
+                lhs = self._resolve_target(kids[0])
+                aug = "+=" if "++" in t else "-="
+                return f"{lhs} {aug} 1" if lhs else self._todo_stmt(c, "incr target")
         return self.e(c)
 
     # ------------------------------ top level ------------------------------ #
@@ -619,7 +698,7 @@ class _Lifter:
         params = ["self"] if cls else []
         params += [snake(a.spelling) or "arg" for a in c.get_arguments()]
         body = next((x for x in c.get_children() if x.kind == K.COMPOUND_STMT), None)
-        name = snake(c.spelling)
+        name = _py_method_name(c.spelling)
         if body is None:
             return [f"{p}def {name}({', '.join(params)}): ...  # decl only"]
         return [f"{p}def {name}({', '.join(params)}):"] + self.stmt(body, ind + 1)

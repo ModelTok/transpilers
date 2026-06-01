@@ -184,6 +184,45 @@ def test_lift_degraded_macro_does_not_emit_unbalanced_garbage():
     assert ") 0" not in out and ") None" not in out
 
 
+def test_lift_objexx_2d_assign_target_recovered():
+    # 2D ObjexxFCL element assignment `a(i, j) = v`: structured emit can lose
+    # the array name -> must recover a valid target from tokens, never `i = v`.
+    out, _ = lift_source(
+        "void f(State &state, int k){ state.dataX->a(k - 2, k) = 1.0; }")
+    assert _compiles(out)
+    assert "= 1.0" in out and "[k - 2, k]" in out
+
+
+def test_lift_post_increment_on_array_element():
+    out, _ = lift_source(
+        "void f(State &state, int i){ state.dataX->counts(i)++; }")
+    assert _compiles(out)
+    assert "state.data_x.counts[i] += 1" in out
+
+
+def test_lift_operator_method_to_dunder():
+    out, _ = lift_source(
+        "struct P{ bool operator==(P const& o) const { return true; } "
+        "double operator()(int k){ return 0.0; } };")
+    assert _compiles(out)
+    assert "def __eq__(" in out and "def __call__(" in out
+    assert "def operator" not in out
+
+
+def test_lift_hex_literal_not_corrupted():
+    # rstrip of int/float suffixes must not eat hex digits f/F.
+    out, _ = lift_source("int f(){ return 0xFF + 0xA0F; }")
+    assert _compiles(out)
+    assert "0xFF" in out and "0xA0F" in out
+
+
+def test_lift_prefix_deref_dropped():
+    out, _ = lift_source(
+        "void f(std::vector<int>* xs){ (*xs).push_back(1); }")
+    assert _compiles(out)
+    assert "(* " not in out and "(*xs)" not in out
+
+
 def test_levels_lift_engine(tmp_path):
     f = tmp_path / "k.cpp"
     f.write_text("double sq(double x){ return x*x; }")
