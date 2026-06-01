@@ -63,6 +63,21 @@ def test_mojo_bool_type():
     assert "-> Bool:" in out
 
 
+def test_mojo_math_import_is_idiomatic():
+    """cmath intrinsics use `from math import <names>` (bare calls), not the
+    non-idiomatic `import math` + module-qualified `math.sqrt`."""
+    import tempfile
+    from transpilers.levels import transpile_level
+
+    p = tempfile.mktemp(suffix=".cpp")
+    with open(p, "w") as f:
+        f.write("double f(double x){ return std::sqrt(x) + std::exp(x); }")
+    out = transpile_level("file", p, target="mojo", engine="strict")[0].output
+    assert "from math import exp, sqrt" in out
+    assert "math.sqrt" not in out and "import math\n" not in out
+    assert "sqrt(x)" in out
+
+
 def test_mojo_inferred_unannotated_python():
     """Algorithmic inference still drives the Mojo target — same MIR."""
     out = _m(

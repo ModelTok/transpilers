@@ -79,6 +79,111 @@ def test_lift_never_refuses_unknown():
     assert "TODO[lift]" in out  # didn't crash; stubbed instead
 
 
+def test_lift_init_list_to_python_list():
+    out, _ = lift_source(
+        "std::vector<int> f(){ return {1, 2, 3}; }")
+    assert "[1, 2, 3]" in out
+
+
+def test_lift_switch_to_if_elif_else():
+    out, _ = lift_source(
+        "int f(int k){ int r; switch (k) { "
+        "  case 1: r = 10; break; "
+        "  case 2: case 3: r = 20; break; "
+        "  default: r = 0; } return r; }")
+    assert "if k == 1:" in out
+    assert "elif k == 2 or k == 3:" in out
+    assert "else:" in out
+    assert "r = 10" in out and "r = 20" in out and "r = 0" in out
+    assert "break" not in out  # switch breaks are dropped, not leaked
+
+
+def test_lift_if_with_initializer_keeps_condition():
+    # C++17 `if (init; cond)` must not read the init as the condition
+    # (regression: previously emitted `if None:`).
+    out, _ = lift_source(
+        "void f(State &state, int n){ "
+        "  if (auto x = state.dataX->find(n); x > 0) { return; } }")
+    assert "if None:" not in out
+    assert "x = state.data_x.find(n)" in out
+    assert "if x > 0:" in out
+
+
+def test_lift_single_return_lambda():
+    out, _ = lift_source(
+        "void f(){ auto sq = [](double x){ return x * x; }; }")
+    assert "lambda x: x * x" in out
+
+
+def test_lift_do_while_to_while_true_break():
+    out, _ = lift_source(
+        "void f(int n){ do { n = n - 1; } while (n > 0); }")
+    assert "while True:" in out
+    assert "n = n - 1" in out
+    assert "if not (n > 0):" in out
+    assert "break" in out
+
+
+def _compiles(out):
+    import ast
+    ast.parse(out)
+    return True
+
+
+def test_lift_keyword_identifier_escaped():
+    # C++ identifiers that are Python keywords (`in`, `is`, `class`) must be
+    # suffixed `_` so the emitted code is valid Python.
+    out, _ = lift_source("void f(){ int in = 0; int is = 1; }")
+    assert _compiles(out)
+    assert "in_ = 0" in out and "is_ = 1" in out
+
+
+def test_lift_dynamic_cast_stripped():
+    out, _ = lift_source(
+        "struct B{}; struct D:B{}; void f(B* b){ auto* d = dynamic_cast<D*>(b); }")
+    assert _compiles(out)
+    assert "dynamic_cast" not in out and "<" not in out.split("def f")[-1]
+
+
+def test_lift_assignment_in_condition_hoisted():
+    # `if ((x = f()) == 0)` -> hoist `x = f()`, then `if x == 0:`.
+    out, _ = lift_source(
+        "int g(); void f(){ int x; if ((x = g()) == 0) { return; } }")
+    assert _compiles(out)
+    assert "x = g()" in out
+    assert "if x == 0:" in out
+
+
+def test_lift_cstyle_cast_in_index_stripped():
+    out, _ = lift_source(
+        "void f(double* a, double t){ a[(int)t] = 1.0; }")
+    assert _compiles(out)
+    assert "(int)" not in out
+    assert "a[t]" in out
+
+
+def test_lift_objexx_call_lvalue_to_subscript():
+    # ObjexxFCL element assignment `arr(i) = v` (1-based `()` indexing on a
+    # name-degraded member) is invalid as a Python call target -> rewrite to a
+    # subscript so it's valid Python.
+    out, _ = lift_source(
+        "void f(State &state, int i){ state.dataX->Arr(i) = 2.0; "
+        "  state.dataX->Cnt(i) += 1; }")
+    assert _compiles(out)
+    assert "state.data_x.arr[i] = 2.0" in out
+    assert "state.data_x.cnt[i] += 1" in out
+
+
+def test_lift_degraded_macro_does_not_emit_unbalanced_garbage():
+    # ObjexxFCL-style bounds macros degrade to a BINARY_OPERATOR with a mangled
+    # operator; the lifter must emit valid Python (a TODO), never `x ) 0`.
+    out, _ = lift_source(
+        "#define EP_SIZE_CHECK(a, n) ((void)0)\n"
+        "void f(int* poly, int nsides){ EP_SIZE_CHECK(poly, nsides); }")
+    assert _compiles(out)
+    assert ") 0" not in out and ") None" not in out
+
+
 def test_levels_lift_engine(tmp_path):
     f = tmp_path / "k.cpp"
     f.write_text("double sq(double x){ return x*x; }")
