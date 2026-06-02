@@ -7,6 +7,11 @@ Two responsibilities not seen in the other backends:
   2. Turn every `return <expr>` into an assignment to the result variable
      plus a bare `return` statement. Fortran functions return whatever the
      result variable holds at function exit.
+
+Fortran's statement layer diverges enough from the common skeleton (result-var
+returns, statement-level `print` rewriting, exit/cycle keywords) that it owns
+``lower_stmt``; it still reuses the shared expression dispatch in
+``_mir_lower_base`` for everything below the statement level.
 """
 
 from __future__ import annotations
@@ -14,54 +19,248 @@ from __future__ import annotations
 from transpilers.ir import lir, mir
 from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
+from ._mir_lower_base import MirLoweringBase, is_string_concat
+
 
 RESULT_VAR = "result_"  # synthesized to avoid clashing with user identifiers
 
+_CMP_OPS = {"==": ".eq.", "!=": ".ne.", "<": ".lt.", "<=": ".le.", ">": ".gt.", ">=": ".ge."}
+
+
+class _FortranLowering(MirLoweringBase):
+    prefix = "Fortran"
+    module_cls = lir.FortranModule
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._result_name = ""
+
+    def type_str(self, ty: Type) -> str:
+        return _fortran_type(ty)
+
+    # -- struct: type + free `Name_method` functions ----------------------- #
+
+    def lower_struct_items(self, s: mir.MirStruct) -> list[lir.LirNode]:
+        methods: list[lir.FortranFn] = []
+        for m in s.methods:
+            lowered = self.lower_function(m)
+            lowered.name = f"{s.name}_{lowered.name}"
+            methods.append(lowered)
+        return [
+            lir.FortranType(
+                name=s.name,
+                fields=[(f.name, _fortran_type(f.ty)) for f in s.fields],
+                methods=methods,
+            )
+        ]
+
+    # -- function: locals decl-block + result var -------------------------- #
+
+    def lower_function(self, fn: mir.MirFunction) -> lir.FortranFn:
+        params = [(p.name, _fortran_type(p.ty)) for p in fn.params]
+        ret = _fortran_type(fn.return_type) if not isinstance(fn.return_type, NoneT) else None
+
+        # Collect every local name and its type in a single MIR walk.
+        locals_map: dict[str, Type] = {}
+        _collect_locals(fn.body, locals_map, exclude={p.name for p in fn.params} | {RESULT_VAR})
+
+        result_name = RESULT_VAR if ret is not None else ""
+        self._result_name = result_name
+        body = [self.lower_stmt(n, set(), set()) for n in fn.body]
+
+        return lir.FortranFn(
+            name=fn.name,
+            params=params,
+            return_type=ret,
+            result_name=result_name,
+            locals=[(name, _fortran_type(ty)) for name, ty in locals_map.items()],
+            body=body,
+        )
+
+    # -- statements -------------------------------------------------------- #
+
+    def lower_stmt(self, node: mir.MirNode, declared: set[str], mut: set[str]):
+        result_name = self._result_name
+        if isinstance(node, mir.MirFieldAssign):
+            # Fortran field assignment: `obj%field = value` — emit as a plain
+            # FortranAssign with the path baked into `name`.
+            return lir.FortranAssign(
+                name=_emit_field_path(node.obj, node.field),
+                value=self.lower_expr(node.value),
+            )
+        if isinstance(node, mir.MirSubscriptAssign):
+            return lir.FortranSubscriptAssign(
+                obj=self.lower_expr(node.obj),
+                index=self.lower_expr(node.index),
+                value=self.lower_expr(node.value),
+            )
+        if isinstance(node, mir.MirReturn):
+            if node.value is None or not result_name:
+                return lir.FortranReturn()
+            return _ReturnAssign(result_name=result_name, value=self.lower_expr(node.value))
+        if isinstance(node, mir.MirBreak):
+            return lir.FortranExit()
+        if isinstance(node, mir.MirContinue):
+            return lir.FortranCycle()
+        if isinstance(node, mir.MirAssign):
+            if node.augmented_op is not None:
+                rhs = lir.FortranBinOp(
+                    op=node.augmented_op,
+                    left=lir.FortranName(name=node.target),
+                    right=self.lower_expr(node.value),
+                )
+                return lir.FortranAssign(name=node.target, value=rhs)
+            return lir.FortranAssign(name=node.target, value=self.lower_expr(node.value))
+        if isinstance(node, mir.MirIf):
+            return lir.FortranIf(
+                test=self.lower_expr(node.test),
+                body=[self.lower_stmt(n, declared, mut) for n in node.body],
+                orelse=[self.lower_stmt(n, declared, mut) for n in node.orelse],
+            )
+        if isinstance(node, mir.MirWhile):
+            return lir.FortranWhile(
+                test=self.lower_expr(node.test),
+                body=[self.lower_stmt(n, declared, mut) for n in node.body],
+            )
+        if isinstance(node, mir.MirForRange):
+            return lir.FortranForRange(
+                target=node.target,
+                start=self.lower_expr(node.start),
+                stop=self.lower_expr(node.stop),
+                step=self.lower_expr(node.step) if node.step else None,
+                body=[self.lower_stmt(n, declared, mut) for n in node.body],
+            )
+        if isinstance(node, mir.MirCall) and node.func == "print":
+            # Match Python's repr output for bool and float args.
+            args = [self._lower_print_arg(a) for a in node.args]
+            return lir.FortranCall(func="print", args=args)
+        return self.lower_expr(node)
+
+    def _lower_print_arg(self, node: mir.MirNode) -> lir.LirNode:
+        """Lower a print() argument, wrapping booleans and floats to match
+        Python's repr-style output."""
+        if _is_bool_type(node):
+            expr = self.lower_expr(node)
+            return lir.FortranCall(
+                func="trim",
+                args=[lir.FortranCall(
+                    func="merge",
+                    args=[
+                        lir.FortranStringLiteral(value="True "),
+                        lir.FortranStringLiteral(value="False"),
+                        expr,
+                    ],
+                )],
+            )
+        ty = getattr(node, "ty", None)
+        if isinstance(ty, FloatT):
+            return lir.FortranCall(
+                func="trim",
+                args=[lir.FortranCall(func="pyfloat", args=[self.lower_expr(node)])],
+            )
+        return self.lower_expr(node)
+
+    # -- expressions ------------------------------------------------------- #
+
+    def lower_expr_special(self, node: mir.MirNode):
+        if isinstance(node, mir.MirBinOp) and node.op == "//":
+            # Fortran `/` on integers is integer division.
+            return lir.FortranBinOp(op="/", left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+        if isinstance(node, mir.MirBinOp) and node.op == "%":
+            # Fortran modulo is an intrinsic function, not an operator.
+            return lir.FortranCall(
+                func="mod",
+                args=[self.lower_expr(node.left), self.lower_expr(node.right)],
+            )
+        return None
+
+    def lower_method_call(self, node: mir.MirMethodCall):
+        recv_ty = getattr(node.receiver, "ty", UnknownT())
+        if not isinstance(recv_ty, StructT):
+            raise NotImplementedError(f"fortran method call on receiver with type {recv_ty}")
+        return lir.FortranCall(
+            func=f"{recv_ty.name}_{node.method}",
+            args=[self.lower_expr(node.receiver)] + [self.lower_expr(a) for a in node.args],
+        )
+
+    def lower_binop(self, node: mir.MirBinOp):
+        if is_string_concat(node):
+            raise NotImplementedError(
+                "Fortran string concat requires fixed-length char buffers; not yet supported"
+            )
+        # List concatenation: `xs + [v]` → `[xs, v]`. Re-allocates per use
+        # (O(n) copy); acceptable for our algorithm corpus. Flattening both
+        # sides avoids ragged `[[a, b], c]` constructors that Fortran rejects.
+        if (
+            node.op == "+"
+            and isinstance(getattr(node.left, "ty", None), ListT)
+            and isinstance(getattr(node.right, "ty", None), ListT)
+        ):
+            return lir.FortranArrayLit(
+                elements=[*self._spread_list(node.left), *self._spread_list(node.right)]
+            )
+        return lir.FortranBinOp(op=node.op, left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+
+    def lower_compare(self, node: mir.MirCompare):
+        fortran_op = _CMP_OPS.get(node.op, node.op)
+        return lir.FortranCompare(op=fortran_op, left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+
+    def lower_boolop(self, node: mir.MirBoolOp):
+        op = ".and." if node.op == "and" else ".or."
+        return lir.FortranBoolOp(op=op, left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+
+    def lower_unary(self, node: mir.MirUnaryOp):
+        op = ".not." if node.op == "not" else "-"
+        return lir.FortranUnary(op=op, operand=self.lower_expr(node.operand))
+
+    def lower_null(self, node: mir.MirNullLiteral):
+        # Fortran has no null/None; pointers exist but cleanup requires a
+        # typed allocation strategy out of scope for this lowering.
+        raise NotImplementedError("fortran has no null literal")
+
+    def lower_subscript(self, node: mir.MirSubscript):
+        return lir.FortranSubscript(
+            value=self.lower_expr(node.value),
+            index=self.lower_expr(node.index),
+        )
+
+    def lower_list(self, node: mir.MirList):
+        elements = [self.lower_expr(e) for e in node.elements]
+        elem_ty = None
+        if not elements:
+            list_ty = getattr(node, "ty", None)
+            if isinstance(list_ty, ListT):
+                elem_ty = _fortran_type(list_ty.elem)
+        return lir.FortranArrayLit(elements=elements, elem_type=elem_ty)
+
+    def lower_call(self, node: mir.MirCall):
+        # `len(xs)` → Fortran intrinsic `size(xs)` on arrays.
+        if node.func == "len" and len(node.args) == 1:
+            return lir.FortranCall(func="size", args=[self.lower_expr(node.args[0])])
+        # `__ternary__(cond, then, else)` → `merge(then, else, cond)`.
+        # Fortran's merge takes (true_val, false_val, mask) — matches the
+        # ternary slot order with a swap.
+        if node.func == "__ternary__" and len(node.args) == 3:
+            return lir.FortranCall(
+                func="merge",
+                args=[self.lower_expr(node.args[1]), self.lower_expr(node.args[2]), self.lower_expr(node.args[0])],
+            )
+        return lir.FortranCall(func=node.func, args=[self.lower_expr(a) for a in node.args])
+
+    def _spread_list(self, node: mir.MirNode) -> list[lir.LirNode]:
+        """Flatten a literal list one level so concatenation emits a single
+        `[a, b, c]` rather than `[[a, b], c]` — Fortran rejects ragged ranks
+        in array constructors."""
+        if isinstance(node, mir.MirList):
+            return [self.lower_expr(e) for e in node.elements]
+        return [self.lower_expr(node)]
+
+
+_LOWERING = _FortranLowering()
+
 
 def mir_to_fortran_lir(module: mir.MirModule) -> lir.FortranModule:
-    items: list[lir.LirNode] = []
-    for s in module.structs:
-        items.append(_lower_struct(s))
-    for fn in module.functions:
-        items.append(_lower_function(fn))
-    return lir.FortranModule(items=items)
-
-
-def _lower_struct(s: mir.MirStruct) -> lir.FortranType:
-    """Methods are emitted as free functions in the module — Fortran needs
-    `type :: Name ... end type Name` + free `function name_method(self, ...)`."""
-    methods: list[lir.FortranFn] = []
-    for m in s.methods:
-        lowered = _lower_function(m)
-        lowered.name = f"{s.name}_{lowered.name}"
-        methods.append(lowered)
-    return lir.FortranType(
-        name=s.name,
-        fields=[(f.name, _fortran_type(f.ty)) for f in s.fields],
-        methods=methods,
-    )
-
-
-def _lower_function(fn: mir.MirFunction) -> lir.FortranFn:
-    params = [(p.name, _fortran_type(p.ty)) for p in fn.params]
-    ret = _fortran_type(fn.return_type) if not isinstance(fn.return_type, NoneT) else None
-
-    # Collect every local name and its type. We do this with a single MIR
-    # walk so we don't visit nodes twice.
-    locals_map: dict[str, Type] = {}
-    _collect_locals(fn.body, locals_map, exclude={p.name for p in fn.params} | {RESULT_VAR})
-
-    result_name = RESULT_VAR if ret is not None else ""
-    body = [_lower_stmt(n, result_name) for n in fn.body]
-
-    return lir.FortranFn(
-        name=fn.name,
-        params=params,
-        return_type=ret,
-        result_name=result_name,
-        locals=[(name, _fortran_type(ty)) for name, ty in locals_map.items()],
-        body=body,
-    )
+    return _LOWERING.lower_module(module)
 
 
 # ---------- local collection ----------
@@ -82,65 +281,6 @@ def _collect_locals(nodes: list[mir.MirNode], out: dict[str, Type], exclude: set
             _collect_locals(n.body, out, exclude)
 
 
-# ---------- statements ----------
-
-def _lower_stmt(node: mir.MirNode, result_name: str) -> lir.LirNode:
-    if isinstance(node, mir.MirFieldAssign):
-        # Fortran field assignment: `obj%field = value` — emit as a plain
-        # FortranAssign with the path baked into `name`.
-        return lir.FortranAssign(
-            name=_emit_field_path(node.obj, node.field),
-            value=_lower_expr(node.value),
-        )
-    if isinstance(node, mir.MirSubscriptAssign):
-        return lir.FortranSubscriptAssign(
-            obj=_lower_expr(node.obj),
-            index=_lower_expr(node.index),
-            value=_lower_expr(node.value),
-        )
-    if isinstance(node, mir.MirReturn):
-        if node.value is None or not result_name:
-            return lir.FortranReturn()
-        return _ReturnAssign(result_name=result_name, value=_lower_expr(node.value))
-    if isinstance(node, mir.MirBreak):
-        return lir.FortranExit()
-    if isinstance(node, mir.MirContinue):
-        return lir.FortranCycle()
-    if isinstance(node, mir.MirAssign):
-        if node.augmented_op is not None:
-            rhs = lir.FortranBinOp(
-                op=node.augmented_op,
-                left=lir.FortranName(name=node.target),
-                right=_lower_expr(node.value),
-            )
-            return lir.FortranAssign(name=node.target, value=rhs)
-        return lir.FortranAssign(name=node.target, value=_lower_expr(node.value))
-    if isinstance(node, mir.MirIf):
-        return lir.FortranIf(
-            test=_lower_expr(node.test),
-            body=[_lower_stmt(n, result_name) for n in node.body],
-            orelse=[_lower_stmt(n, result_name) for n in node.orelse],
-        )
-    if isinstance(node, mir.MirWhile):
-        return lir.FortranWhile(
-            test=_lower_expr(node.test),
-            body=[_lower_stmt(n, result_name) for n in node.body],
-        )
-    if isinstance(node, mir.MirForRange):
-        return lir.FortranForRange(
-            target=node.target,
-            start=_lower_expr(node.start),
-            stop=_lower_expr(node.stop),
-            step=_lower_expr(node.step) if node.step else None,
-            body=[_lower_stmt(n, result_name) for n in node.body],
-        )
-    if isinstance(node, mir.MirCall) and node.func == "print":
-        # Match Python's repr output for bool and float args.
-        args = [_lower_print_arg(a) for a in node.args]
-        return lir.FortranCall(func="print", args=args)
-    return _lower_expr(node)
-
-
 def _is_bool_type(node: mir.MirNode) -> bool:
     """True if this MIR expression is definitely of boolean type."""
     ty = getattr(node, "ty", None)
@@ -153,31 +293,6 @@ def _is_bool_type(node: mir.MirNode) -> bool:
     return False
 
 
-def _lower_print_arg(node: mir.MirNode) -> lir.LirNode:
-    """Lower a print() argument, wrapping booleans and floats to match
-    Python's repr-style output."""
-    if _is_bool_type(node):
-        expr = _lower_expr(node)
-        return lir.FortranCall(
-            func="trim",
-            args=[lir.FortranCall(
-                func="merge",
-                args=[
-                    lir.FortranStringLiteral(value="True "),
-                    lir.FortranStringLiteral(value="False"),
-                    expr,
-                ],
-            )],
-        )
-    ty = getattr(node, "ty", None)
-    if isinstance(ty, FloatT):
-        return lir.FortranCall(
-            func="trim",
-            args=[lir.FortranCall(func="pyfloat", args=[_lower_expr(node)])],
-        )
-    return _lower_expr(node)
-
-
 class _ReturnAssign(lir.LirNode):
     """Marker carrying `result_ = <value>; return` so the emitter renders
     both lines. Not part of the public LIR shape."""
@@ -187,107 +302,6 @@ class _ReturnAssign(lir.LirNode):
         self.value = value
 
 
-# ---------- expressions ----------
-
-def _lower_expr(node: mir.MirNode) -> lir.LirNode:
-    if isinstance(node, mir.MirBinOp) and node.op == "//":
-        # Fortran `/` on integers is integer division.
-        return lir.FortranBinOp(op="/", left=_lower_expr(node.left), right=_lower_expr(node.right))
-    if isinstance(node, mir.MirBinOp) and node.op == "%":
-        # Fortran modulo is an intrinsic function, not an operator.
-        return lir.FortranCall(
-            func="mod",
-            args=[_lower_expr(node.left), _lower_expr(node.right)],
-        )
-    if isinstance(node, mir.MirFieldAccess):
-        return lir.FortranFieldAccess(value=_lower_expr(node.value), field=node.field)
-    if isinstance(node, mir.MirMethodCall):
-        recv_ty = getattr(node.receiver, "ty", UnknownT())
-        if not isinstance(recv_ty, StructT):
-            raise NotImplementedError(
-                f"fortran method call on receiver with type {recv_ty}"
-            )
-        return lir.FortranCall(
-            func=f"{recv_ty.name}_{node.method}",
-            args=[_lower_expr(node.receiver)] + [_lower_expr(a) for a in node.args],
-        )
-    if isinstance(node, mir.MirBinOp):
-        if _is_string_concat(node):
-            raise NotImplementedError(
-                "Fortran string concat requires fixed-length char buffers; not yet supported"
-            )
-        # List concatenation: `xs + [v]` → `[xs, v]`. Re-allocates per use
-        # (O(n) copy); acceptable for our algorithm corpus. Flattening both
-        # sides avoids ragged `[[a, b], c]` constructors that Fortran rejects.
-        if (
-            node.op == "+"
-            and isinstance(getattr(node.left, "ty", None), ListT)
-            and isinstance(getattr(node.right, "ty", None), ListT)
-        ):
-            return lir.FortranArrayLit(
-                elements=[*_spread_list(node.left), *_spread_list(node.right)]
-            )
-        return lir.FortranBinOp(op=node.op, left=_lower_expr(node.left), right=_lower_expr(node.right))
-    if isinstance(node, mir.MirCompare):
-        _CMP_OPS = {"==": ".eq.", "!=": ".ne.", "<": ".lt.", "<=": ".le.", ">": ".gt.", ">=": ".ge."}
-        fortran_op = _CMP_OPS.get(node.op, node.op)
-        return lir.FortranCompare(op=fortran_op, left=_lower_expr(node.left), right=_lower_expr(node.right))
-    if isinstance(node, mir.MirBoolOp):
-        op = ".and." if node.op == "and" else ".or."
-        return lir.FortranBoolOp(op=op, left=_lower_expr(node.left), right=_lower_expr(node.right))
-    if isinstance(node, mir.MirUnaryOp):
-        op = ".not." if node.op == "not" else "-"
-        return lir.FortranUnary(op=op, operand=_lower_expr(node.operand))
-    if isinstance(node, mir.MirName):
-        return lir.FortranName(name=node.name)
-    if isinstance(node, mir.MirIntLiteral):
-        return lir.FortranIntLiteral(value=node.value)
-    if isinstance(node, mir.MirFloatLiteral):
-        return lir.FortranFloatLiteral(value=node.value)
-    if isinstance(node, mir.MirBoolLiteral):
-        return lir.FortranBoolLiteral(value=node.value)
-    if isinstance(node, mir.MirStringLiteral):
-        return lir.FortranStringLiteral(value=node.value)
-    if isinstance(node, mir.MirNullLiteral):
-        # Fortran has no null/None; pointers exist but cleanup requires
-        # a typed allocation strategy out of scope for this lowering.
-        raise NotImplementedError("fortran has no null literal")
-    if isinstance(node, mir.MirCall):
-        # `len(xs)` → Fortran intrinsic `size(xs)` on arrays.
-        if node.func == "len" and len(node.args) == 1:
-            return lir.FortranCall(func="size", args=[_lower_expr(node.args[0])])
-        # `__ternary__(cond, then, else)` → `merge(then, else, cond)`.
-        # Fortran's merge takes (true_val, false_val, mask) — matches the
-        # ternary slot order with a swap.
-        if node.func == "__ternary__" and len(node.args) == 3:
-            return lir.FortranCall(
-                func="merge",
-                args=[_lower_expr(node.args[1]), _lower_expr(node.args[2]), _lower_expr(node.args[0])],
-            )
-        return lir.FortranCall(func=node.func, args=[_lower_expr(a) for a in node.args])
-    if isinstance(node, mir.MirList):
-        elements = [_lower_expr(e) for e in node.elements]
-        elem_ty = None
-        if not elements:
-            list_ty = getattr(node, "ty", None)
-            if isinstance(list_ty, ListT):
-                elem_ty = _fortran_type(list_ty.elem)
-        return lir.FortranArrayLit(elements=elements, elem_type=elem_ty)
-    if isinstance(node, mir.MirSubscript):
-        return lir.FortranSubscript(
-            value=_lower_expr(node.value),
-            index=_lower_expr(node.index),
-        )
-    if isinstance(node, mir.MirFieldAccess):
-        return lir.FortranFieldAccess(value=_lower_expr(node.value), field=node.field)
-    if isinstance(node, mir.MirStructInit):
-        return lir.FortranStructInit(
-            name=node.name,
-            field_values=[(n, _lower_expr(v)) for n, v in node.field_values],
-        )
-    raise NotImplementedError(f"fortran MIR expr {type(node).__name__}")
-
-
 def _emit_field_path(obj: mir.MirNode, field: str) -> str:
     """Build a `obj%field` path string for assignment-LHS use."""
     if isinstance(obj, mir.MirName):
@@ -295,23 +309,6 @@ def _emit_field_path(obj: mir.MirNode, field: str) -> str:
     if isinstance(obj, mir.MirFieldAccess):
         return f"{_emit_field_path(obj.value, obj.field)}%{field}"
     raise NotImplementedError(f"fortran field-assign on {type(obj).__name__}")
-
-
-def _spread_list(node: mir.MirNode) -> list[lir.LirNode]:
-    """Flatten a literal list one level so concatenation emits a single
-    `[a, b, c]` rather than `[[a, b], c]` — Fortran rejects ragged ranks
-    in array constructors."""
-    if isinstance(node, mir.MirList):
-        return [_lower_expr(e) for e in node.elements]
-    return [_lower_expr(node)]
-
-
-def _is_string_concat(node: mir.MirBinOp) -> bool:
-    return (
-        node.op == "+"
-        and isinstance(getattr(node.left, "ty", None), StrT)
-        and isinstance(getattr(node.right, "ty", None), StrT)
-    )
 
 
 def _fortran_type(ty: Type) -> str:

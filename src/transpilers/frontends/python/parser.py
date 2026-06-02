@@ -22,8 +22,7 @@ from transpilers.ir import hir
 from transpilers.frontends._markers import FlattenBlock, PassMarker
 
 
-class UnsupportedConstruct(Exception):
-    pass
+from transpilers.frontends.errors import UnsupportedConstruct
 
 
 def parse_python(source: str) -> hir.HirModule:

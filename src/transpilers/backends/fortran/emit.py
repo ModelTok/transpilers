@@ -250,8 +250,15 @@ def _emit_fn(fn: lir.FortranFn) -> str:
     return "\n".join([head, *decl_lines, "", *body_lines, end])
 
 
+def _flatten_snippet(snippet: str) -> str:
+    """Collapse a multi-line source snippet to a single comment-safe line."""
+    return " ".join(snippet.split())
+
+
 def _emit_stmt(node: lir.LirNode, depth: int) -> list[str]:
     pad = INDENT * depth
+    if isinstance(node, lir.FortranRaw):
+        return [f"{pad}! TODO[port]: {_flatten_snippet(node.snippet)}"]
     if isinstance(node, _ReturnAssign):
         return [f"{pad}{node.result_name} = {_emit_expr(node.value)}", f"{pad}return"]
     if isinstance(node, lir.FortranExit):
@@ -341,6 +348,11 @@ def _paren(child: lir.LirNode, parent_op: str, *, on_right: bool) -> str:
 def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
+    if isinstance(node, lir.FortranRaw):
+        # No inline comments mid-expression in Fortran; preserve the snippet
+        # in a marker call argument.
+        text = _flatten_snippet(node.snippet).replace("'", "''")
+        return f"todo_port('{text}')"
     if isinstance(node, lir.FortranBinOp):
         return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.FortranCompare):

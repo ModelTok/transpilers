@@ -108,8 +108,16 @@ def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
     return "\n".join(lines)
 
 
+def _flatten_snippet(snippet: str) -> str:
+    """Collapse a multi-line source snippet to a single comment-safe line."""
+    return " ".join(snippet.split())
+
+
 def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     pad = INDENT * depth
+    if isinstance(node, lir.ZigRaw):
+        # Zig has only line comments; emit the stub as its own comment line.
+        return f"{pad}// TODO[port]: {_flatten_snippet(node.snippet)}"
     if isinstance(node, lir.ZigBreak):
         return f"{pad}break;"
     if isinstance(node, lir.ZigContinue):
@@ -188,6 +196,11 @@ def _paren(child: lir.LirNode, parent_op: str, *, on_right: bool) -> str:
 def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
+    if isinstance(node, lir.ZigRaw):
+        # No inline comment (Zig line comments would swallow the rest of the
+        # line). Preserve the snippet in a never-defined marker call.
+        text = _flatten_snippet(node.snippet).replace("\\", "\\\\").replace('"', '\\"')
+        return f'__todo_port__("{text}")'
     if isinstance(node, lir.ZigBinOp):
         return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.ZigCompare):

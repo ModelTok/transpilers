@@ -265,7 +265,9 @@ def main(argv: list[str] | None = None) -> int:
     if source_lang == "asm":
         src_input = str(args.source)
     else:
-        src_input = args.source.read_text()
+        # Legacy Fortran/C/C++ sources often carry non-UTF-8 bytes (e.g. the
+        # © in author headers, latin-1 names), so decode leniently.
+        src_input = args.source.read_text(encoding="utf-8", errors="replace")
 
     # Both LLM-augmented passes share a single client so they hit the same
     # on-disk cache. Lazy-construct so non-LLM runs never touch credentials.

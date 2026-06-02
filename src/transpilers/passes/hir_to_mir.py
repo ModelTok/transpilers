@@ -91,6 +91,8 @@ def _lower_function(fn: hir.HirFunction) -> mir.MirFunction:
 
 
 def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
+    if isinstance(node, hir.HirRaw):
+        return mir.MirRaw(snippet=node.snippet)
     if isinstance(node, hir.HirReturn):
         return mir.MirReturn(value=_lower_expr(node.value, env) if node.value else None)
     if isinstance(node, hir.HirBreak):
@@ -165,6 +167,8 @@ def _lower_for(node: hir.HirFor, env: dict[str, Type]) -> mir.MirForRange:
 
 
 def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
+    if isinstance(node, hir.HirRaw):
+        return mir.MirRaw(snippet=node.snippet)
     if isinstance(node, hir.HirBinOp):
         left = _lower_expr(node.left, env)
         right = _lower_expr(node.right, env)

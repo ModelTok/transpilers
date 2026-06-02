@@ -22,7 +22,15 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_mojo(module: lir.MojoModule) -> str:
-    return "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    body = "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    imports = getattr(module, "imports", None)
+    if imports:
+        # Entries may be bare module names (`math`) or full statements
+        # (`from math import sqrt`); emit the latter verbatim.
+        lines = [m if m.startswith(("from ", "import ")) else f"import {m}"
+                 for m in imports]
+        return "\n".join(lines) + "\n\n" + body
+    return body
 
 
 def _emit_item(item: lir.LirNode) -> str:
@@ -68,8 +76,15 @@ def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
     return "\n".join(lines)
 
 
+def _flatten_snippet(snippet: str) -> str:
+    """Collapse a multi-line source snippet to a single comment-safe line."""
+    return " ".join(snippet.split())
+
+
 def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     pad = INDENT * depth
+    if isinstance(node, lir.MojoRaw):
+        return f"{pad}pass  # TODO[port]: {_flatten_snippet(node.snippet)}"
     if isinstance(node, lir.MojoBreak):
         return f"{pad}break"
     if isinstance(node, lir.MojoContinue):
@@ -131,6 +146,11 @@ def _paren(child: lir.LirNode, parent_op: str, *, on_right: bool) -> str:
 def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
+    if isinstance(node, lir.MojoRaw):
+        # Expr position: no trailing `#` comment (would swallow the rest of an
+        # enclosing line). Encode the snippet in a never-called marker call.
+        text = _flatten_snippet(node.snippet).replace("\\", "\\\\").replace('"', '\\"')
+        return f'__todo_port__("{text}")'
     if isinstance(node, lir.MojoBinOp):
         return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.MojoCompare):

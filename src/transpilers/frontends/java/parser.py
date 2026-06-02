@@ -19,8 +19,7 @@ from transpilers.ir import hir
 from transpilers.frontends._treesitter import make_parser, named_children, required_field, text
 
 
-class UnsupportedConstruct(Exception):
-    pass
+from transpilers.frontends.errors import UnsupportedConstruct
 
 
 JAVA_TYPE_ALIASES: dict[str, str] = {
