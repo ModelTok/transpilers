@@ -20,8 +20,7 @@ from pycparser import CParser, c_ast
 from transpilers.ir import hir
 
 
-class UnsupportedConstruct(Exception):
-    pass
+from transpilers.frontends.errors import UnsupportedConstruct
 
 
 # C types that map onto the shared HIR annotation strings. The HIR->MIR pass
