@@ -165,8 +165,22 @@ uv run python scripts/transpile_matrix.py examples/samples/Python rust
   per-target `_pyprint` helpers.
 - **List subscript-assign** (`xs[i] = v`) plumbed through HIR/MIR/all
   7 LIRs, including the swap idiom `xs[i], xs[j] = xs[j], xs[i]`.
+- **`for`-each and `enumerate`** (`for x in xs`, `for i, x in enumerate(xs)`)
+  desugar in HIR→MIR to an indexed `range(len(xs))` loop with a *typed*
+  `x = xs[i]` binding — so the loop variable carries the iterable's element
+  type even on zero-inference targets (C, Rust). Lights up all 7 backends with
+  no per-backend code. Side-effecting / non-name iterables and
+  `enumerate(seq, start)` are refused rather than miscompiled.
 - **C/Java `cond ? a : b`** lowers to a target-native ternary via a
-  shared `__ternary__` builtin.
+  shared `__ternary__` builtin — and Python's `a if cond else b`
+  conditional expression lowers to the same builtin.
+- **Keyword-only params** (`def f(*, a, b)`) are flattened to ordinary
+  typed params (the call convention relaxes; the computation is identical).
+  `*args` / `**kwargs` are refused rather than silently dropped.
+- **Module-level constants** (`NAME: T = <literal>` at module scope) inline
+  into function bodies at HIR→MIR, so self-contained numeric modules
+  transpile without a const-declaration concept in the IR. Locals shadow
+  constants by name.
 - **`break` / `continue`** with Fortran rendering them as `exit` /
   `cycle`.
 - **Null literal** (`None` / `null` / `NULL` / `nil`) distinct from

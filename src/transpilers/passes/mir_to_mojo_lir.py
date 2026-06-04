@@ -41,7 +41,14 @@ _MATH_FNS = frozenset({
     "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
     "sinh", "cosh", "tanh", "ceil", "floor", "trunc",
 })
-_BUILTIN_MAP = {"fabs": "abs", "fmin": "min", "fmax": "max"}
+# Python numeric constructors map to Mojo's scalar types. `float`/`int`/`bool`
+# are not Mojo builtins (`use of unknown declaration 'float'`); `Float64(x)` /
+# `Int(x)` / `Bool(x)` are. `int(float)` truncates toward zero in both Python
+# and Mojo, so the cast semantics match.
+_BUILTIN_MAP = {
+    "fabs": "abs", "fmin": "min", "fmax": "max",
+    "float": "Float64", "int": "Int", "bool": "Bool",
+}
 
 
 class _MojoLowering(MirLoweringBase):

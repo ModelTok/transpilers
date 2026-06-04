@@ -119,11 +119,55 @@ def test_c_target_lists_emit_slice():
 
 # ---------- compile checks ----------
 
+def test_python_foreach_typed_binding_on_zero_inference_target():
+    # The desugared `for x in xs` binding must carry the iterable's element
+    # type on C — a target with no type inference. A type-blind binding would
+    # surface here (`double x = ...` is the proof it didn't).
+    out = _py(
+        """
+        def total_scaled(xs: list[float]) -> float:
+            total: float = 0.0
+            for x in xs:
+                total = total + x * 2.0
+            return total
+        """
+    )
+    assert "double x = xs.data[" in out
+
+
+def test_python_enumerate_uses_index_on_c():
+    out = _py(
+        """
+        def index_weighted(xs: list[int]) -> int:
+            acc: int = 0
+            for i, x in enumerate(xs):
+                acc = acc + x * i
+            return acc
+        """
+    )
+    assert "for (int64_t i = 0; i < (int64_t)xs.len; i++)" in out
+    assert "int64_t x = xs.data[i];" in out
+
+
 @pytest.mark.skipif(not _cc_available(), reason="no C compiler on PATH")
 @pytest.mark.parametrize(
     "py_src",
     [
         "def add(a: int, b: int) -> int:\n    return a + b\n",
+        """
+        def total_scaled(xs: list[float]) -> float:
+            total: float = 0.0
+            for x in xs:
+                total = total + x * 2.0
+            return total
+        """,
+        """
+        def index_weighted(xs: list[int]) -> int:
+            acc: int = 0
+            for i, x in enumerate(xs):
+                acc = acc + x * i
+            return acc
+        """,
         """
         def max2(a: int, b: int) -> int:
             if a > b:

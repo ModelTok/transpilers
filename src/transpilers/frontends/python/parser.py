@@ -3,7 +3,9 @@
 Subset supported:
   - function defs with annotated params and return types
   - simple statements: return, expression
-  - control flow: if/elif/else, while, for-in-range
+  - control flow: if/elif/else, while, for-in-range, for-each over a bare-name
+    collection, and `for i, x in enumerate(<name>)` (both desugar to an
+    indexed range loop in HIR->MIR)
   - assignment: plain, annotated, augmented
   - expressions: binary ops, comparisons, boolean ops, unary not/-
   - literals: int, bool, string
@@ -166,6 +168,15 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
         op = "and" if isinstance(node.operator, cst.And) else "or"
         return hir.HirBoolOp(op=op, left=_convert(node.left), right=_convert(node.right))
 
+    if isinstance(node, cst.IfExp):
+        # `<body> if <test> else <orelse>` → the shared `__ternary__` builtin
+        # (test, then, else), which every backend already lowers to its native
+        # conditional expression.
+        return hir.HirCall(
+            func="__ternary__",
+            args=[_convert(node.test), _convert(node.body), _convert(node.orelse)],
+        )
+
     if isinstance(node, cst.UnaryOperation):
         if isinstance(node.operator, cst.Not):
             op = "not"
@@ -287,7 +298,24 @@ def _tuple_assign(target: cst.Tuple, value: cst.BaseExpression) -> hir.HirNode:
 
 
 def _convert_function(fn: cst.FunctionDef) -> hir.HirFunction:
-    params = [_convert_param(p) for p in fn.params.params]
+    sig = fn.params
+    # Variadic forms can't be modelled in the typed subset — refuse loudly
+    # rather than silently drop them (the prior behaviour for keyword-only
+    # params, which produced a no-arg signature with a body using them).
+    if isinstance(sig.star_arg, cst.Param):
+        raise UnsupportedConstruct("*args variadic parameter")
+    if sig.star_kwarg is not None:
+        raise UnsupportedConstruct("**kwargs variadic parameter")
+    # Positional-only, normal, and keyword-only params all become ordinary
+    # typed params. Python's keyword-only call convention (the `*,` marker) is
+    # relaxed to positional-or-keyword; the computation is identical and every
+    # target backend renders a flat typed parameter list.
+    cst_params = [
+        *getattr(sig, "posonly_params", ()),
+        *sig.params,
+        *getattr(sig, "kwonly_params", ()),
+    ]
+    params = [_convert_param(p) for p in cst_params]
     ret = _annotation_text(fn.returns.annotation) if fn.returns else None
     body = _convert_block(fn.body)
     return hir.HirFunction(name=fn.name.value, params=params, return_annotation=ret, body=body)
@@ -333,12 +361,55 @@ def _convert_if(node: cst.If) -> hir.HirIf:
     return hir.HirIf(test=test, body=body, orelse=orelse)
 
 
-def _convert_for(node: cst.For) -> hir.HirFor:
-    if not isinstance(node.target, cst.Name):
-        raise UnsupportedConstruct(f"for target {type(node.target).__name__}")
+def _is_call_named(node: cst.BaseExpression, name: str) -> bool:
+    return (
+        isinstance(node, cst.Call)
+        and isinstance(node.func, cst.Name)
+        and node.func.value == name
+    )
+
+
+def _convert_for(node: cst.For) -> hir.HirNode:
     if node.orelse is not None:
         raise UnsupportedConstruct("for-else clause")
-    return hir.HirFor(target=node.target.value, iter=_convert(node.iter), body=_convert_block(node.body))
+    target, it = node.target, node.iter
+
+    # `for <name> in range(...)` — the original indexed-range form, untouched.
+    if isinstance(target, cst.Name) and _is_call_named(it, "range"):
+        return hir.HirFor(target=target.value, iter=_convert(it), body=_convert_block(node.body))
+
+    # `for <index>, <value> in enumerate(<name>)` — indexed iteration.
+    if isinstance(target, cst.Tuple) and _is_call_named(it, "enumerate"):
+        elts = [e.value for e in target.elements if isinstance(e, cst.Element)]
+        if len(elts) != 2 or not all(isinstance(e, cst.Name) for e in elts):
+            raise UnsupportedConstruct("enumerate target must be two names `index, value`")
+        eargs = [a.value for a in it.args]
+        if len(eargs) != 1:
+            raise UnsupportedConstruct("enumerate(seq, start) is not supported yet")
+        if not isinstance(eargs[0], cst.Name):
+            raise UnsupportedConstruct("enumerate(<expr>): only a bare-name iterable is supported")
+        return hir.HirForEach(
+            value_name=elts[1].value,
+            iterable=eargs[0].value,
+            index_name=elts[0].value,
+            body=_convert_block(node.body),
+        )
+
+    # `for <value> in <name>` — plain foreach over a bare-name collection.
+    if isinstance(target, cst.Name) and isinstance(it, cst.Name):
+        return hir.HirForEach(
+            value_name=target.value,
+            iterable=it.value,
+            index_name=None,
+            body=_convert_block(node.body),
+        )
+
+    if isinstance(target, cst.Tuple):
+        raise UnsupportedConstruct("for tuple target requires enumerate(<name>)")
+    raise UnsupportedConstruct(
+        f"for-loop over {type(it).__name__}: only range(...), a bare name, "
+        "or enumerate(<name>) are supported"
+    )
 
 
 def _annotation_text(node: cst.BaseExpression) -> str:

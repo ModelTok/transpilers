@@ -39,6 +39,11 @@ PYTHON_TYPE_MAP: dict[str, Type] = {
 _KNOWN_STRUCTS: set[str] = set()
 _STRUCT_FIELD_NAMES: dict[str, list[str]] = {}
 _STRUCT_FIELD_TYPES: dict[str, dict[str, Type]] = {}
+# Module-level constants (`NAME: T = <literal>` at module scope). A free-name
+# reference inside a function inlines the constant's value, so self-contained
+# numeric modules transpile without a module-const declaration concept in the
+# IR. Keyed name -> the HIR value expression (re-lowered per reference).
+_MODULE_CONSTS: dict[str, "hir.HirNode"] = {}
 
 
 def _default_init_for(ty: Type) -> mir.MirNode:
@@ -61,11 +66,20 @@ def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
     _KNOWN_STRUCTS.clear()
     _STRUCT_FIELD_NAMES.clear()
     _STRUCT_FIELD_TYPES.clear()
+    # Reset per-module so synthesised foreach index names are deterministic:
+    # a given module always lowers to byte-identical output regardless of how
+    # many modules were processed earlier in the same process.
+    global _FOREACH_INDEX_COUNTER
+    _FOREACH_INDEX_COUNTER = 0
+    _MODULE_CONSTS.clear()
     # First pass: register struct names so methods and fields can reference
-    # them in their annotations.
+    # them in their annotations, and collect module-level constants so function
+    # bodies can inline free-name references to them.
     for node in module.body:
         if isinstance(node, hir.HirStruct):
             _KNOWN_STRUCTS.add(node.name)
+        elif isinstance(node, hir.HirAssign) and node.augmented_op is None:
+            _MODULE_CONSTS[node.target] = node.value
     for node in module.body:
         if isinstance(node, hir.HirFunction):
             functions.append(_lower_function(node))
@@ -144,6 +158,8 @@ def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         )
     if isinstance(node, hir.HirFor):
         return _lower_for(node, env)
+    if isinstance(node, hir.HirForEach):
+        return _lower_foreach(node, env)
     # Bare expression statement (rare in our subset, but legal): wrap as no-op-ish.
     return _lower_expr(node, env)
 
@@ -166,6 +182,60 @@ def _lower_for(node: hir.HirFor, env: dict[str, Type]) -> mir.MirForRange:
     return mir.MirForRange(target=node.target, start=start, stop=stop, step=step, body=body)
 
 
+# Monotonic counter for synthesised plain-foreach index names. A plain index is
+# named uniquely so nested foreach loops can't shadow each other.
+_FOREACH_INDEX_COUNTER = 0
+
+
+def _lower_foreach(node: hir.HirForEach, env: dict[str, Type]) -> mir.MirForRange:
+    """Desugar `for v in seq` / `for i, v in enumerate(seq)` to an indexed
+    `range(len(seq))` loop with a typed `v = seq[i]` binding at the body head.
+
+    The binding's type is the iterable's element type resolved from `env`, so it
+    is typed by construction — every backend (not just type-inferring ones)
+    sees a concrete element type when the iterable's element type is known.
+    """
+    global _FOREACH_INDEX_COUNTER
+    seq_ty = env.get(node.iterable, UnknownT(hint=f"name {node.iterable}"))
+    elem_ty: Type = (
+        seq_ty.elem
+        if isinstance(seq_ty, ListT)
+        else UnknownT(hint=f"foreach over non-list {node.iterable}")
+    )
+
+    if node.index_name is not None:
+        index_name = node.index_name
+    else:
+        index_name = f"__xpile_idx_{_FOREACH_INDEX_COUNTER}"
+        _FOREACH_INDEX_COUNTER += 1
+    env[index_name] = IntT()
+
+    # `value = seq[index]` — typed binding synthesised at the body head.
+    binding = mir.MirAssign(
+        target=node.value_name,
+        value=mir.MirSubscript(
+            value=mir.MirName(name=node.iterable, ty=seq_ty),
+            index=mir.MirName(name=index_name, ty=IntT()),
+            ty=elem_ty,
+        ),
+        ty=elem_ty,
+        augmented_op=None,
+    )
+    env[node.value_name] = elem_ty
+    body = [binding, *(_lower_stmt(n, env) for n in node.body)]
+
+    stop = mir.MirCall(
+        func="len", args=[mir.MirName(name=node.iterable, ty=seq_ty)], ty=IntT()
+    )
+    return mir.MirForRange(
+        target=index_name,
+        start=mir.MirIntLiteral(value=0, ty=IntT()),
+        stop=stop,
+        step=None,
+        body=body,
+    )
+
+
 def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
     if isinstance(node, hir.HirRaw):
         return mir.MirRaw(snippet=node.snippet)
@@ -186,6 +256,11 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         ty = BoolT() if node.op == "not" else _type_of(operand)
         return mir.MirUnaryOp(op=node.op, operand=operand, ty=ty)
     if isinstance(node, hir.HirName):
+        # A free name (not a local/param) that matches a module-level constant
+        # inlines that constant's value — re-lowered here so it carries its
+        # literal type. Locals/params shadow constants (checked via `env`).
+        if node.name not in env and node.name in _MODULE_CONSTS:
+            return _lower_expr(_MODULE_CONSTS[node.name], env)
         return mir.MirName(name=node.name, ty=env.get(node.name, UnknownT(hint=f"name {node.name}")))
     if isinstance(node, hir.HirIntLiteral):
         return mir.MirIntLiteral(value=node.value, ty=IntT())
@@ -239,6 +314,20 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
     raise NotImplementedError(f"HIR expr {type(node).__name__}")
 
 
+def _numeric_result_ty(arg_tys: list[Type]) -> Type:
+    """Result type of a type-preserving numeric builtin (abs/min/max). Float
+    dominates int; an all-int set stays int; otherwise preserve the first known
+    numeric arg, falling back to a hole."""
+    if any(isinstance(t, FloatT) for t in arg_tys):
+        return FloatT()
+    if arg_tys and all(isinstance(t, IntT) for t in arg_tys):
+        return IntT()
+    for t in arg_tys:
+        if isinstance(t, (IntT, FloatT)):
+            return t
+    return UnknownT(hint="numeric builtin result")
+
+
 def _lower_call(node: hir.HirCall, env: dict[str, Type]) -> mir.MirNode:
     args = [_lower_expr(a, env) for a in node.args]
     if node.func == "len":
@@ -249,7 +338,21 @@ def _lower_call(node: hir.HirCall, env: dict[str, Type]) -> mir.MirNode:
     # type so call results flow through inference rather than blocking on
     # UnknownT. Heuristic, not exhaustive; the stdlib_maps/ tables are the
     # long-term home for richer mappings.
-    if node.func in ("int", "abs", "min", "max", "sum", "ord", "id", "hash"):
+    if node.func in ("abs", "min", "max"):
+        # Type-preserving: abs(float)->float, max(float, float)->float. A single
+        # list arg (min([...])/max([...])) yields its element type.
+        tys = [_type_of(a) for a in args]
+        if node.func in ("min", "max") and len(tys) == 1 and isinstance(tys[0], ListT):
+            ty: Type = tys[0].elem
+        else:
+            ty = _numeric_result_ty(tys)
+        return mir.MirCall(func=node.func, args=args, ty=ty)
+    if node.func == "sum":
+        # sum of a list -> the list's element type (sum([floats]) is float).
+        t0 = _type_of(args[0]) if args else IntT()
+        ty = t0.elem if isinstance(t0, ListT) else IntT()
+        return mir.MirCall(func="sum", args=args, ty=ty)
+    if node.func in ("int", "ord", "id", "hash"):
         return mir.MirCall(func=node.func, args=args, ty=IntT())
     if node.func in ("float", "round"):
         return mir.MirCall(func=node.func, args=args, ty=FloatT())

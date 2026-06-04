@@ -145,6 +145,22 @@ class HirFor(HirNode):
 
 
 @dataclass
+class HirForEach(HirNode):
+    """`for <value> in <name>:` or `for <index>, <value> in enumerate(<name>):`.
+
+    The iterable is restricted to a bare name (`iterable`) so HIR->MIR can
+    desugar it to an indexed `range(len(name))` loop without re-evaluating a
+    side-effecting expression. `index_name` is set for the enumerate form and
+    `None` for plain foreach (HIR->MIR synthesises a fresh index there).
+    """
+
+    value_name: str
+    iterable: str
+    index_name: str | None
+    body: list[HirNode]
+
+
+@dataclass
 class HirCall(HirNode):
     func: str
     args: list[HirNode]
