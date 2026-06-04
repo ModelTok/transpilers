@@ -18,10 +18,27 @@ PREAMBLE = (
     "#include <stddef.h>\n"
     "#include <string.h>\n"
     "\n"
-    "/* Slice types — Python `list[T]` lowers to one of these. */\n"
-    "typedef struct { int64_t *data; size_t len; } slice_i64_t;\n"
-    "typedef struct { double *data; size_t len; } slice_f64_t;\n"
-    "typedef struct { bool *data; size_t len; } slice_bool_t;\n"
+    "/* Growable list types — Python `list[T]` lowers to one of these.\n"
+    " * `data` is heap-owned once grown; a `{0}` (empty) list grows via\n"
+    " * realloc on push, so `xs = xs + [e]` works without a fixed bound. */\n"
+    "typedef struct { int64_t *data; size_t len; size_t cap; } slice_i64_t;\n"
+    "typedef struct { double *data; size_t len; size_t cap; } slice_f64_t;\n"
+    "typedef struct { bool *data; size_t len; size_t cap; } slice_bool_t;\n"
+    "static void slice_i64_push(slice_i64_t *v, int64_t x) {\n"
+    "    if (v->len == v->cap) { v->cap = v->cap ? v->cap * 2 : 4;\n"
+    "        v->data = (int64_t*)realloc(v->data, v->cap * sizeof(int64_t)); }\n"
+    "    v->data[v->len++] = x;\n"
+    "}\n"
+    "static void slice_f64_push(slice_f64_t *v, double x) {\n"
+    "    if (v->len == v->cap) { v->cap = v->cap ? v->cap * 2 : 4;\n"
+    "        v->data = (double*)realloc(v->data, v->cap * sizeof(double)); }\n"
+    "    v->data[v->len++] = x;\n"
+    "}\n"
+    "static void slice_bool_push(slice_bool_t *v, bool x) {\n"
+    "    if (v->len == v->cap) { v->cap = v->cap ? v->cap * 2 : 4;\n"
+    "        v->data = (bool*)realloc(v->data, v->cap * sizeof(bool)); }\n"
+    "    v->data[v->len++] = x;\n"
+    "}\n"
     "\n"
     "/* Python-compatible float printer: shortest round-trip representation.\n"
     " * Writes into a caller-supplied buffer (at least 32 bytes). Returns buf. */\n"
@@ -122,6 +139,25 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     if isinstance(node, lir.CDecl):
         return f"{pad}{node.ty} {node.name} = {_emit_expr(node.value)};"
     if isinstance(node, lir.CReassign):
+        # Python `xs = xs + [e0, e1, ...]` is list growth, not arithmetic.
+        # Lower it to element-wise push() onto the realloc-backed slice — a
+        # struct `+=` is invalid C and the old emission produced exactly that.
+        from transpilers.passes.mir_to_c_lir import _CSliceLiteral
+        val = node.value
+        if (
+            isinstance(val, lir.CBinOp)
+            and val.op == "+"
+            and isinstance(val.left, lir.CName)
+            and val.left.name == node.name
+            and isinstance(val.right, _CSliceLiteral)
+        ):
+            push_fn = val.right.slice_ty.removesuffix("_t") + "_push"
+            if not val.right.elements:
+                return f"{pad};"
+            return "\n".join(
+                f"{pad}{push_fn}(&{node.name}, {_emit_expr(e)});"
+                for e in val.right.elements
+            )
         aug = _augmented_form(node.name, node.value)
         if aug is not None:
             op, rhs = aug
@@ -206,6 +242,11 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         return f"{_emit_expr(node.value)}.data[{_emit_expr(node.index)}]"
     from transpilers.passes.mir_to_c_lir import _CSliceLiteral, _CPyFloat
     if isinstance(node, _CSliceLiteral):
+        # Empty list → zeroed growable slice (data=NULL, len=cap=0) so a
+        # later push() reallocs from scratch. Non-empty literals keep their
+        # inline backing array (read-only / fixed use).
+        if not node.elements:
+            return f"({node.slice_ty}){{0}}"
         elems = ", ".join(_emit_expr(e) for e in node.elements)
         return f"(({node.slice_ty}){{({node.elem_ty}[]){{{elems}}}, {len(node.elements)}}})"
     if isinstance(node, _CPyFloat):
