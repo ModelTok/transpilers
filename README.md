@@ -35,12 +35,13 @@ On the curated `examples/algorithms/` corpus (18 Python files):
 | Mojo   | 18 / 18 |
 | Python | 18 / 18 |
 | Fortran| 18 / 18 |
-| C      | 17 / 18 |
+| C      | 18 / 18 |
 | Zig    | 17 / 18 |
 
-Two remaining gaps (sieve.py on Zig + C) need dynamic-array growth
-support (ArrayList in Zig, realloc in C); float-precision rounding
-caused one Zig newton_sqrt diff.
+One remaining gap (sieve.py on Zig) needs dynamic-array growth support
+(ArrayList in Zig). The C target now ships realloc-backed growable slices,
+closing `sieve.py` on C. A float-precision rounding diff remains on Zig
+newton_sqrt.
 
 ### Real-world corpus (transpile-only, → Rust)
 
@@ -183,9 +184,9 @@ uv run python scripts/transpile_matrix.py examples/samples/Python rust
 Tracked in [GitHub Issues](https://github.com/Tokarzewski/transpilers/issues).
 Highlights:
 
-- Dynamic array growth (ArrayList in Zig, realloc in C, allocatable
-  growth in Fortran) — would close `sieve.py` on the three remaining
-  targets.
+- Dynamic array growth — done for C (realloc-backed growable slices,
+  `sieve.py` passes). Still pending: ArrayList in Zig and allocatable
+  growth in Fortran to close `sieve.py` on those targets too.
 - `OptionT` / `RefT` in the type lattice — currently null literals
   collapse to bare sentinels that may or may not type-check
   downstream.
