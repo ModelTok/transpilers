@@ -317,6 +317,33 @@ def _convert_constructor(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunct
     )
 
 
+# C++ operator token → Python/Mojo dunder method name. Used to rename member
+# `operator+` etc. into the dunder the backends already emit as methods.
+# Note: `operator+` / `operator-` are spelling-identical for unary and binary
+# forms; we map to the binary dunder (the common case for member arithmetic).
+_OPERATOR_DUNDERS: dict[str, str] = {
+    "+": "__add__", "-": "__sub__", "*": "__mul__", "/": "__truediv__",
+    "%": "__mod__",
+    "==": "__eq__", "!=": "__ne__",
+    "<": "__lt__", ">": "__gt__", "<=": "__le__", ">=": "__ge__",
+    "&": "__and__", "|": "__or__", "^": "__xor__",
+    "<<": "__lshift__", ">>": "__rshift__",
+    "[]": "__getitem__",
+}
+
+
+def _method_name(cursor: ci.Cursor) -> str:
+    """Map an operator-overload member to its dunder; otherwise the spelling.
+    `operator+` → `__add__`, `operator==` → `__eq__`, etc. An operator token
+    we don't recognize keeps the raw spelling (no refusal — same as before)."""
+    spelling = cursor.spelling
+    if spelling.startswith("operator"):
+        token = spelling[len("operator"):].strip()
+        if token in _OPERATOR_DUNDERS:
+            return _OPERATOR_DUNDERS[token]
+    return spelling
+
+
 def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
     params: list[hir.HirParam] = [hir.HirParam(name="self", annotation=struct_name)]
     body: list[hir.HirNode] = []
@@ -326,7 +353,7 @@ def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
         elif c.kind == CursorKind.COMPOUND_STMT:
             body = _convert_compound(c)
     return hir.HirFunction(
-        name=cursor.spelling,
+        name=_method_name(cursor),
         params=params,
         return_annotation=_type_text(cursor.result_type),
         body=body,
@@ -481,6 +508,13 @@ def _convert_var_decl(cursor: ci.Cursor) -> hir.HirNode:
             init = hir.HirStructInit(name=annotation, args=args)
         return hir.HirAssign(target=cursor.spelling, value=init, annotation=annotation)
     init = _convert_expr(kids[-1]) if kids else hir.HirIntLiteral(value=0)
+    # `auto x = expr;` — drop the (deduced) annotation so the IR's own type
+    # inference (hir_to_mir / infer_types) recovers x's type from the RHS,
+    # rather than baking in clang's deduction. The struct branch above already
+    # handled `auto p = Point(...)` via the deduced name, so by here `auto`
+    # only covers scalar/expression initializers.
+    if cursor.type.kind == ci.TypeKind.AUTO:
+        annotation = None
     return hir.HirAssign(target=cursor.spelling, value=init, annotation=annotation)
 
 _KNOWN_STRUCT_NAMES: set[str] = set()

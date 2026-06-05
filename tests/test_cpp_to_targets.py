@@ -148,6 +148,45 @@ def test_cpp_long_collapses_to_int():
     assert "fn sum(a: i64, b: i64) -> i64" in out
 
 
+def test_cpp_operator_overloads_become_dunders():
+    # Member `operator+` / `operator==` / `operator<` rename to the matching
+    # Python/Mojo dunder; the backends already emit these as ordinary methods.
+    src = """
+        struct Vec {
+            int x;
+            int y;
+            Vec(int a, int b) : x(a), y(b) {}
+            Vec operator+(Vec o) const { return Vec(x + o.x, y + o.y); }
+            bool operator==(Vec o) const { return x == o.x && y == o.y; }
+            bool operator<(Vec o) const { return x < o.x; }
+        };
+    """
+    out = _mojo(src)
+    assert "def __add__(self, o: Vec) -> Vec:" in out
+    assert "def __eq__(self, o: Vec) -> Bool:" in out
+    assert "def __lt__(self, o: Vec) -> Bool:" in out
+    # same rename flows to other targets from one HIR
+    rust = _rust(src)
+    assert "fn __add__(&self, o: Vec) -> Vec" in rust
+
+
+def test_cpp_auto_var_type_inferred():
+    # `auto x = expr;` carries no forced annotation, so the IR's own type
+    # inference recovers x's type from the RHS: int from int+int, float from
+    # the float mix.
+    out = _mojo(
+        """
+        int compute(int a, int b) {
+            auto s = a + b;
+            auto f = a + 1.5;
+            return s;
+        }
+        """
+    )
+    assert "var s: Int = a + b" in out
+    assert "var f: Float64 = a + 1.5" in out
+
+
 # ---------- C++ → Mojo compile checks ----------
 
 @pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
