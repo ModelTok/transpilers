@@ -175,18 +175,36 @@ def transpile_cpp_to_c(source: str, *, llm_fill=None) -> str:
     return transpile(source, source_lang="cpp", target="c", llm_fill=llm_fill)
 
 
-def transpile_cpp_to_python_to_mojo(source: str, *, llm_fill=None, ir_hints=None) -> tuple[str, str]:
-    """Two-stage: C++ → Python (stage 1), Python → Mojo (stage 2).
+def transpile_cpp_via_python(
+    source: str,
+    target: str,
+    *,
+    llm_fill=None,
+    ir_hints=None,
+) -> tuple[str, str]:
+    """Python-as-pivot: C++ → Python (stage 1), Python → <target> (stage 2).
 
-    Returns (python_intermediate, mojo_output).
+    Returns (python_pivot, final_output) for any supported target (mojo, rust,
+    c, zig, go, fortran, python).
 
-    The Python code produced in stage 1 acts as a pivot IR — an explicit,
-    readable intermediate that can be inspected or edited before the second
-    stage converts it to Mojo.
+    Routing through Python as a shared IR — the "Python-as-pivot" path
+    validated by the CodePivot paper (arXiv:2604.18027) — replaces N×M direct
+    language pairs with N + M stages. The Python produced in stage 1 is an
+    explicit, readable intermediate that can be inspected or edited before the
+    second stage converts it to the final target.
+
+    ``ir_hints`` (LLVM-IR-derived type hints) only apply to stage 1, since they
+    are extracted from the original C/C++ source.
     """
     python_code = transpile(source, source_lang="cpp", target="python", llm_fill=llm_fill, ir_hints=ir_hints)
-    mojo_code = transpile(python_code, source_lang="python", target="mojo", llm_fill=llm_fill)
-    return python_code, mojo_code
+    final_code = transpile(python_code, source_lang="python", target=target, llm_fill=llm_fill)
+    return python_code, final_code
+
+
+def transpile_cpp_to_python_to_mojo(source: str, *, llm_fill=None, ir_hints=None) -> tuple[str, str]:
+    """Two-stage C++ → Python → Mojo. Thin wrapper over the general pivot,
+    kept for backward compatibility. Returns (python_intermediate, mojo_output)."""
+    return transpile_cpp_via_python(source, "mojo", llm_fill=llm_fill, ir_hints=ir_hints)
 
 
 # Convenience wrappers for the new frontends. Targets are picked at the call
@@ -237,7 +255,8 @@ def main(argv: list[str] | None = None) -> int:
         default="direct",
         help=(
             "Translation path: 'direct' (default) performs a single-pass translation; "
-            "'python_pivot' routes C++ → Python → Mojo (requires --target mojo)."
+            "'python_pivot' routes C++ → Python → <target> via Python as a shared IR "
+            "(works with any target; requires a C++ source)."
         ),
     )
     parser.add_argument(
@@ -281,15 +300,9 @@ def main(argv: list[str] | None = None) -> int:
         ir_hints = extract_ir_types(args.source)
 
     # ------------------------------------------------------------------
-    # Two-stage python_pivot path: C++ → Python → Mojo
+    # Two-stage python_pivot path: C++ → Python → <target>
     # ------------------------------------------------------------------
     if args.path == "python_pivot":
-        if args.target != "mojo":
-            print(
-                "--path python_pivot requires --target mojo",
-                file=sys.stderr,
-            )
-            return 2
         if source_lang != "cpp":
             print(
                 "--path python_pivot requires a C++ source file",
@@ -297,7 +310,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
 
-        python_ir, out = transpile_cpp_to_python_to_mojo(src_input, llm_fill=llm_fill, ir_hints=ir_hints)
+        python_ir, out = transpile_cpp_via_python(
+            src_input, args.target, llm_fill=llm_fill, ir_hints=ir_hints
+        )
 
         if args.verbose:
             sys.stderr.write("--- Python intermediate ---\n")
@@ -307,10 +322,10 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(out)
 
         if args.verify:
-            _, _, verify_fn = TARGETS["mojo"]
+            _, _, verify_fn = TARGETS[args.target]
             result = verify_fn(out)
             if not result.ok:
-                sys.stderr.write("\n--- mojo compiler rejected emitted code ---\n")
+                sys.stderr.write(f"\n--- {args.target} compiler rejected emitted code ---\n")
                 sys.stderr.write(result.stderr)
                 return 1
             sys.stderr.write("\n[verify] ok\n")
