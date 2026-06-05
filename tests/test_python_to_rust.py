@@ -180,6 +180,32 @@ def test_iterate_list_by_index():
     assert "xs[(i) as usize]" in out
 
 
+# ---------- builtins ----------
+
+def test_sum_lowers_to_iter_sum():
+    src = """
+    def total(xs: list[int]) -> int:
+        return sum(xs)
+    """
+    out = _t(src)
+    # `sum(xs)` → `xs.iter().sum()`. No cast: an `as i64` would truncate an
+    # f64 list; the output type is resolved by the return/let context.
+    assert "xs.iter().sum()" in out
+    assert "as i64" not in out
+
+
+def test_sum_preserves_float_element_type():
+    """The element type flows through `.sum()` — a float list must not be
+    silently coerced to an integer."""
+    src = """
+    def total(xs: list[float]) -> float:
+        s: float = sum(xs)
+        return s
+    """
+    out = _t(src)
+    assert "let s: f64 = xs.iter().sum();" in out
+
+
 # ---------- compile checks: every construct produces real Rust ----------
 
 @pytest.mark.parametrize(
@@ -224,6 +250,16 @@ def test_iterate_list_by_index():
         """
         def in_range(x: int, lo: int, hi: int) -> bool:
             return x >= lo and x <= hi
+        """,
+        # sum builtin over an int list
+        """
+        def total(xs: list[int]) -> int:
+            return sum(xs)
+        """,
+        # sum builtin over a float list (type must flow through)
+        """
+        def ftotal(xs: list[float]) -> float:
+            return sum(xs)
         """,
     ],
 )
