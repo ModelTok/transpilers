@@ -142,6 +142,14 @@ class _RustLowering(MirLoweringBase):
                 rendered_args.append(refined)
             template = " ".join(tokens)
             return lir.RustMacro(name="println", template=template, args=rendered_args)
+        if node.func == "sum" and len(args) == 1:
+            # `sum(xs)` → `xs.iter().sum()`. No cast: the element type flows
+            # through, so `.sum()`'s output is inferred from the iterator
+            # (an `as i64` here would silently truncate an f64 list). The
+            # result type is resolved by the surrounding context (a typed
+            # `let`/return), matching how Rust infers `.sum()`.
+            iter_chain = lir.RustMethodChain(receiver=args[0], method="iter", args=[])
+            return lir.RustMethodChain(receiver=iter_chain, method="sum", args=[])
         if node.func == "abs" and len(args) == 1:
             return lir.RustMethodChain(receiver=args[0], method="abs", args=[])
         if node.func == "min" and len(args) == 2:
