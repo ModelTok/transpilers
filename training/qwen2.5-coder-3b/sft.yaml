@@ -1,0 +1,45 @@
+# LLaMA-Factory SFT config — Qwen2.5-Coder-3B-Instruct, Python-as-IR transpilation.
+# Adapts the CodePivot/CodeNexus recipe to the 3B dense base.
+#
+# Switch `finetuning_type` to `lora` (and drop `deepspeed`) for a single-GPU run.
+
+### model
+model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: full                       # full FT of 3B fits 1-2x 80GB w/ ZeRO-3; use `lora` for 1x 24GB
+deepspeed: examples/deepspeed/ds_z3_config.json   # ships with LLaMA-Factory
+
+### dataset
+# Register sft_data.json (alpaca format: {instruction, input, output}) in
+# LLaMA-Factory's data/dataset_info.json under the name below. See RUNBOOK.md.
+dataset: transpilation_sft
+template: qwen
+cutoff_len: 16384
+max_samples: 25000
+overwrite_cache: true
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+
+### output
+output_dir: saves/Qwen2.5-Coder-3B-Instruct/full/transpilation-sft
+logging_steps: 10
+save_steps: 500
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: false
+report_to: wandb                            # or: none / tensorboard
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 1.0e-5
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+ddp_timeout: 180000000
+resume_from_checkpoint: null

@@ -43,8 +43,11 @@ class TypedHole(Generic[T]):
 
 
 class LlmClient:
-    def __init__(self, model: str = DEFAULT_MODEL, cache_dir: Path = DEFAULT_CACHE_DIR) -> None:
-        self.model = model
+    def __init__(self, model: str | None = None, cache_dir: Path = DEFAULT_CACHE_DIR) -> None:
+        # Model resolves from (explicit arg) > TRANSPILER_LLM_MODEL env > default.
+        # For a self-hosted vLLM server this is the served name, e.g.
+        # "Qwen2.5-Coder-3B-Instruct".
+        self.model = model or os.environ.get("TRANSPILER_LLM_MODEL", DEFAULT_MODEL)
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -77,10 +80,45 @@ class LlmClient:
         (self.cache_dir / f"{key}.txt").write_text(value)
 
     def _call(self, prompt: str, temperature: float) -> str:
+        # Backend select: TRANSPILER_LLM_BACKEND=openai|anthropic, else inferred
+        # (openai when OPENAI_BASE_URL is set, otherwise anthropic). This lets a
+        # self-hosted model (e.g. Qwen2.5-Coder-3B via vLLM) serve the holes
+        # instead of a hosted API, at on-prem cost.
+        backend = os.environ.get("TRANSPILER_LLM_BACKEND", "").lower()
+        if not backend:
+            backend = "openai" if os.environ.get("OPENAI_BASE_URL") else "anthropic"
+        if backend == "openai":
+            return self._call_openai(prompt, temperature)
+        return self._call_anthropic(prompt, temperature)
+
+    def _call_openai(self, prompt: str, temperature: float) -> str:
+        """OpenAI-compatible chat endpoint — works with a self-hosted vLLM
+        server (`vllm serve <model>`), HF TGI, or the OpenAI API. Configure with
+        OPENAI_BASE_URL (e.g. ``http://<host>:8000/v1``) and OPENAI_API_KEY
+        (vLLM accepts any token — use ``EMPTY`` if the server is unsecured)."""
+        base_url = os.environ.get("OPENAI_BASE_URL")
+        if not base_url:
+            raise RuntimeError(
+                "OpenAI-compatible LLM backend selected but OPENAI_BASE_URL is not set "
+                "(e.g. http://<host>:8000/v1 for a vLLM server)."
+            )
+        from openai import OpenAI
+
+        client = OpenAI(base_url=base_url, api_key=os.environ.get("OPENAI_API_KEY", "EMPTY"))
+        resp = client.chat.completions.create(
+            model=self.model,
+            max_tokens=1024,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.choices[0].message.content or ""
+
+    def _call_anthropic(self, prompt: str, temperature: float) -> str:
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise RuntimeError(
-                "LLM hole reached and ANTHROPIC_API_KEY not set. "
-                "Either annotate the source to keep the pipeline algorithmic, or set the key."
+                "LLM hole reached and ANTHROPIC_API_KEY not set. Either annotate the source "
+                "to keep the pipeline algorithmic, set the key, or point at a self-hosted model "
+                "via TRANSPILER_LLM_BACKEND=openai + OPENAI_BASE_URL."
             )
         from anthropic import Anthropic
 
