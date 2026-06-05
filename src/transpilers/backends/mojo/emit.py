@@ -43,8 +43,12 @@ def _emit_item(item: lir.LirNode) -> str:
 
 def _emit_struct(s: lir.MojoStruct) -> str:
     """`@fieldwise_init` + `Copyable, Movable` conformance gives the struct
-    a usable constructor and value semantics in current Mojo."""
-    lines = ["@fieldwise_init", f"struct {s.name}(Copyable, Movable):"]
+    a usable constructor and value semantics in current Mojo. An explicit
+    `__init__` (from a C++ constructor) replaces the synthesized fieldwise
+    one, so `@fieldwise_init` is dropped to avoid a duplicate constructor."""
+    has_explicit_init = any(m.name == "__init__" for m in s.methods)
+    lines = [] if has_explicit_init else ["@fieldwise_init"]
+    lines.append(f"struct {s.name}(Copyable, Movable):")
     if not s.fields and not s.methods:
         lines.append(INDENT + "pass")
         return "\n".join(lines)
@@ -58,7 +62,11 @@ def _emit_struct(s: lir.MojoStruct) -> str:
 
 def _emit_fn(fn: lir.MojoFn, *, depth: int = 0) -> str:
     indent = INDENT * depth
-    params = ", ".join(_emit_param(n, t) for n, t in fn.params)
+    # `__init__` takes `out self` (uninitialized output) rather than a borrow.
+    params = ", ".join(
+        ("out self" if (n == "self" and fn.name == "__init__") else _emit_param(n, t))
+        for n, t in fn.params
+    )
     ret = f" -> {fn.return_type}" if fn.return_type != "None" else ""
     header = f"{indent}def {fn.name}({params}){ret}:"
     body = _emit_block(fn.body, depth + 1) or (indent + INDENT + "pass")

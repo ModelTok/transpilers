@@ -52,6 +52,71 @@ def test_cpp_to_mojo_shape():
     assert "return a + b" in out
 
 
+def test_cpp_enum_inlines_to_int_constants():
+    # `enum {...}` was previously refused (top-level ENUM_DECL). Each
+    # enumerator now becomes a module-level int constant that inlines at use
+    # sites, so the construct flows through to every backend.
+    src = """
+        enum SurfaceClass { Wall = 0, Floor = 1, Roof = 2 };
+
+        int classify(int x) {
+            if (x == Wall) return 100;
+            if (x == Roof) return 300;
+            return 0;
+        }
+    """
+    out = _mojo(src)
+    assert "def classify(x: Int) -> Int:" in out
+    assert "if x == 0:" in out      # Wall -> 0, inlined
+    assert "if x == 2:" in out      # Roof -> 2, inlined
+    # same C++ enum flows to other targets from one HIR
+    assert "fn classify(x: i64) -> i64" in _rust(src)
+
+
+def test_cpp_namespace_flattens_to_module_scope():
+    # `namespace foo { ... }` members used to be skipped wholesale; they now
+    # flatten to module scope and emit.
+    out = _mojo(
+        """
+        namespace hb {
+        int classify(int x) { return x + 1; }
+        }
+        """
+    )
+    assert "def classify(x: Int) -> Int:" in out
+
+
+def test_cpp_typedef_and_using_resolve():
+    out = _mojo(
+        """
+        typedef double Real64;
+        using Int32 = int;
+        Real64 add(Real64 a, Real64 b) { return a + b; }
+        Int32 doubled(Int32 n) { return n * 2; }
+        """
+    )
+    assert "def add(a: Float64, b: Float64) -> Float64:" in out
+    assert "def doubled(n: Int) -> Int:" in out
+
+
+def test_cpp_constructor_to_init():
+    out = _mojo(
+        """
+        struct Vec2 {
+            double x;
+            double y;
+            Vec2(double a, double b) : x(a), y(b) {}
+            double norm2() const { return x*x + y*y; }
+        };
+        """
+    )
+    assert "def __init__(out self, a: Float64, b: Float64):" in out
+    assert "self.x = a" in out
+    assert "self.y = b" in out
+    # explicit constructor replaces the synthesized fieldwise one
+    assert "@fieldwise_init" not in out
+
+
 def test_cpp_bool_handled():
     out = _rust("bool is_positive(int x) { return x > 0; }")
     assert "fn is_positive(x: i64) -> bool" in out

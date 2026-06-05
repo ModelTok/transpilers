@@ -165,43 +165,91 @@ def parse_cpp(source: str) -> hir.HirModule:
     )
     _check_diagnostics(tu)
     _KNOWN_STRUCT_NAMES.clear()
-    # First pass: record struct/class names so VAR_DECLs later resolve to
-    # HirStructInit instead of integer-default HirAssign.
-    for c in tu.cursor.get_children():
-        if _from_input(c) and c.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
-            _KNOWN_STRUCT_NAMES.add(c.spelling)
+    # First pass: record struct/class names (recursing into namespaces) so
+    # VAR_DECLs later resolve to HirStructInit instead of integer-default.
+    _register_struct_names(tu.cursor.get_children())
     body: list[hir.HirNode] = []
     for c in tu.cursor.get_children():
+        _convert_top_level(c, body)
+    return hir.HirModule(source_lang="cpp", body=body)
+
+
+def _register_struct_names(cursors) -> None:
+    for c in cursors:
         if not _from_input(c):
             continue
-        if c.kind == CursorKind.FUNCTION_DECL and c.is_definition():
-            body.append(_convert_function(c))
-            continue
-        if c.kind == CursorKind.CLASS_DECL or c.kind == CursorKind.STRUCT_DECL:
-            body.append(_convert_class(c))
-            continue
-        if c.kind in (CursorKind.FUNCTION_DECL,):
-            continue
-        if c.kind == CursorKind.VAR_DECL:
-            # Top-level globals (e.g. `const double KELVIN = 273.15`).
-            # Translate to module-level assignments so functions can reference them.
-            try:
-                body.append(_convert_var_decl(c))
-            except UnsupportedConstruct:
-                pass
-            continue
-        if c.kind in (
-            CursorKind.INCLUSION_DIRECTIVE,
-            CursorKind.MACRO_DEFINITION,
-            CursorKind.MACRO_INSTANTIATION,
-            CursorKind.NAMESPACE,           # `namespace foo { ... }` — skip wrapper
-            CursorKind.USING_DIRECTIVE,
-            CursorKind.USING_DECLARATION,
-            CursorKind.TYPEDEF_DECL,
-        ):
-            continue
-        raise UnsupportedConstruct(f"top-level {c.kind.name}")
-    return hir.HirModule(source_lang="cpp", body=body)
+        if c.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
+            _KNOWN_STRUCT_NAMES.add(c.spelling)
+        elif c.kind == CursorKind.NAMESPACE:
+            _register_struct_names(c.get_children())
+
+
+def _convert_top_level(c: ci.Cursor, body: list[hir.HirNode]) -> None:
+    """Dispatch one translation-unit- or namespace-level declaration into
+    `body`. Namespaces are flattened — Mojo has no namespace, so members are
+    emitted at module scope (name collisions across namespaces are a caller
+    risk until qualified-name mangling lands)."""
+    if not _from_input(c):
+        return
+    if c.kind == CursorKind.NAMESPACE:
+        for inner in c.get_children():
+            _convert_top_level(inner, body)
+        return
+    if c.kind == CursorKind.FUNCTION_DECL and c.is_definition():
+        body.append(_convert_function(c))
+        return
+    if c.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
+        body.append(_convert_class(c))
+        return
+    if c.kind == CursorKind.FUNCTION_DECL:
+        return
+    if c.kind == CursorKind.VAR_DECL:
+        # Top-level globals (e.g. `const double KELVIN = 273.15`).
+        # Translate to module-level assignments so functions can reference them.
+        try:
+            body.append(_convert_var_decl(c))
+        except UnsupportedConstruct:
+            pass
+        return
+    if c.kind == CursorKind.ENUM_DECL:
+        # `enum { A = 0, B = 1 }` → one module-level int constant per
+        # enumerator. Module-constant inlining (hir_to_mir) substitutes each
+        # name with its value at use sites, so no enum IR node is needed and
+        # the result flows to every backend.
+        body.extend(_convert_enum(c))
+        return
+    if c.kind in (
+        CursorKind.INCLUSION_DIRECTIVE,
+        CursorKind.MACRO_DEFINITION,
+        CursorKind.MACRO_INSTANTIATION,
+        CursorKind.USING_DIRECTIVE,
+        CursorKind.USING_DECLARATION,
+        CursorKind.TYPEDEF_DECL,
+        CursorKind.TYPE_ALIAS_DECL,      # `using Real64 = double;`
+    ):
+        # Type-alias declarations carry no runtime content; uses resolve via
+        # libclang type canonicalization (`Real64` -> `double` -> Float64).
+        return
+    raise UnsupportedConstruct(f"top-level {c.kind.name}")
+
+def _convert_enum(cursor: ci.Cursor) -> list[hir.HirNode]:
+    """C-style `enum { A = 0, B = 1 }` → one module-level int constant per
+    enumerator (libclang resolves implicit values via `enum_value`). These
+    feed the module-constant table; references inline to their literal value
+    on every target, so a dedicated enum IR node isn't required for the
+    named-int case."""
+    out: list[hir.HirNode] = []
+    for c in cursor.get_children():
+        if c.kind == ci.CursorKind.ENUM_CONSTANT_DECL:
+            out.append(
+                hir.HirAssign(
+                    target=c.spelling,
+                    value=hir.HirIntLiteral(value=int(c.enum_value)),
+                    annotation="int",
+                )
+            )
+    return out
+
 
 def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
     """Subset: public fields (`int x;`), public methods. No constructors,
@@ -222,6 +270,9 @@ def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
         if c.kind == ci.CursorKind.CXX_METHOD and c.is_definition():
             methods.append(_convert_method(c, struct_name=name))
             continue
+        if c.kind == ci.CursorKind.CONSTRUCTOR and c.is_definition():
+            methods.append(_convert_constructor(c, struct_name=name))
+            continue
         if c.kind in (ci.CursorKind.CXX_METHOD, ci.CursorKind.CONSTRUCTOR, ci.CursorKind.DESTRUCTOR):
             # Declared-but-not-defined methods and ctors/dtors: skip silently
             # rather than raising — Ghidra and many C++ headers ship these.
@@ -230,6 +281,41 @@ def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
             raise UnsupportedConstruct(f"C++ inheritance for class {name!r} not yet supported")
         raise UnsupportedConstruct(f"class member {c.kind.name}")
     return hir.HirStruct(name=name, fields=fields, methods=methods)
+
+def _convert_constructor(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
+    """C++ constructor → Mojo `__init__(out self, ...)`. The member-init list
+    (`: x(a), y(b)`) appears in the AST as alternating MEMBER_REF / init-expr
+    children before the body; each pair becomes a `self.<field> = <expr>`
+    assignment, followed by the constructor body's statements."""
+    params: list[hir.HirParam] = [hir.HirParam(name="self", annotation=struct_name)]
+    field_inits: list[hir.HirNode] = []
+    body_stmts: list[hir.HirNode] = []
+    kids = list(cursor.get_children())
+    i = 0
+    while i < len(kids):
+        c = kids[i]
+        if c.kind == CursorKind.PARM_DECL:
+            params.append(hir.HirParam(name=c.spelling, annotation=_type_text(c.type)))
+        elif c.kind == CursorKind.MEMBER_REF and i + 1 < len(kids):
+            field_inits.append(
+                hir.HirFieldAssign(
+                    obj=hir.HirName(name="self"),
+                    field=c.spelling,
+                    value=_convert_expr(kids[i + 1]),
+                )
+            )
+            i += 2
+            continue
+        elif c.kind == CursorKind.COMPOUND_STMT:
+            body_stmts = _convert_compound(c)
+        i += 1
+    return hir.HirFunction(
+        name="__init__",
+        params=params,
+        return_annotation="None",  # constructors return nothing -> NoneT
+        body=field_inits + body_stmts,
+    )
+
 
 def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
     params: list[hir.HirParam] = [hir.HirParam(name="self", annotation=struct_name)]
