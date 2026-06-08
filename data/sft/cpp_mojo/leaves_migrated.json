@@ -5,14 +5,14 @@
   "mojo": "def zoneinfiltrationdesignflowrate_modifier(\n    constant_term_coefficient: Float64,\n    temperature_term_coefficient: Float64,\n    velocity_term_coefficient: Float64,\n    velocity_squared_term_coefficient: Float64,\n    t_zone_c: Float64,\n    t_outdoor_c: Float64,\n    wind_speed_m_s: Float64,\n) -> Float64:\n    var dt = abs(t_zone_c - t_outdoor_c)\n    var v = max(0.0, wind_speed_m_s)\n    return constant_term_coefficient + temperature_term_coefficient * dt + velocity_term_coefficient * v + velocity_squared_term_coefficient * v * v"
  },
  {
-  "name": "zonemixing_is_active",
-  "source_file": "airflow/mixing.py",
-  "mojo": "def zonemixing_is_active(delta_temperature_c: Float64, t_source_c: Float64, t_target_c: Float64) -> Float64:\n    var dtc = max(delta_temperature_c, -100.0)\n    if t_source_c == t_target_c:\n        return 0.0\n    return 1.0"
+  "name": "flowcomponent_mass_flow",
+  "source_file": "airflow/network_solver.py",
+  "mojo": "from std.math import copysign\n\ncomptime _DP_REG_PA: Float64 = 0.0001\n\ndef flowcomponent_mass_flow(coefficient: Float64, exponent: Float64, dp_pa: Float64) -> Float64:\n    var ap = abs(dp_pa)\n    if ap < _DP_REG_PA:\n        var slope = coefficient * exponent * (_DP_REG_PA ** (exponent - 1.0))\n        return slope * dp_pa\n    return copysign(coefficient * (ap ** exponent), dp_pa)"
  },
  {
   "name": "flowcomponent_derivative",
   "source_file": "airflow/network_solver.py",
-  "mojo": "from math import pow\n\ndef flowcomponent_derivative(coefficient: Float64, exponent: Float64, dp_pa: Float64) -> Float64:\n    var ap = abs(dp_pa)\n    if ap <= 0.0001:\n        ap = 0.0001\n    return coefficient * exponent * pow(ap, exponent - 1.0)"
+  "mojo": "from std.math import pow\n\ndef flowcomponent_derivative(coefficient: Float64, exponent: Float64, dp_pa: Float64) -> Float64:\n    var ap = abs(dp_pa)\n    if ap < 0.0001:\n        ap = 0.0001\n    return coefficient * exponent * pow(ap, exponent - 1.0)"
  },
  {
   "name": "_sign",
@@ -35,6 +35,11 @@
   "mojo": "from std.math import exp, pow\n\ndef curvesigmoid_evaluate(coefficient1_c1: Float64, coefficient2_c2: Float64, coefficient3_c3: Float64, coefficient4_c4: Float64, coefficient5_c5: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64) -> Float64:\n    var x_clip = x\n    if x_clip < minimum_value_of_x:\n        x_clip = minimum_value_of_x\n    if x_clip > maximum_value_of_x:\n        x_clip = maximum_value_of_x\n    var e = exp((coefficient3_c3 - x_clip) / coefficient4_c4)\n    var out = coefficient1_c1 + coefficient2_c2 / pow(1.0 + e, coefficient5_c5)\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    if out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
  },
  {
+  "name": "curvedoubleexponentialdecay_evaluate",
+  "source_file": "curves/extended_records.py",
+  "mojo": "from std.math import exp\n\ndef curvedoubleexponentialdecay_evaluate(coefficient1_c1: Float64, coefficient2_c2: Float64, coefficient3_c3: Float64, coefficient4_c4: Float64, coefficient5_c5: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64) -> Float64:\n    var x_val = x\n    if x_val < minimum_value_of_x:\n        x_val = minimum_value_of_x\n    elif x_val > maximum_value_of_x:\n        x_val = maximum_value_of_x\n    var out = coefficient1_c1 + coefficient2_c2 * exp(coefficient3_c3 * x_val) + coefficient4_c4 * exp(coefficient5_c5 * x_val)\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    elif out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
+ },
+ {
   "name": "curveexponentialskewnormal_evaluate",
   "source_file": "curves/extended_records.py",
   "mojo": "from std.math import exp, erf, sqrt\n\ndef curveexponentialskewnormal_evaluate(coefficient1_c1: Float64, coefficient2_c2: Float64, coefficient3_c3: Float64, coefficient4_c4: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64) -> Float64:\n    var x_val = x\n    if x_val < minimum_value_of_x:\n        x_val = minimum_value_of_x\n    elif x_val > maximum_value_of_x:\n        x_val = maximum_value_of_x\n    var c1 = coefficient1_c1\n    var c2 = coefficient2_c2\n    var c3 = coefficient3_c3\n    var c4 = coefficient4_c4\n    var sqrt_2_inv = 1.0 / sqrt(2.0)\n    var z1 = (x_val - c1) / c2\n    var z2 = (c4 * x_val * exp(c3 * x_val) - c1) / c2\n    var z3 = -c1 / c2\n    var numer = exp(-0.5 * z1 * z1) * (1.0 + (1.0 if z2 >= 0.0 else -1.0) * erf(abs(z2) * sqrt_2_inv))\n    var denom = exp(-0.5 * z3 * z3) * (1.0 + (1.0 if z3 >= 0.0 else -1.0) * erf(abs(z3) * sqrt_2_inv))\n    var out = numer / denom\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    elif out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
@@ -48,11 +53,6 @@
   "name": "curvecubiclinear_evaluate",
   "source_file": "curves/extra_curve_records.py",
   "mojo": "def curvecubiclinear_evaluate(coefficient1_constant: Float64, coefficient2_x: Float64, coefficient3_x_2: Float64, coefficient4_x_3: Float64, coefficient5_y: Float64, coefficient6_x_y: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_value_of_y: Float64, maximum_value_of_y: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64, y: Float64) -> Float64:\n    var x_clip = x\n    if x_clip < minimum_value_of_x:\n        x_clip = minimum_value_of_x\n    elif x_clip > maximum_value_of_x:\n        x_clip = maximum_value_of_x\n    var y_clip = y\n    if y_clip < minimum_value_of_y:\n        y_clip = minimum_value_of_y\n    elif y_clip > maximum_value_of_y:\n        y_clip = maximum_value_of_y\n    var out = coefficient1_constant + coefficient2_x * x_clip + coefficient3_x_2 * x_clip * x_clip + coefficient4_x_3 * x_clip * x_clip * x_clip + coefficient5_y * y_clip + coefficient6_x_y * x_clip * y_clip\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    elif out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
- },
- {
-  "name": "_curvebase__clip_output",
-  "source_file": "curves/library.py",
-  "mojo": "def _curvebase__clip_output(minimum_curve_output: Float64, maximum_curve_output: Float64, value: Float64) -> Float64:\n    return (minimum_curve_output if value < minimum_curve_output else (maximum_curve_output if value > maximum_curve_output else value))"
  },
  {
   "name": "_curvebase__clip_x",
@@ -120,6 +120,11 @@
   "mojo": "def othersidecoefficients_effective_outside_temperature_c(constant_temperature_c: Float64, constant_temperature_coefficient: Float64) -> Float64:\n    return constant_temperature_c * constant_temperature_coefficient"
  },
  {
+  "name": "_clamp",
+  "source_file": "geometry/shadow_fraction.py",
+  "mojo": "def _clamp(value: Float64, low: Float64, high: Float64) -> Float64:\n    return max(low, min(high, value))"
+ },
+ {
   "name": "_area_mismatch_pct",
   "source_file": "heat_balance/interzone.py",
   "mojo": "def _area_mismatch_pct(a: Float64, b: Float64) -> Float64:\n    var denom = a if a > b else b\n    if denom == 0.0:\n        return 0.0\n    return 100.0 * abs(a - b) / denom"
@@ -183,11 +188,6 @@
   "name": "_smooth_ramp",
   "source_file": "runtime/airflow_terms.py",
   "mojo": "def _smooth_ramp(value: Float64, threshold: Float64, half_width: Float64, ascending: Bool) -> Float64:\n    if half_width <= 0.0:\n        var v = (1.0 if value >= threshold else 0.0) if ascending else (1.0 if value <= threshold else 0.0)\n        return v\n    var delta = value - threshold\n    if ascending:\n        if delta <= -half_width:\n            return 0.0\n        if delta >= half_width:\n            return 1.0\n        return 0.5 + 0.5 * (delta / half_width)\n    if delta >= half_width:\n        return 0.0\n    if delta <= -half_width:\n        return 1.0\n    return 0.5 - 0.5 * (delta / half_width)"
- },
- {
-  "name": "_mean_obliquity_deg",
-  "source_file": "solar/spa.py",
-  "mojo": "def _mean_obliquity_deg(jme: Float64) -> Float64:\n    var u = jme / 10.0\n    var eps0_arcsec: Float64 = 84381.448 - 4680.93*u - 1.55*u**2 + 1999.25*u**3 - 51.38*u**4 - 249.67*u**5 - 39.05*u**6 + 7.12*u**7 + 27.87*u**8 + 5.79*u**9 + 2.45*u**10\n    return eps0_arcsec / 3600.0"
  },
  {
   "name": "sunposition_zenith_deg",
