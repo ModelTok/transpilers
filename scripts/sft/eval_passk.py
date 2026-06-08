@@ -49,7 +49,7 @@ def matches(ref, out):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="Qwen/Qwen2.5-Coder-0.5B-Instruct")
-    ap.add_argument("--adapter", default=str(SFT/"adapter_honest"))
+    ap.add_argument("--adapter", default=str(SFT/"adapter_15b_v2"))
     ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--tag", default="passk")
     args = ap.parse_args()

@@ -34,7 +34,7 @@ def mojo_call(code, name, args_lit):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--model",default="Qwen/Qwen2.5-Coder-1.5B-Instruct")
-    ap.add_argument("--adapter",default=str(SFT/"adapter_15b"))
+    ap.add_argument("--adapter",default=str(SFT/"adapter_15b_v2"))
     ap.add_argument("--k",type=int,default=1)
     ap.add_argument("--source",default="cpp_source",choices=["cpp_source","python_reference"])
     args=ap.parse_args()

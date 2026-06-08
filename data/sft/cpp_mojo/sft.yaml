@@ -1,34 +1,39 @@
-# LLaMA-Factory SFT config — the C++→Mojo translator (first model in the 1:1 library).
+# LLaMA-Factory SFT config — the C++/Python → Mojo translator.
 #
-# One model, ONE direction (C++→Mojo). No Python, no other targets. Mojo-language
-# acquisition data IS included because Mojo is this model's target and the base
-# has ~0% Mojo competency.
+# Reproduces the shipped adapter_15b_v2 (base Qwen2.5-Coder-1.5B-Instruct,
+# LoRA r=16 alpha=32 dropout=0.05 on all linear projections). Runs on the
+# Ubuntu-24.04 WSL distro's ROCm GPU (RX 7700 XT, 12 GB) — bf16 LoRA of a 1.5B
+# model fits comfortably, no quantization needed.
 #
-# Recommended: TWO PHASES (see README) — acquisition first to learn Mojo, then
-# translation to specialize. This file is the combined single-pass default;
-# translation is interleaved with acquisition (register both datasets below).
+# Datasets are registered in this folder's dataset_info.json. The GUI sees them
+# automatically once scripts/sft/register_datasets.sh has merged them into
+# LLaMA-Factory's data/dataset_info.json (run wsl-setup/08-train-gui.sh).
 #
-# Register in LLaMA-Factory data/dataset_info.json:
-#   "cpp_mojo_translation": { "file_name": "train_translation.jsonl",
-#     "columns": { "prompt": "instruction", "query": "input",
-#                  "response": "output", "system": "system" } },
-#   "mojo_acquisition": { "file_name": "mojo_acquisition.json",
-#     "columns": { "prompt": "instruction", "query": "input", "response": "output" } }
+# Run:
+#   CLI:  llamafactory-cli train data/sft/cpp_mojo/sft.yaml
+#   GUI:  http://localhost:7860 -> Train tab (see RUN.md walkthrough)
+#
+# NOTE on upweighting: the legacy train_05b.py upweighted translation x4 over a
+# 300-sample acquisition slice. A plain `dataset:` list can't express that. For
+# the faithful recipe, use the TWO-PHASE approach (README): phase 1 acquisition
+# to learn Mojo, phase 2 translation to specialize. The combined single pass
+# below is the quick default.
 
 ### model
-model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+model_name_or_path: Qwen/Qwen2.5-Coder-1.5B-Instruct
 trust_remote_code: true
 
 ### method
 stage: sft
 do_train: true
-finetuning_type: lora                 # small data → LoRA on 1x 24GB; switch to `full` w/ deepspeed for more
-lora_rank: 32
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
 lora_target: all
 
 ### dataset
-# acquisition (learn Mojo) + translation (the task). Translation is tiny (41) vs
-# acquisition (1357); see README for two-phase / upweighting if it under-fits.
+dataset_dir: /mnt/c/Github/transpilers/data/sft/cpp_mojo
 dataset: mojo_acquisition,cpp_mojo_translation
 template: qwen
 cutoff_len: 4096
@@ -36,18 +41,25 @@ overwrite_cache: true
 preprocessing_num_workers: 8
 
 ### output
-output_dir: saves/qwen2.5-coder-3b/cpp_mojo
+# Write into the saves/ tree (relative to the repo cwd you run from) using the
+# same {model}/{finetuning_type}/{name} layout the GUI uses, so CLI-launched
+# runs are ALSO visible in LLaMA Board: select model Qwen2.5-Coder-1.5B-Instruct
+# + lora and type `cpp_mojo_v1` in Output dir to reload this run's loss curve.
+# Promote a good adapter to data/sft/cpp_mojo/adapter_* when you're happy with it.
+output_dir: saves/Qwen2.5-Coder-1.5B-Instruct/lora/cpp_mojo_v1
 logging_steps: 5
-save_steps: 200
+save_strategy: epoch
 plot_loss: true
 overwrite_output_dir: true
-report_to: none
+# TensorBoard event logs land in <output_dir>/runs/ — view all runs with
+# wsl-setup/12-tensorboard.sh (http://localhost:6006).
+report_to: tensorboard
 
 ### train
 per_device_train_batch_size: 1
-gradient_accumulation_steps: 8
-learning_rate: 1.0e-4                  # LoRA; use 1e-5 for full-FT
-num_train_epochs: 3.0
+gradient_accumulation_steps: 4
+learning_rate: 1.5e-4
+num_train_epochs: 2.0
 lr_scheduler_type: cosine
-warmup_ratio: 0.1
+warmup_ratio: 0.05
 bf16: true

@@ -72,7 +72,7 @@ def faithful(ref,out):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--model",default="Qwen/Qwen2.5-Coder-0.5B-Instruct")
-    ap.add_argument("--adapter",default=str(SFT/"adapter_honest"))
+    ap.add_argument("--adapter",default=str(SFT/"adapter_15b_v2"))
     ap.add_argument("--inputs",default=str(SFT/"prod_test_cpp.jsonl"))
     ap.add_argument("--k",type=int,default=5)
     ap.add_argument("--fewshot",type=int,default=0,help="prepend N retrieved few-shot examples")

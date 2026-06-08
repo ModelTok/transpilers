@@ -20,8 +20,9 @@ pass@1** (`heldout_eval.jsonl`), nothing else.
 ## Files
 | File | Role |
 |---|---|
-| `train_translation.jsonl` | 41 **behaviorally-verified** C++→Mojo pairs, CodePivot schema (`{instruction,input,system,output}`) with rich faithful `<think>` reasoning. The task. |
-| `mojo_acquisition.json` | 1357 Mojo-target examples (kernel corpus + Manual/Reference docs + syntax-correction skill). Teaches the model Mojo — the *target* language, not a second translation language. |
+| `train_translation.jsonl` | 1005 **behaviorally-verified** C++/Python→Mojo pairs, Alpaca schema (`{instruction,input,system,output}`), code-only ("no-think") output. The task. (Variants: `train_translation_nothink.jsonl`, `train_translation.think.jsonl`.) |
+| `mojo_acquisition.json` | 1163 Mojo-target examples (kernel corpus + Manual/Reference docs + syntax-correction skill). Teaches the model Mojo — the *target* language, not a second translation language. |
+| `dataset_info.json` | LLaMA Factory dataset registry (column maps for the files above). |
 | `heldout_eval.jsonl` | 14 held-out C++→Mojo pairs in verl format with regenerated `ground_truth={inputs,outputs}` test cases. **Excluded from training** — the clean metric. |
 | `system.txt` | The transpiler system prompt (CodePivot's + a Mojo runtime entry encoding the Python-interop JSON idiom). Used in both training and eval. |
 | `sft.yaml` | LLaMA-Factory config. |
@@ -32,9 +33,15 @@ both sides, run on ~125 sampled inputs, agree to ≤1e-9, full branch coverage);
 set grew 40→55 total after the **`fmod` codegen fix** and bool-return fix.
 
 ## Train
+Training runs through **LLaMA Factory** (GUI or CLI). The datasets are registered in
+`dataset_info.json` (this folder); `register_datasets.sh` merges them into LLaMA
+Factory so the GUI sees them.
 ```bash
-# register the two datasets (see header of sft.yaml), then:
+# one-time: make the datasets visible to LLaMA Factory / the LLaMA Board GUI
+bash scripts/sft/register_datasets.sh
+# then train (CLI):
 llamafactory-cli train data/sft/cpp_mojo/sft.yaml
+# ...or use the GUI at http://localhost:7860 — see ../../RUN.md for the walkthrough.
 ```
 **Two-phase (recommended if the single pass under-fits translation):** the
 acquisition set (1357) dwarfs translation (41), so the task signal can get

@@ -13,7 +13,8 @@ from HuggingFace on first run) and the throwaway training checkpoints.
 | `data/sft/cpp_mojo/train_translation.jsonl` | the training set (C++ + Python → Mojo, code-only) |
 | `data/sft/cpp_mojo/system.txt` | the lean system prompt |
 | `data/sft/diverse/verified.jsonl`, `py_verified.jsonl` | verified translation pairs |
-| `scripts/sft/` | train (`train_05b.py`), eval (`eval_diverse.py`, `eval_transbench.py`), migrate (`migrate_py_leaves.py`), verify gates (`diff_verify.py`, `py_verify.py`) |
+| `data/sft/cpp_mojo/sft.yaml` + `dataset_info.json` | **LLaMA Factory training config + dataset registry** (the training path) |
+| `scripts/sft/` | eval (`eval_diverse.py`, `eval_transbench.py`), migrate (`migrate_py_leaves.py`), verify gates (`diff_verify.py`, `py_verify.py`); `register_datasets.sh`; legacy TRL trainers under `legacy/` |
 | `benchmarks/transpilation-bench/` | the 40-task benchmark |
 
 The base model is `Qwen/Qwen2.5-Coder-1.5B-Instruct` — pulled from HF automatically.
@@ -36,15 +37,43 @@ GPU, try `HSA_OVERRIDE_GFX_VERSION=11.0.1`. Confirm with:
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
-## Run it
+## Retrain the adapter — LLaMA Factory (GUI or CLI)
+
+Training runs through **LLaMA Factory** on the ROCm GPU. It reproduces the shipped
+`adapter_15b_v2` LoRA (base Qwen2.5-Coder-1.5B-Instruct, r=16, alpha=32, dropout=0.05,
+all linear projections). Config: `data/sft/cpp_mojo/sft.yaml`; datasets registered in
+`data/sft/cpp_mojo/dataset_info.json`.
+
+```bash
+# One-time: make the datasets visible to LLaMA Factory / the GUI.
+bash scripts/sft/register_datasets.sh
+
+# CLI retrain (the 7700 XT is ~3-4x faster than the iGPU):
+llamafactory-cli train data/sft/cpp_mojo/sft.yaml
+```
+
+### GUI (LLaMA Board)
+
+```bash
+# Launch the GUI with datasets pre-registered, then open http://localhost:7860
+wsl -d Ubuntu-24.04 -u root -- bash /mnt/c/Users/<you>/wsl-setup/08-train-gui.sh
+```
+In the **Train** tab: Model = `Qwen2.5-Coder-1.5B-Instruct` · Finetuning = `lora`
+(rank 16) · Template = `qwen` · Dataset = `mojo_acquisition` + `cpp_mojo_translation`
+· LR `1.5e-4` · Epochs `2` → **Start**. Watch the loss curve live; the adapter lands
+in the chosen Output dir.
+
+**Two-phase (recommended if translation under-fits):** acquisition (1163) dwarfs
+translation (1005), so the task signal can dilute. Phase 1: train `mojo_acquisition`
+only (1–2 epochs) → checkpoint. Phase 2: load that adapter and train
+`cpp_mojo_translation` (3–5 epochs, lower LR). This replaces the old script's ×4
+translation upweight.
+
+## Run it (eval / migrate)
 
 ```bash
 # Evaluate the model on the benchmark (Python->Mojo or C++->Mojo):
 python scripts/sft/eval_transbench.py --adapter data/sft/cpp_mojo/adapter_15b_v2 --source python_reference
-
-# Retrain the adapter (the 7700 XT is ~3-4x faster than the iGPU — ~1.5h not ~6h):
-SMOKE_MODEL=Qwen/Qwen2.5-Coder-1.5B-Instruct TR_UP=3 AB_EPOCHS=2 \
-  ADAPTER_DIR=data/sft/cpp_mojo/adapter_15b_v3 python scripts/sft/train_05b.py
 
 # Run the model on energyplus-mojo leaf functions (needs the Mojo toolchain — see below):
 python scripts/sft/migrate_py_leaves.py --adapter data/sft/cpp_mojo/adapter_15b_v2 --k 3

@@ -1,0 +1,40 @@
+# Qwen2.5-Coder-3B bf16 LoRA — C++/Python -> Mojo, on the 12 GB RX 7700 XT.
+# 3B bf16 weights (~6 GB) + LoRA + grad-checkpointed activations fit cleanly in
+# 12 GB — no quantization needed (unlike the 7B/12B QLoRA experiments).
+model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+
+### dataset
+dataset_dir: /mnt/c/Github/transpilers/data/sft/cpp_mojo
+dataset: mojo_acquisition,cpp_mojo_translation
+template: qwen
+cutoff_len: 2048
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+### output
+output_dir: saves/Qwen2.5-Coder-3B-Instruct/lora/cpp_mojo_v1
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+learning_rate: 1.0e-4
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true

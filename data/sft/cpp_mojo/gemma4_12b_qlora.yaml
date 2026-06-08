@@ -1,0 +1,46 @@
+# Gemma 4 12B QLoRA (4-bit) — C++/Python -> Mojo, on the 12 GB RX 7700 XT.
+# google/gemma-4-12b-it is ungated + multimodal (gemma4_unified w/ vision tower).
+# We freeze the vision tower and 4-bit-quantize the LM. This is RIGHT at the
+# 12 GB edge — conservative cutoff + grad checkpointing; may still OOM (then we
+# fall back to Gemma 3 4B).
+model_name_or_path: google/gemma-4-12b-it
+trust_remote_code: true
+
+### method (QLoRA, text-only on a VLM)
+stage: sft
+do_train: true
+finetuning_type: lora
+quantization_bit: 4
+quantization_method: bnb
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+
+### dataset
+dataset_dir: /mnt/c/Github/transpilers/data/sft/cpp_mojo
+dataset: mojo_acquisition,cpp_mojo_translation
+template: gemma4
+cutoff_len: 1024          # tight to survive 12 GB with a 12B model + vision tower
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+### output
+output_dir: saves/gemma-4-12b-it/lora/cpp_mojo_qlora_v1
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+learning_rate: 1.0e-4
+num_train_epochs: 2.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true

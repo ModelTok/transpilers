@@ -34,7 +34,7 @@ def compiles(code):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="Qwen/Qwen2.5-Coder-0.5B-Instruct")
-    ap.add_argument("--adapter", default=str(SFT/"adapter_coder507"))
+    ap.add_argument("--adapter", default=str(SFT/"adapter_15b_v2"))
     args = ap.parse_args()
     gpu = torch.cuda.is_available(); dev = "cuda" if gpu else "cpu"
     tok = AutoTokenizer.from_pretrained(args.model)

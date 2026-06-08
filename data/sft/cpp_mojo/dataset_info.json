@@ -1,0 +1,37 @@
+{
+  "cpp_mojo_translation": {
+    "file_name": "train_translation.jsonl",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output",
+      "system": "system"
+    }
+  },
+  "mojo_acquisition": {
+    "file_name": "mojo_acquisition.json",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+  "cpp_mojo_translation_nothink": {
+    "file_name": "train_translation_nothink.jsonl",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output",
+      "system": "system"
+    }
+  },
+  "cpp_mojo_translation_think": {
+    "file_name": "train_translation.think.jsonl",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output",
+      "system": "system"
+    }
+  }
+}

@@ -19,12 +19,19 @@ src/transpilers/llm/cache/*
 # generated sweep artifacts
 scripts/ep_*.json
 
-# --- run-portability: exclude huge non-essentials (the 70MB adapter weights ARE kept) ---
+# --- run-portability: exclude huge non-essentials ---
 # 12GB vendored research dataset; re-clone separately if needed
 third_party/CodePivot/
+# Only the shipped adapter is tracked; experimental adapters live on Hugging Face.
+data/sft/cpp_mojo/adapter_*/
+!data/sft/cpp_mojo/adapter_15b_v2/
 # training optimizer state (~141MB each), not needed for inference
 data/sft/cpp_mojo/adapter_*/checkpoint-*/
 *.pt
 # intermediate reasoning batches + scratch outputs
 data/sft/cpp_mojo/_reason_out/
 artifacts/
+
+# LLaMA Factory / LLaMA Board GUI runtime cache + run outputs (created in cwd when running the webui)
+llamaboard_cache/
+saves/
