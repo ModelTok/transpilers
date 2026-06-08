@@ -1,0 +1,17 @@
+[project]
+name = "migraph"
+version = "0.1.0"
+description = "Interactive 2D migration-progress and code graphs (cytoscape.js, no build step)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []   # pure stdlib; the viewer pulls cytoscape.js from a CDN
+
+[project.scripts]
+migraph = "migraph.__main__:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["migraph"]

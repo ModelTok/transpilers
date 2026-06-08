@@ -1,0 +1,107 @@
+{
+ "tag": "ft-coder-held",
+ "results": [
+  {
+   "fn": "BetweenDateHoursLeftInclusive",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "True"
+  },
+  {
+   "fn": "CalcAlamdariHammondUnstableHorizontal",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcBeausoleilMorrisonMixedUnstableFloor",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcKaradagChilledCeiling",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "CalcKhalifaEq6NonHeatedWalls",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "CalcMoWITTWindward",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcSatVapPressFromTempTorr",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "0.0 exp 4.5671304910108"
+  },
+  {
+   "fn": "FanSpdResidualCool",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "GlycolTempToTempIndex",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "InterpolateBetweenFourValues",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "MakeUpWaterVolFunct",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "SafeDivide",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "TempIPtoSI",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "WaterConversionFunct",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "calcFluxWeightingFactor",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "1.0 exp 0.0"
+  },
+  {
+   "fn": "interpSetPoint",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "isLeapYear",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  }
+ ]
+}

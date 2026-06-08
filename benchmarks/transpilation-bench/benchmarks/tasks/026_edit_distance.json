@@ -1,0 +1,45 @@
+{
+  "id": "026",
+  "name": "edit_distance",
+  "tier": 4,
+  "concept": "dynamic_programming_2d",
+  "tags": [
+    "dp",
+    "strings",
+    "2d_dp"
+  ],
+  "description": "Return the minimum edit distance (Levenshtein) between two strings.",
+  "cpp_source": "#include <string>\n#include <vector>\n#include <algorithm>\nint edit_distance(const std::string& a, const std::string& b) {\n    int m=a.size(), n=b.size();\n    std::vector<std::vector<int>> dp(m+1, std::vector<int>(n+1));\n    for (int i=0;i<=m;i++) dp[i][0]=i;\n    for (int j=0;j<=n;j++) dp[0][j]=j;\n    for (int i=1;i<=m;i++) for (int j=1;j<=n;j++)\n        dp[i][j] = a[i-1]==b[j-1] ? dp[i-1][j-1]\n            : 1+std::min({dp[i-1][j], dp[i][j-1], dp[i-1][j-1]});\n    return dp[m][n];\n}",
+  "python_reference": "def edit_distance(a: str, b: str) -> int:\n    m, n = len(a), len(b)\n    dp = [[0]*(n+1) for _ in range(m+1)]\n    for i in range(m+1): dp[i][0] = i\n    for j in range(n+1): dp[0][j] = j\n    for i in range(1, m+1):\n        for j in range(1, n+1):\n            if a[i-1] == b[j-1]:\n                dp[i][j] = dp[i-1][j-1]\n            else:\n                dp[i][j] = 1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])\n    return dp[m][n]",
+  "mojo_reference": "fn edit_distance(a: String, b: String) -> Int:\n    var m = len(a); var n = len(b)\n    var dp = List[List[Int]]()\n    for i in range(m + 1):\n        var row = List[Int]()\n        for j in range(n + 1):\n            if i == 0: row.append(j)\n            elif j == 0: row.append(i)\n            else: row.append(0)\n        dp.append(row)\n    for i in range(1, m + 1):\n        for j in range(1, n + 1):\n            if a[i-1] == b[j-1]:\n                dp[i][j] = dp[i-1][j-1]\n            else:\n                dp[i][j] = 1 + min(dp[i-1][j], min(dp[i][j-1], dp[i-1][j-1]))\n    return dp[m][n]",
+  "tests": [
+    {
+      "args": [
+        "kitten",
+        "sitting"
+      ],
+      "expected": "3"
+    },
+    {
+      "args": [
+        "",
+        "abc"
+      ],
+      "expected": "3"
+    },
+    {
+      "args": [
+        "abc",
+        "abc"
+      ],
+      "expected": "0"
+    },
+    {
+      "args": [
+        "horse",
+        "ros"
+      ],
+      "expected": "3"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+ "tag": "smoke-adapter",
+ "repair": 1,
+ "results": [
+  {
+   "fn": "BetweenDateHoursLeftInclusive",
+   "lang": "Mojo",
+   "first_status": "compile_error",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj",
+   "repair_rounds": 1
+  },
+  {
+   "fn": "CalcAlamdariHammondUnstableHorizontal",
+   "lang": "Mojo",
+   "first_status": "compile_error",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj",
+   "repair_rounds": 1
+  },
+  {
+   "fn": "CalcBeausoleilMorrisonMixedUnstableFloor",
+   "lang": "Mojo",
+   "first_status": "compile_error",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj",
+   "repair_rounds": 1
+  },
+  {
+   "fn": "CalcKaradagChilledCeiling",
+   "lang": "Mojo",
+   "first_status": "compile_error",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj",
+   "repair_rounds": 1
+  },
+  {
+   "fn": "CalcKhalifaEq6NonHeatedWalls",
+   "lang": "Mojo",
+   "first_status": "pass",
+   "status": "pass",
+   "detail": "",
+   "repair_rounds": 0
+  },
+  {
+   "fn": "CalcMoWITTWindward",
+   "lang": "Mojo",
+   "first_status": "compile_error",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj",
+   "repair_rounds": 1
+  }
+ ]
+}

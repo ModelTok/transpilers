@@ -1,0 +1,527 @@
+[
+ {
+  "name": "Accumulator",
+  "category": "class",
+  "status": "pass"
+ },
+ {
+  "name": "BankAccount",
+  "category": "class",
+  "status": "pass"
+ },
+ {
+  "name": "Box_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "Color",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Counter",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Date",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Frac",
+  "category": "operator",
+  "status": "wrong_output"
+ },
+ {
+  "name": "Graph4",
+  "category": "class",
+  "status": "runtime_error"
+ },
+ {
+  "name": "IntQueue",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Inventory",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Mat2d",
+  "category": "operator",
+  "status": "compile_error"
+ },
+ {
+  "name": "Matrix2x2",
+  "category": "class",
+  "status": "pass"
+ },
+ {
+  "name": "MinHeap",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Money",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Pair_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "Polynomial",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Queue_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "Rational",
+  "category": "operator",
+  "status": "pass"
+ },
+ {
+  "name": "RingBuffer",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Segment",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Stack_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "Tally",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "TimeSpan",
+  "category": "operator",
+  "status": "compile_error"
+ },
+ {
+  "name": "Vec2",
+  "category": "operator",
+  "status": "pass"
+ },
+ {
+  "name": "Vec3",
+  "category": "operator",
+  "status": "pass"
+ },
+ {
+  "name": "accumulate_dtype",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "apply_twice_dtype",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "array_mean",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "binary_search",
+  "category": "algo",
+  "status": "pass"
+ },
+ {
+  "name": "bounds_checked_get",
+  "category": "error",
+  "status": "pass"
+ },
+ {
+  "name": "caesar_shift",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "catalan_number",
+  "category": "algo",
+  "status": "pass"
+ },
+ {
+  "name": "char_frequency",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "checked_factorial",
+  "category": "error",
+  "status": "pass"
+ },
+ {
+  "name": "checked_mod",
+  "category": "error",
+  "status": "pass"
+ },
+ {
+  "name": "chess_piece_value",
+  "category": "enum",
+  "status": "compile_error"
+ },
+ {
+  "name": "clamp_int",
+  "category": "control",
+  "status": "pass"
+ },
+ {
+  "name": "climb_stairs",
+  "category": "algo",
+  "status": "pass"
+ },
+ {
+  "name": "collatz_steps_capped",
+  "category": "control",
+  "status": "compile_error"
+ },
+ {
+  "name": "contains_all_keys",
+  "category": "map",
+  "status": "pass"
+ },
+ {
+  "name": "count_digits",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "count_if_positive",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "count_pairs_with_sum",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "count_trailing_zeros",
+  "category": "bitops",
+  "status": "run_timeout"
+ },
+ {
+  "name": "count_words",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "days_in_month",
+  "category": "control",
+  "status": "compile_error"
+ },
+ {
+  "name": "dedup_preserving_first",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "diagonal_extract",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "dispatch_op",
+  "category": "control",
+  "status": "wrong_output"
+ },
+ {
+  "name": "dot_product",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "erase_and_size",
+  "category": "map",
+  "status": "pass"
+ },
+ {
+  "name": "factorial_iter",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "filter_count_positive",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "fizzbuzz_count",
+  "category": "control",
+  "status": "pass"
+ },
+ {
+  "name": "frequency_then_lookup",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "gcd_rec",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "gray_code",
+  "category": "algo",
+  "status": "pass"
+ },
+ {
+  "name": "hamming_str",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "horner_poly",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "hypotenuse_angle",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "increment_or_init",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "int_pow",
+  "category": "algo",
+  "status": "pass"
+ },
+ {
+  "name": "is_numeric",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "is_prime",
+  "category": "algo",
+  "status": "compile_error"
+ },
+ {
+  "name": "is_symmetric",
+  "category": "matrix",
+  "status": "wrong_output"
+ },
+ {
+  "name": "key_exists",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "leap_year",
+  "category": "control",
+  "status": "pass"
+ },
+ {
+  "name": "levenshtein",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "log_interp",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "lookup_default",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "matrix_add",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "matrix_max_element",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "matrix_trace",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "max_generic",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "median3_generic",
+  "category": "template",
+  "status": "wrong_output"
+ },
+ {
+  "name": "merge_sum",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "mode_value",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "nested_loop_count",
+  "category": "control",
+  "status": "compile_error"
+ },
+ {
+  "name": "next_power_of_two",
+  "category": "bitops",
+  "status": "compile_error"
+ },
+ {
+  "name": "opcode_dispatch",
+  "category": "enum",
+  "status": "pass"
+ },
+ {
+  "name": "parse_bool_checked",
+  "category": "error",
+  "status": "pass"
+ },
+ {
+  "name": "pascal_row",
+  "category": "algo",
+  "status": "pass"
+ },
+ {
+  "name": "point_normalize",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "power_rec",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "product_dtype",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "range_sum",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "repeat_string",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "reverse_in_place",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "reverse_string",
+  "category": "string",
+  "status": "wrong_output"
+ },
+ {
+  "name": "rotate_left",
+  "category": "array",
+  "status": "wrong_output"
+ },
+ {
+  "name": "run_length_encode",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "saturation_pressure",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "selection_sort",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "sieve_count",
+  "category": "algo",
+  "status": "compile_error"
+ },
+ {
+  "name": "starts_with",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "substring_count",
+  "category": "string",
+  "status": "runtime_error"
+ },
+ {
+  "name": "sum_by_key",
+  "category": "map",
+  "status": "pass"
+ },
+ {
+  "name": "sum_even_indexed",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "sum_to_n_rec",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "swap_pair_generic",
+  "category": "template",
+  "status": "wrong_output"
+ },
+ {
+  "name": "to_upper_ascii",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "transpose",
+  "category": "matrix",
+  "status": "wrong_output"
+ },
+ {
+  "name": "two_sum_count",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "vec2_add",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "wind_chill",
+  "category": "numeric",
+  "status": "compile_error"
+ }
+]

@@ -1,0 +1,101 @@
+{
+ "tag": "ft-fresh",
+ "results": [
+  {
+   "fn": "CalcASHRAEVerticalWall",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "CalcWaltonUnstableHorizontalOrTilt",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "0.3100293951367781 exp 2.19227591798644"
+  },
+  {
+   "fn": "CalcWaltonStableHorizontalOrTilt",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "GetInterpValue",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "epexp",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "Interp",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "should_be_fixed_output",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "fixed_will_fit",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "add",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "subtract",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "PsyRhoAirFnPbTdbW",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "PsyRhovFnTdbRhLBnd0C",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "F6",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "F7",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "RhoH2O",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "fclamp",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  }
+ ]
+}

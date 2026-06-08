@@ -1,0 +1,22 @@
+[
+ "Mojo:CalcASHRAESimpleIntConvCoeff",
+ "Mojo:CalcKhalifaEq3WallAwayFromHeat",
+ "Mojo:CalcKhalifaEq7Ceiling",
+ "Mojo:CalcMoWITTNatural",
+ "Mojo:CalcSatVapPressFromTempTorr",
+ "Mojo:FanSpdResidualHeat",
+ "Mojo:InterpolateBetweenTwoValues",
+ "Mojo:Ra_un",
+ "Mojo:TempSItoIP",
+ "Mojo:computeJulianDate",
+ "Python:CalcASHRAESimpleIntConvCoeff",
+ "Python:CalcKhalifaEq4CeilingAwayFromHeat",
+ "Python:CalcMcAdams",
+ "Python:CalcSatVapPressFromTemp",
+ "Python:Fahrenheit2Celsius",
+ "Python:Le",
+ "Python:SafeDivide",
+ "Python:VB_CriticalSlatAngle",
+ "Python:d_eq",
+ "Python:neq"
+]

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/
+build/
+dist/
+# generated graph outputs (regenerate from the scripts)
+*.html
+!docs/*.html
+.venv/
+.direnv/

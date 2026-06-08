@@ -1,0 +1,31 @@
+{
+  "total": 1177,
+  "composition": {
+    "cpp_mojo": {
+      "unique": 40,
+      "weight": 3,
+      "contributed": 120
+    },
+    "cpp_python": {
+      "unique": 39,
+      "weight": 2,
+      "contributed": 78
+    },
+    "mojo_corpus": {
+      "unique": 425,
+      "weight": 1,
+      "contributed": 425
+    },
+    "skill": {
+      "unique": 52,
+      "weight": 2,
+      "contributed": 104
+    },
+    "docs": {
+      "unique": 450,
+      "weight": 1,
+      "contributed": 450
+    }
+  },
+  "note": "LLaMA-Factory alpaca format; register as in RUNBOOK."
+}

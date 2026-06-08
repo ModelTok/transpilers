@@ -1,0 +1,51 @@
+{
+  "id": "040",
+  "name": "ep_rho_air",
+  "tier": 2,
+  "concept": "ideal_gas_law",
+  "tags": [
+    "energyplus",
+    "thermodynamics",
+    "psychrometrics",
+    "physics",
+    "real_world"
+  ],
+  "description": "Compute moist-air density (kg/m³) from pressure (Pa), dry-bulb temperature (°C), and humidity ratio (kg/kg). Uses ideal gas law with Kelvin=273.15. Source: EnergyPlus/Psychrometrics.hh PsyRhoAirFnPbTdbW(). Result rounded to 6 dp.",
+  "cpp_source": "// Source: EnergyPlus/src/EnergyPlus/Psychrometrics.hh — PsyRhoAirFnPbTdbW()\n// Wylan & Sontag, Fundamentals of Classical Thermodynamics.\n// ASHRAE handbook 1985 Fundamentals, Ch. 6, eqn. (6),(26)\n#include <algorithm>\n#include <cmath>\nconstexpr double KELVIN = 273.15;\ndouble ep_rho_air(double pb, double tdb, double dw) {\n    double w = std::max(dw, 1.0e-5);\n    return std::round(pb / (287.0 * (tdb + KELVIN) * (1.0 + 1.6077687 * w)) * 1e6) / 1e6;\n}",
+  "python_reference": "def ep_rho_air(pb: float, tdb: float, dw: float) -> float:\n    KELVIN = 273.15\n    w = max(dw, 1e-5)\n    return round(pb / (287.0 * (tdb + KELVIN) * (1.0 + 1.6077687 * w)), 6)",
+  "mojo_reference": "import math\n\nfn ep_rho_air(pb: Float64, tdb: Float64, dw: Float64) -> Float64:\n    var KELVIN: Float64 = 273.15\n    var w = max(dw, 1e-5)\n    var rho = pb / (287.0 * (tdb + KELVIN) * (1.0 + 1.6077687 * w))\n    return math.round(rho * 1e6) / 1e6",
+  "tests": [
+    {
+      "args": [
+        101325.0,
+        25.0,
+        0.01
+      ],
+      "expected": "1.165395"
+    },
+    {
+      "args": [
+        101325.0,
+        0.0,
+        0.0
+      ],
+      "expected": "1.292488"
+    },
+    {
+      "args": [
+        85000.0,
+        15.0,
+        0.005
+      ],
+      "expected": "1.019627"
+    },
+    {
+      "args": [
+        101325.0,
+        20.0,
+        0.0
+      ],
+      "expected": "1.204309"
+    }
+  ]
+}

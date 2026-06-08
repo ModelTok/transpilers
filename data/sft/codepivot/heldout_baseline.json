@@ -1,0 +1,125 @@
+{
+ "tag": "base",
+ "results": [
+  {
+   "fn": "CalcASHRAESimpleIntConvCoeff",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcKhalifaEq3WallAwayFromHeat",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcKhalifaEq7Ceiling",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcMoWITTNatural",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcSatVapPressFromTempTorr",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "FanSpdResidualHeat",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "InterpolateBetweenTwoValues",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "Ra_un",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "TempSItoIP",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "computeJulianDate",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcASHRAESimpleIntConvCoeff",
+   "lang": "Python",
+   "status": "runtime_error",
+   "detail": "module 'math' has no attribute 'abs'"
+  },
+  {
+   "fn": "CalcKhalifaEq4CeilingAwayFromHeat",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "CalcMcAdams",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "CalcSatVapPressFromTemp",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "Fahrenheit2Celsius",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "Le",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "SafeDivide",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "VB_CriticalSlatAngle",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "d_eq",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "neq",
+   "lang": "Python",
+   "status": "pass",
+   "detail": ""
+  }
+ ]
+}

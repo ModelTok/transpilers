@@ -4,7 +4,7 @@
 Reads `data/cpp_mojo_pairs.jsonl` (output of build_cpp_mojo_dataset.py) and
 emits `data/cpp_mojo_sft.json` — a list of {instruction, input, output} records
 that drops into the same LLaMA-Factory pipeline as the CodePivot SFT split
-(register it in data/dataset_info.json; see training/qwen2.5-coder-3b/RUNBOOK.md).
+(register it in data/dataset_info.json; see artifacts/training/qwen2.5-coder-3b/RUNBOOK.md).
 
 Every record here is behaviorally verified (C++ and Mojo produce the same
 outputs on sampled inputs), so the supervision signal is faithful — unlike a

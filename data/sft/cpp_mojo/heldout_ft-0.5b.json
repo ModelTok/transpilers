@@ -1,0 +1,107 @@
+{
+ "tag": "ft-0.5b",
+ "results": [
+  {
+   "fn": "BetweenDateHoursLeftInclusive",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcAlamdariHammondUnstableHorizontal",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcBeausoleilMorrisonMixedUnstableFloor",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcKaradagChilledCeiling",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcKhalifaEq6NonHeatedWalls",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "CalcMoWITTWindward",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "CalcSatVapPressFromTempTorr",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "FanSpdResidualCool",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "GlycolTempToTempIndex",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "7.0 exp 8.0"
+  },
+  {
+   "fn": "InterpolateBetweenFourValues",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "MakeUpWaterVolFunct",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "SafeDivide",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "TempIPtoSI",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "-12.777772777777779 exp -14.9999972222222"
+  },
+  {
+   "fn": "WaterConversionFunct",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "calcFluxWeightingFactor",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "interpSetPoint",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "-0.05 exp 0.0"
+  },
+  {
+   "fn": "isLeapYear",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "False"
+  }
+ ]
+}

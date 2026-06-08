@@ -226,7 +226,10 @@ class MirLoweringBase:
         params = self.lower_params(fn)
         ret = self.return_type(fn)
         declared, mut, preamble = self.function_preamble(fn, param_names)
-        body = preamble + [self.lower_stmt(n, declared, mut) for n in fn.body]
+        # `lower_stmt` may return None to *drop* a statement (e.g. a target with
+        # no `assert` — see the Mojo backend); filter those out.
+        lowered = [self.lower_stmt(n, declared, mut) for n in fn.body]
+        body = preamble + [s for s in lowered if s is not None]
         return self.make_function(fn, params, ret, body)
 
     def make_function(self, fn, params, ret, body):
@@ -269,13 +272,13 @@ class MirLoweringBase:
         if isinstance(node, mir.MirIf):
             return self.ns.If(
                 test=self.lower_expr(node.test),
-                body=[self.lower_stmt(n, declared, mut) for n in node.body],
-                orelse=[self.lower_stmt(n, declared, mut) for n in node.orelse],
+                body=self._lower_block(node.body, declared, mut),
+                orelse=self._lower_block(node.orelse, declared, mut),
             )
         if isinstance(node, mir.MirWhile):
             return self.ns.While(
                 test=self.lower_expr(node.test),
-                body=[self.lower_stmt(n, declared, mut) for n in node.body],
+                body=self._lower_block(node.body, declared, mut),
             )
         if isinstance(node, mir.MirForRange):
             return self.lower_for_range(node, declared, mut)
@@ -304,8 +307,14 @@ class MirLoweringBase:
             start=self.lower_expr(node.start),
             stop=self.lower_expr(node.stop),
             step=self.lower_expr(node.step) if node.step else None,
-            body=[self.lower_stmt(n, declared, mut) for n in node.body],
+            body=self._lower_block(node.body, declared, mut),
         )
+
+    def _lower_block(self, nodes, declared, mut):
+        """Lower a statement block, dropping any statement that lowers to None
+        (a backend may intentionally drop e.g. `assert`)."""
+        lowered = [self.lower_stmt(n, declared, mut) for n in nodes]
+        return [s for s in lowered if s is not None]
 
     def lower_assign(self, node: mir.MirAssign, declared: set[str], mut: set[str]):  # pragma: no cover - abstract
         raise NotImplementedError

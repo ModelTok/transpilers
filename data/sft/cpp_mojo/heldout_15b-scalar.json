@@ -1,0 +1,180 @@
+{
+ "tag": "15b-scalar",
+ "results": [
+  {
+   "fn": "BetweenDateHoursLeftInclusive",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "0.0 exp 1.0",
+   "code": "def BetweenDateHoursLeftInclusive(TestDate: Int, TestHour: Int, StartDate: Int, StartHour: Int, EndDate: Int, EndHour: Int) -> Bool:\n    var TestRatioOfDay: Float64 = Float64(TestHour) / 24.0\n    var StartRatioOfDay: Float64 = Float64(StartDate) + StartHour / 24.0\n    var EndRatioOfDay: Float64 = Float64(EndDate) + EndHour / 24.0\n    if StartDate + StartRatioOfDay <= EndDate + EndRatioOfDay:\n        return (StartDate + StartRatioOfDay <= TestDate + TestRatioOfDay) and (TestDate + TestRatioOfDay <= EndDate + EndRatioOfDay)\n    return (EndDate + EndRatioOfDay <= TestDate + TestRatioOfDay) and (TestDate + TestRatioOfDay <= StartDate + StartRatioOfDay)"
+  },
+  {
+   "fn": "CalcASHRAEVerticalWall",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "from math import pow\n\ndef CalcASHRAEVerticalWall(DeltaTemp: Float64) -> Float64:\n    return 1.31 * pow(abs(DeltaTemp), 1.0 / 3.0)"
+  },
+  {
+   "fn": "CalcAwbiHattonHeatedFloor",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "from math import pow\n\ndef CalcAwbiHattonHeatedFloor(DeltaTemp: Float64, HydraulicDiameter: Float64) -> Float64:\n    if HydraulicDiameter > 1.0:\n        return 2.175 * pow(abs(DeltaTemp), 0.308) / pow(HydraulicDiameter, 0.076)\n    var pow_fac: Float64 = 2.175 / pow(1.0, 0.076)\n    return pow_fac * pow(abs(DeltaTemp), 0.308)"
+  },
+  {
+   "fn": "CalcEmmelRoof",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/tmp/claude-1000/tmpvxtyhyux/k.mojo:16:30: error: use of unknown declaration 'mo",
+   "code": "from math import pow\n\ndef CalcWindSurfaceTheta(WindDir: Float64, SurfAzimuth: Float64) -> Float64:\n    var windDir: Float64 = WindDir\n    var surfAzi: Float64 = SurfAzimuth\n    if windDir >= 360:\n        windDir -= 360\n    if surfAzi >= 360:\n        surfAzi -= 360\n    var theta: Float64 = abs(windDir - surfAzi)\n    if theta > 180:\n        return abs(theta - 360)\n    return theta\n\ndef CalcEmmelRoof(WindAt10m: Float64, WindDir: Float64, LongAxisOutwardAzimuth: Float64) -> Float64:\n    var Theta: Float64 = abs(mod(WindDir, 360) - mod(LongAxisOutwardAzimuth, 360))\n    if Theta <= 22.5:\n        return 5.11 * pow(WindAt10m, 0.78)\n    if Theta <= 67.5:\n        return 4.60 * pow(WindAt10m, 0.79)\n    if Theta <= 112.5:\n        return 3.67 * pow(WindAt10m, 0.85)\n    if Theta <= 157.5:\n        return 4.60 * pow(WindAt10m, 0.79)\n    return 5.11 * pow(WindAt10m, 0.78)"
+  },
+  {
+   "fn": "CalcKhalifaEq3WallAwayFromHeat",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "from math import pow\n\ndef CalcKhalifaEq3WallAwayFromHeat(DeltaTemp: Float64) -> Float64:\n    return 2.07 * pow(abs(DeltaTemp), 0.23)"
+  },
+  {
+   "fn": "CalcKhalifaEq7Ceiling",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "from math import pow\n\ndef CalcKhalifaEq7Ceiling(DeltaTemp: Float64) -> Float64:\n    return 3.1 * pow(abs(DeltaTemp), 0.17)"
+  },
+  {
+   "fn": "CalcNusseltJurges",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def CalcNusseltJurges(WindAtZ: Float64) -> Float64:\n    return 5.8 + 3.94 * WindAtZ"
+  },
+  {
+   "fn": "CalcWaltonStableHorizontalOrTilt",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "from math import pow\n\ndef CalcWaltonStableHorizontalOrTilt(DeltaTemp: Float64, CosineTilt: Float64) -> Float64:\n    return 1.810 * pow(abs(DeltaTemp), 1.0 / 3.0) / (1.382 + abs(CosineTilt))"
+  },
+  {
+   "fn": "F7",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def F7(X: Float64, A0: Float64, A1: Float64, A2: Float64, A3: Float64, A4: Float64, A5: Float64, A6: Float64) -> Float64:\n    return (A0 + X * (A1 + X * (A2 + X * (A3 + X * (A4 + X * (A5 + X * A6)))))) / 1e10"
+  },
+  {
+   "fn": "FanSpdResidualCool",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "from math import copysign\n\ndef FanSpdResidualCool(FanSpdRto: Float64, QCoilSenCoolingLoad: Float64, Ts_1: Float64, Tin: Float64, Garate: Float64, BF: Float64) -> Float64:\n    var ZnSenLoad: Float64 = QCoilSenCoolingLoad\n    if abs(ZnSenLoad) < 100.0:\n        ZnSenLoad = copysign(100.0, ZnSenLoad)\n    var Tout: Float64 = Tin - (Tin - Ts_1) * (1 - BF)\n    var TotCap: Float64 = FanSpdRto * Garate * 1005.0 * (Tin - Tout)\n    return TotCap / ZnSenLoad - 1.0"
+  },
+  {
+   "fn": "GetInterpValue",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def GetInterpValue(Tact: Float64, Tlo: Float64, Thi: Float64, Xlo: Float64, Xhi: Float64) -> Float64:\n    return Xhi - ((Thi - Tact) / (Thi - Tlo) * (Xhi - Xlo))"
+  },
+  {
+   "fn": "HRadPar",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/tmp/claude-1000/tmpfzl2bz50/k.mojo:8:19: error: use of unknown declaration 'ste",
+   "code": "from math import pi\n\ndef HRadPar(t1: Float64, t2: Float64, e1: Float64, e2: Float64) -> Float64:\n    var HRadPar: Float64 = 0.0\n    var dv: Float64 = 0.0\n    if e1 > 0.001 and e2 > 0.001:\n        dv = 1.0 / e1 + 1.0 / e2 - 1.0\n        HRadPar = stefan_boltzmann / dv * (t1 + t2) * (t1 ** 2 + t2 ** 2)\n    return HRadPar"
+  },
+  {
+   "fn": "Interp",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def Interp(Lower: Float64, Upper: Float64, InterpFac: Float64) -> Float64:\n    return Lower + InterpFac * (Upper - Lower)"
+  },
+  {
+   "fn": "MakeUpWaterVolFlowFunct",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def MakeUpWaterVolFlowFunct(MakeUpWaterMassFlowRate: Float64, Density: Float64) -> Float64:\n    return MakeUpWaterMassFlowRate / Density"
+  },
+  {
+   "fn": "PsyRhoAirFnPbTdbW",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def PsyRhoAirFnPbTdbW(pb: Float64, tdb: Float64, dw: Float64) -> Float64:\n    return pb / (287.0 * (tdb + 273.15) * (1.0 + 1.6077687 * max(dw, 1e-05)))"
+  },
+  {
+   "fn": "PsyTdbFnHW",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def PsyTdbFnHW(H: Float64, dW: Float64) -> Float64:\n    var W: Float64 = max(dW, 1e-05)\n    return (H - 2.50094e06 * W) / (1.00484e03 + 1.85895e03 * W)"
+  },
+  {
+   "fn": "RhoH2O",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def RhoH2O(TB: Float64) -> Float64:\n    return 1000.1207 + 8.3215874e-04 * TB - 4.929976e-03 * TB ** 2 + 8.4791863e-06 * TB ** 3"
+  },
+  {
+   "fn": "SandiaModuleTemperature",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "from math import exp\n\ndef SandiaModuleTemperature(Ibc: Float64, Idc: Float64, Ws: Float64, Ta: Float64, fd: Float64, a: Float64, b: Float64) -> Float64:\n    var E: Float64 = Ibc + fd * Idc\n    return E * exp(a + b * Ws) + Ta"
+  },
+  {
+   "fn": "VB_CriticalSlatAngle",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def VB_CriticalSlatAngle(OMEGA_DEG: Float64) -> Float64:\n    var VB_CriticalSlatAngle: Float64 = 0\n    VB_CriticalSlatAngle = 90.0 - OMEGA_DEG\n    return VB_CriticalSlatAngle"
+  },
+  {
+   "fn": "Windward",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def Windward(CosTilt: Float64, Azimuth: Float64, WindDirection: Float64) -> Bool:\n    var Diff: Float64 = 0.0\n    if abs(CosTilt) >= 0.98:\n        return True\n    Diff = abs(WindDirection - Azimuth)\n    if (Diff - 180.0) > 0.001:\n        Diff -= 360.0\n    return (abs(Diff) - 90.0) <= 0.001"
+  },
+  {
+   "fn": "calcFluxWeightingFactor",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def calcFluxWeightingFactor(weightedHeatFlux: Float64, uniformHeatFlux: Float64) -> Float64:\n    var returnValue: Float64 = 0\n    var tolerance: Float64 = 1.0e-06\n    if abs(uniformHeatFlux) <= tolerance:\n        returnValue = 1.0\n    else:\n        returnValue = weightedHeatFlux / uniformHeatFlux\n    return returnValue"
+  },
+  {
+   "fn": "d_eq",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def d_eq(a: Float64, b: Float64) -> Bool:\n    return abs(a - b) < 2.0"
+  },
+  {
+   "fn": "interpSetPoint",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def interpSetPoint(LowVal: Float64, HighVal: Float64, RefVal: Float64, SetptAtLowVal: Float64, SetptAtHighVal: Float64) -> Float64:\n    if LowVal >= HighVal:\n        return 0.5 * (SetptAtLowVal + SetptAtHighVal)\n    if RefVal <= LowVal:\n        return SetptAtLowVal\n    if RefVal >= HighVal:\n        return SetptAtHighVal\n    return SetptAtLowVal - ((RefVal - LowVal) / (HighVal - LowVal)) * (SetptAtLowVal - SetptAtHighVal)"
+  },
+  {
+   "fn": "isLeapYear",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def isLeapYear(Year: Int) -> Bool:\n    if Year % 4 == 0:\n        if Year % 100 == 0 and Year % 400 != 0:\n            return False\n        return True\n    return False"
+  },
+  {
+   "fn": "should_be_fixed_output",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": "",
+   "code": "def should_be_fixed_output(value: Float64) -> Bool:\n    return ((value >= 0.099999999999999995 or value <= -0.099999999999999995) or (value == 0.0) or (value == -0.0))"
+  }
+ ]
+}

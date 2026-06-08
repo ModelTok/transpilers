@@ -1,0 +1,42 @@
+{
+  "id": "022",
+  "name": "statistics_ops",
+  "tier": 3,
+  "concept": "numerical_statistics",
+  "tags": [
+    "statistics",
+    "numerical",
+    "sorting"
+  ],
+  "description": "Return (mean, median, population_std_dev) of a list of floats.",
+  "cpp_source": "#include <vector>\n#include <cmath>\n#include <algorithm>\n#include <tuple>\nstd::tuple<double,double,double> statistics_ops(std::vector<double> v) {\n    int n = v.size();\n    double mean = 0; for (double x : v) mean += x; mean /= n;\n    std::sort(v.begin(), v.end());\n    double median = n%2 ? v[n/2] : (v[n/2-1]+v[n/2])/2.0;\n    double var = 0; for (double x : v) var += (x-mean)*(x-mean); var /= n;\n    return {mean, median, std::sqrt(var)};\n}",
+  "python_reference": "import math\n\ndef statistics_ops(v: list) -> tuple:\n    n = len(v)\n    mean = sum(v) / n\n    sv = sorted(v)\n    median = sv[n//2] if n%2 else (sv[n//2-1]+sv[n//2])/2\n    std = math.sqrt(sum((x-mean)**2 for x in v) / n)\n    return (mean, median, std)",
+  "mojo_reference": "import math\n\nfn statistics_ops(v: List[Float64]) -> Tuple[Float64, Float64, Float64]:\n    var n = len(v)\n    var mean: Float64 = 0\n    for x in v: mean += x[]\n    mean /= n\n    var sv = sort(v)\n    var median: Float64\n    if n % 2 == 1:\n        median = sv[n // 2]\n    else:\n        median = (sv[n // 2 - 1] + sv[n // 2]) / 2.0\n    var variance: Float64 = 0\n    for x in v: variance += (x[] - mean) ** 2\n    variance /= n\n    return (mean, median, math.sqrt(variance))",
+  "tests": [
+    {
+      "args": [
+        [
+          2.0,
+          4.0,
+          4.0,
+          4.0,
+          5.0,
+          5.0,
+          7.0,
+          9.0
+        ]
+      ],
+      "expected": "(5.0, 4.5, 2.0)"
+    },
+    {
+      "args": [
+        [
+          1.0,
+          2.0,
+          3.0
+        ]
+      ],
+      "expected": "(2.0, 2.0, 0.816496580927726)"
+    }
+  ]
+}

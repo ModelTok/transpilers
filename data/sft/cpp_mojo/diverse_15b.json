@@ -1,0 +1,434 @@
+[
+ {
+  "name": "Box3",
+  "category": "struct",
+  "status": "pass",
+  "detail": "",
+  "code": "@fieldwise_init\nstruct Box3(Copyable, Movable):\n    var lx: Float64\n    var ly: Float64\n    var lz: Float64\n    var ux: Float64\n    var uy: Float64\n    var uz: Float64\n\n    def volume(self) -> Float64:\n        return (self.ux - self.lx) * (self.uy - self.ly) * (self.uz - self.lz)\n\n    def contains(self, x: Float64, y: Float64, z: Float64) -> Bool:\n        return x >= self.lx and x <= self.ux and y >= self.ly and y <= self.uy and z >= self.lz and z <= self.uz",
+  "repaired": false
+ },
+ {
+  "name": "Calculator",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpdzrx22d4/b.mojo:9:16: error: value of type 'Calculator' cannot be implicitly copied, it does not con",
+  "code": "struct Calculator(Copyable, Movable):\n    var acc: Float64\n\n    def __init__(out self):\n        self.acc = 0.0\n\n    def add(mut self, x: Float64) -> Calculator:\n        self.acc += x\n        return self\n\n    def sub(mut self, x: Float64) -> Calculator:\n        self.acc -= x\n        return self\n\n    def mul(mut self, x: Float64) -> Calculator:\n        self.acc *= x\n        return self\n\n    def clear(mut self):\n        self.acc = 0.0\n        return self\n\n    def result(self) -> Float64:\n        return self.acc",
+  "repaired": false
+ },
+ {
+  "name": "Date",
+  "category": "struct",
+  "status": "pass",
+  "detail": "",
+  "code": "@fieldwise_init\nstruct Date(Copyable, Movable):\n    var year: Int\n    var month: Int\n    var day: Int\n\ndef is_leap(y: Int) -> Bool:\n    return (y % 4 == 0 and y % 100 != 0) or (y % 400 == 0)\n\ndef day_of_year(d: Date) -> Int:\n    var days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]\n    var total = d.day\n    for i in range(d.month - 1):\n        total += days[i]\n    if d.month > 2 and is_leap(d.year):\n        total += 1\n    return total",
+  "repaired": false
+ },
+ {
+  "name": "Interval2",
+  "category": "operator",
+  "status": "pass",
+  "detail": "",
+  "code": "@fieldwise_init\nstruct Interval2(Copyable, Movable):\n    var lo: Float64\n    var hi: Float64\n\n    def __add__(self, o: Interval2) -> Interval2:\n        return Interval2(self.lo + o.lo, self.hi + o.hi)\n\n    def __mul__(self, s: Float64) -> Interval2:\n        return Interval2(self.lo * s, self.hi * s)\n\n    def __eq__(self, o: Interval2) -> Bool:\n        return self.lo == o.lo and self.hi == o.hi\n\n    def width(self) -> Float64:\n        return self.hi - self.lo\n\n    def contains(self, x: Float64) -> Bool:\n        return x >= self.lo and x <= self.hi\n\n    def overlaps(self, o: Interval2) -> Bool:\n        return self.lo <= o.hi and o.lo <= self.hi",
+  "repaired": false
+ },
+ {
+  "name": "Matrix2",
+  "category": "operator",
+  "status": "pass",
+  "detail": "",
+  "code": "@fieldwise_init\nstruct Mat2(Copyable, Movable):\n    var a: Float64\n    var b: Float64\n    var c: Float64\n    var d: Float64\n\n    def __add__(self, o: Mat2) -> Mat2:\n        return Mat2(self.a + o.a, self.b + o.b, self.c + o.c, self.d + o.d)\n\n    def __mul__(self, o: Mat2) -> Mat2:\n        return Mat2(self.a*o.a + self.b*o.c, self.a*o.b + self.b*o.d, self.c*o.a + self.d*o.c, self.c*o.b + self.d*o.d)\n\n    def det(self) -> Float64:\n        return self.a*self.d - self.b*self.c",
+  "repaired": false
+ },
+ {
+  "name": "Maybe_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpncz85mkj/b.mojo:15:18: error: 'Maybe' parameter 'T' has 'ImplicitlyCopyable & Movable' type, but val",
+  "code": "@fieldwise_init\nstruct Maybe[T: ImplicitlyCopyable & Movable](Copyable, Movable):\n    var present: Bool\n    var value: Self.T\n\n    def get_or(self, fallback: Self.T) -> Self.T:\n        if self.present:\n            return self.value\n        return fallback\n\n    def has(self) -> Bool:\n        return self.present",
+  "repaired": false
+ },
+ {
+  "name": "StringBuilder",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp8x1a68nn/b.mojo:5:20: error: cannot implicitly convert 'String' type as a value to an instance of 'S",
+  "code": "struct StringBuilder(Copyable, Movable):\n    var buf: String\n\n    def __init__(out self):\n        self.buf = String \"\"\n\n    def append(mut self, s: String):\n        self.buf = self.buf + s\n\n    def append_char(mut self, c: String):\n        self.buf = self.buf + c\n\n    def length(self) -> Int:\n        return len(self.buf)\n\n    def result(self) -> String:\n        return self.buf",
+  "repaired": false
+ },
+ {
+  "name": "Thermostat",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Thermostat(Copyable, Movable):\n    var setpoint: Float64\n    var current: Float64\n\n    def __init__(out self, sp: Float64):\n        self.setpoint = sp\n        self.current = sp\n\n    def adjust(mut self, delta: Float64):\n        self.setpoint = self.setpoint + delta\n\n    def step(mut self):\n        self.current = self.current + (self.setpoint - self.current) * 0.5\n\n    def error(self) -> Float64:\n        var e = self.setpoint - self.current\n        if e < 0:\n            e = -e\n        return e",
+  "repaired": false
+ },
+ {
+  "name": "TimeSpan",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpsuslr4ql/b.mojo:24:21: error: no matching function in initialization",
+  "code": "@fieldwise_init\nstruct TimeSpan(Copyable, Movable):\n    var secs: Int\n\n    def __add__(self, o: TimeSpan) -> TimeSpan:\n        return TimeSpan(self.secs + o.secs)\n\n    def __sub__(self, o: TimeSpan) -> TimeSpan:\n        return TimeSpan(self.secs - o.secs)\n\n    def __mul__(self, n: Int) -> TimeSpan:\n        return TimeSpan(self.secs * n)\n\n    def hours(self) -> Int:\n        return self.secs // 3600\n\n    def minutes(self) -> Int:\n        return (self.secs // 60) % 60\n\n    def seconds(self) -> Int:\n        return self.secs % 60",
+  "repaired": false
+ },
+ {
+  "name": "Triangle",
+  "category": "struct",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "from std.math import sqrt\n\n@fieldwise_init\nstruct Triangle(Copyable, Movable):\n    var ax: Float64\n    var ay: Float64\n    var bx: Float64\n    var by: Float64\n    var cx: Float64\n    var cy: Float64\n\n    def area(self) -> Float64:\n        var v = (self.bx - self.ax) * (self.cy - self.ay) - (self.cx - self.ax) * (self.by - self.ay)\n        return (v if v < 0.0 else -v) * 0.5\n\n    def perimeter(self) -> Float64:\n        var d1 = sqrt((self.bx - self.ax) * (self.bx - self.ax) + (self.by - self.ay) * (self.by - self.ay))\n        var d2 = sqrt((self.cx - self.bx) * (self.cx - self.bx) + (self.cy - self.by) * (self.cy - self.by))\n        var d3 = sqrt((self.ax - self.cx) * (self.ax - self.cx) + (self.ay - self.cy) * (self.ay - self.cy))\n        return d1 + d2 + d3",
+  "repaired": false
+ },
+ {
+  "name": "Triple_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpa8ccnbmg/b.mojo:9:19: error: 'T' does not implement the '__lt__' method",
+  "code": "@fieldwise_init\nstruct Triple[T: ImplicitlyCopyable & Movable](Copyable, Movable):\n    var a: Self.T\n    var b: Self.T\n    var c: Self.T\n\n    def mid(self) -> Self.T:\n        var m = self.a\n        if self.b < m:\n            m = self.b\n        if self.c < m:\n            m = self.c\n        return m",
+  "repaired": false
+ },
+ {
+  "name": "angle_between2d",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import atan2\n\ndef angle_between2d(ax: Float64, ay: Float64, bx: Float64, by: Float64) -> Float64:\n    var dot = ax * bx + ay * by\n    var cross = ax * by - ay * bx\n    return atan2(cross, dot)",
+  "repaired": false
+ },
+ {
+  "name": "binary_search",
+  "category": "algo",
+  "status": "pass",
+  "detail": "",
+  "code": "def binary_search(arr: List[Int], target: Int) -> Int:\n    var lo = 0\n    var hi = len(arr) - 1\n    while lo <= hi:\n        var mid = lo + (hi - lo) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1",
+  "repaired": false
+ },
+ {
+  "name": "bitwise_abs",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def bitwise_abs(n: Int) -> Int:\n    var mask = n >> 63\n    return (n + mask) ^ mask",
+  "repaired": false
+ },
+ {
+  "name": "bump_counter",
+  "category": "reference",
+  "status": "pass",
+  "detail": "",
+  "code": "def bump_counter(mut counter: Int, times: Int):\n    for _ in range(times):\n        counter += 1",
+  "repaired": false
+ },
+ {
+  "name": "checked_log2",
+  "category": "error",
+  "status": "pass",
+  "detail": "",
+  "code": "from math import log2\n\ndef checked_log2(x: Float64) raises -> Float64:\n    if x <= 0.0:\n        raise Error(\"non-positive\")\n    return log2(x)",
+  "repaired": false
+ },
+ {
+  "name": "clamp_functor",
+  "category": "closure",
+  "status": "pass",
+  "detail": "",
+  "code": "trait IntFn(Copyable, Movable):\n    def call(self, x: Int) -> Int:\n        ...\n\n@fieldwise_init\nstruct Clamp(IntFn, Copyable, Movable):\n    var lo: Int\n    var hi: Int\n    def call(self, x: Int) -> Int:\n        if x < self.lo:\n            return self.lo\n        if x > self.hi:\n            return self.hi\n        return x\n\ndef make_clamp(lo: Int, hi: Int) -> Clamp:\n    return Clamp(lo, hi)",
+  "repaired": false
+ },
+ {
+  "name": "clamp_int",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def clamp_int(x: Int, lo: Int, hi: Int) -> Int:\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x",
+  "repaired": false
+ },
+ {
+  "name": "collatz_steps_capped",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def collatz(n: Int, cap: Int) -> Int:\n    var x = n\n    var steps = 0\n    while x != 1 and steps < cap:\n        if x % 2 == 0:\n            x = x // 2\n        else:\n            x = 3 * x + 1\n        steps += 1\n    return steps",
+  "repaired": false
+ },
+ {
+  "name": "cosine_similarity2d",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import sqrt\n\ndef cosine_similarity2d(ax: Float64, ay: Float64, bx: Float64, by: Float64) -> Float64:\n    var dot = ax * bx + ay * by\n    var na = sqrt(ax * ax + ay * ay)\n    var nb = sqrt(bx * bx + by * by)\n    return dot / (na * nb)",
+  "repaired": false
+ },
+ {
+  "name": "count_chars",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def count_chars(s: String) -> Int:\n    return len(s)",
+  "repaired": false
+ },
+ {
+  "name": "day_kind",
+  "category": "enum",
+  "status": "pass",
+  "detail": "",
+  "code": "comptime MON = 0\ncomptime TUE = 1\ncomptime WED = 2\ncomptime THU = 3\ncomptime FRI = 4\ncomptime SAT = 5\ncomptime SUN = 6\n\ndef is_weekend(day: Int) -> Int:\n    if day == SAT or day == SUN:\n        return 1\n    return 0",
+  "repaired": false
+ },
+ {
+  "name": "dispatch_op",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def dispatch_op(op: Int, a: Int, b: Int) -> Int:\n    if op == 0:\n        return a + b\n    elif op == 1:\n        return a - b\n    elif op == 2:\n        return a * b\n    elif op == 3:\n        if b != 0:\n            return a // b\n        else:\n            return 0\n    else:\n        return -1",
+  "repaired": false
+ },
+ {
+  "name": "factorial_iter",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def factorial_iter(n: Int) -> Int:\n    var r = 1\n    for i in range(2, n + 1):\n        r *= i\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "fraction_reduce_num",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def gcd3(a: Int, b: Int) -> Int:\n    var x = a\n    var y = b\n    while y != 0:\n        var t = y\n        y = x % y\n        x = t\n    return x\n\ndef reduce_num(num: Int, den: Int) -> Int:\n    var g = gcd3(abs(num), abs(den))\n    if g == 0:\n        return num\n    return num // g",
+  "repaired": false
+ },
+ {
+  "name": "gray_code",
+  "category": "algo",
+  "status": "pass",
+  "detail": "",
+  "code": "def gray_code(n: Int) -> Int:\n    return n ^ (n >> 1)",
+  "repaired": false
+ },
+ {
+  "name": "identity_build",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def identity_build(n: Int) -> List[List[Float64]]:\n    var m = List[List[Float64]]()\n    for _ in range(n):\n        var row = List[Float64]()\n        for _ in range(n):\n            row.append(0.0)\n        m.append(row^)\n    for i in range(n):\n        m[i][i] = 1.0\n    return m^",
+  "repaired": false
+ },
+ {
+  "name": "int_pow",
+  "category": "algo",
+  "status": "pass",
+  "detail": "",
+  "code": "def int_pow(base: Int, exp: Int) -> Int:\n    if exp == 0:\n        return 1\n    var half = int_pow(base, exp // 2)\n    if exp % 2 == 0:\n        return half * half\n    return half * half * base",
+  "repaired": false
+ },
+ {
+  "name": "is_power_of_two",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def is_pow2(n: Int) -> Bool:\n    return n > 0 and (n & (n - 1)) == 0",
+  "repaired": false
+ },
+ {
+  "name": "levenshtein",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def levenshtein(a: String, b: String) -> Int:\n    var n = a.byte_length()\n    var m = b.byte_length()\n    var prev = List[Int]()\n    for _i in range(m + 1):\n        prev.append(0)\n    var cur = List[Int]()\n    for _i in range(m + 1):\n        cur.append(0)\n    for i in range(1, n + 1):\n        cur[0] = i\n        for j in range(1, m + 1):\n            var cost = 1\n            if String(a[byte=i - 1]) == String(b[byte=j - 1]):\n                cost = 0\n            var d = prev[j] + 1\n            var ins = cur[j - 1] + 1\n            var sub = prev[j - 1] + cost\n            var mn = d\n            if ins < mn:\n                mn = ins\n            if sub < mn:\n                mn = sub\n            cur[j] = mn\n        for j in range(m + 1):\n            prev[j] = cur[j]\n    return prev[m]",
+  "repaired": false
+ },
+ {
+  "name": "log_interp",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import log\n\ndef log_interp(x0: Float64, y0: Float64, x1: Float64, y1: Float64, x: Float64) -> Float64:\n    var lx0 = log(x0)\n    var lx1 = log(x1)\n    var lx = log(x)\n    var t = (lx - lx0) / (lx1 - lx0)\n    return y0 + (y1 - y0) * t",
+  "repaired": false
+ },
+ {
+  "name": "lookup_default",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpu4q6fjh3/b.mojo:3:17: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def lookup_default(m: Dict[String, Int], key: String, dflt: Int) -> Int:\n    if key in m:\n        return m[key]\n    return dflt",
+  "repaired": false
+ },
+ {
+  "name": "matrix_determinant_3x3",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def det3x3(m: List[List[Float64]]) -> Float64:\n    return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])",
+  "repaired": false
+ },
+ {
+  "name": "median_of_array",
+  "category": "array",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpurxl3a0y/b.mojo:6:9: error: 'List[Float64]' value has no attribute 'sort'",
+  "code": "def median_of_array(v: List[Float64]) -> Float64:\n    var copy = List[Float64]()\n    for i in range(len(v)):\n        copy.append(v[i])\n    var n = len(copy)\n    copy.sort()\n    if n % 2 == 1:\n        return copy[n // 2]\n    return (copy[n // 2 - 1] + copy[n // 2]) / 2.0",
+  "repaired": false
+ },
+ {
+  "name": "merge_sum",
+  "category": "map",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def merge_sum(k1: List[String], v1: List[Int], k2: List[String], v2: List[Int], target: String) raises -> Int:\n    var m = Dict[String, Int]()\n    for i in range(len(k1)):\n        var ok = True\n        if k1[i] in m:\n            m[k1[i]] = m[k1[i]] + v1[i]\n        else:\n            ok = False\n        if ok:\n            m[k2[i]] = m[k2[i]] + v2[i]\n    if target in m:\n        return m[target]\n    return 0",
+  "repaired": false
+ },
+ {
+  "name": "min_max_out",
+  "category": "reference",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp33_8bssk/b.mojo:1:36: error: argument already has a convention specified",
+  "code": "def min_max_out(xs: List[Int], out var lo: Int, out var hi: Int):\n    var lo = xs[0]\n    var hi = xs[0]\n    for i in range(len(xs)):\n        var v = xs[i]\n        if v < lo:\n            lo = v\n        if v > hi:\n            hi = v",
+  "repaired": false
+ },
+ {
+  "name": "min_value_key",
+  "category": "map",
+  "status": "pass",
+  "detail": "",
+  "code": "def min_value_key(keys: List[Int], vals: List[Int]) raises -> Int:\n    var m = Dict[Int, Int]()\n    for i in range(len(keys)):\n        m[keys[i]] = vals[i]\n    var best_key = keys[0]\n    var best_val = m[keys[0]]\n    for i in range(len(keys)):\n        if m[keys[i]] < best_val:\n            best_val = m[keys[i]]\n            best_key = keys[i]\n    return best_key",
+  "repaired": false
+ },
+ {
+  "name": "mutual_recursion_even_odd",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def is_even(n: Int) -> Bool:\n    if n == 0:\n        return True\n    return is_odd(n - 1)\n\ndef is_odd(n: Int) -> Bool:\n    if n == 0:\n        return False\n    return is_even(n - 1)",
+  "repaired": false
+ },
+ {
+  "name": "parse_bool_checked",
+  "category": "error",
+  "status": "pass",
+  "detail": "",
+  "code": "def parse_bool_checked(s: String) raises -> Int:\n    if s == String(\"true\"):\n        return 1\n    if s == String(\"false\"):\n        return 0\n    raise Error(\"not a bool\")",
+  "repaired": false
+ },
+ {
+  "name": "parse_positive",
+  "category": "error",
+  "status": "pass",
+  "detail": "",
+  "code": "def parse_positive(n: Int) raises -> Int:\n    if n <= 0:\n        raise Error(\"must be positive\")\n    var total = 0\n    for i in range(1, n + 1):\n        total += i\n    return total",
+  "repaired": false
+ },
+ {
+  "name": "power_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def power_rec(base: Int, exp: Int) -> Int:\n    if exp == 0:\n        return 1\n    return base * power_rec(base, exp - 1)",
+  "repaired": false
+ },
+ {
+  "name": "range_sum",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def range_sum(v: List[Int], lo: Int, hi: Int) -> Int:\n    var s = 0\n    for i in range(lo, hi + 1):\n        s += v[i]\n    return s",
+  "repaired": false
+ },
+ {
+  "name": "reverse_in_place",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def reverse_in_place(mut v: List[Float64]):\n    var i = 0\n    var j = len(v) - 1\n    while i < j:\n        var tmp = v[i]\n        v[i] = v[j]\n        v[j] = tmp\n        i += 1\n        j -= 1",
+  "repaired": false
+ },
+ {
+  "name": "reverse_number_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def rev_helper(n: Int, acc: Int) -> Int:\n    if n == 0:\n        return acc\n    return rev_helper(n // 10, acc * 10 + n % 10)\n\ndef reverse_number_rec(n: Int) -> Int:\n    return rev_helper(n, 0)",
+  "repaired": false
+ },
+ {
+  "name": "run_length_encode",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def run_length_encode(s: String) -> String:\n    var n = s.byte_length()\n    var result = String(\"\")\n    var i = 0\n    while i < n:\n        var c = String(s[byte=i])\n        var run = 1\n        while i + run < n and String(s[byte=i + run]) == c:\n            run += 1\n        result += c\n        result += String(run^)\n        i += run\n    return result",
+  "repaired": false
+ },
+ {
+  "name": "running_apply",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp9dtfvd06/b.mojo:17:19: error: use of unknown declaration 'DoubleR'",
+  "code": "trait IntFn(Copyable, Movable):\n    def call(self, x: Int) -> Int:\n        ...\n\n@fieldwise_init\nstruct Inc(IntFn, Copyable, Movable):\n    def call(self, x: Int) -> Int:\n        return x + 1\n\ndef running_apply[F: IntFn](f: F, x: Int, n: Int):\n    var cur = x\n    for _i in range(n):\n        cur = f.call(cur)\n        print(cur, end=\"\")",
+  "repaired": false
+ },
+ {
+  "name": "scale_then_offset",
+  "category": "closure",
+  "status": "pass",
+  "detail": "",
+  "code": "trait FloatFn(Copyable, Movable):\n    def call(self, x: Float64) -> Float64:\n        ...\n\n@fieldwise_init\nstruct ScaleThenOffset(FloatFn, Copyable, Movable):\n    var s: Float64\n    var o: Float64\n    def call(self, x: Float64) -> Float64:\n        return x * self.s + self.o\n\ndef scale_then_offset(s: Float64, o: Float64) -> ScaleThenOffset:\n    return ScaleThenOffset(s, o)",
+  "repaired": false
+ },
+ {
+  "name": "severity_order",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpvmy0cxxf/b.mojo:17:11: error: invalid call to 'is_at_least': value passed to 'level' cannot be conve",
+  "code": "@fieldwise_init\nstruct Severity(Copyable, Movable):\n    var value: Int\n\ncomptime DEBUG = Severity(0)\ncomptime INFO = Severity(1)\ncomptime WARN = Severity(2)\ncomptime ERROR = Severity(3)\ncomptime FATAL = Severity(4)\n\ndef is_at_least(level: Int, threshold: Int) -> Int:\n    if level >= threshold:\n        return 1\n    return 0",
+  "repaired": false
+ },
+ {
+  "name": "swap_nibbles",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpwphptgs2/b.mojo:2:22: error: statements must start at the beginning of a line",
+  "code": "def swap_nibbles(b: UInt64) -> UInt64:\n    var lo = b & 0x0FULL\n    var hi = (b >> 4) & 0x0FULL\n    return (lo << 4) | hi",
+  "repaired": false
+ },
+ {
+  "name": "swap_pair_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmphlhlpxu4/b.mojo:3:6: error: expression must be mutable in assignment",
+  "code": "def swap_vals[T: Copyable & Movable & ImplicitlyDestructible](mut a: T, mut b: T):\n    var t = a^\n    a^ = b^\n    b^ = t^",
+  "repaired": false
+ },
+ {
+  "name": "swap_refs",
+  "category": "reference",
+  "status": "pass",
+  "detail": "",
+  "code": "def swap_refs(mut a_ref: Int, mut b_ref: Int):\n    var t = a_ref^\n    a_ref^ = b_ref^\n    b_ref^ = t",
+  "repaired": false
+ },
+ {
+  "name": "transpose",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def transpose(m: List[List[Float64]]) -> List[List[Float64]]:\n    var rows = len(m)\n    var cols = len(m[0])\n    var t = List[List[Float64]]()\n    for _ in range(cols):\n        var row = List[Float64]()\n        for _ in range(rows):\n            row.append(0.0)\n        t.append(row^)\n    for i in range(rows):\n        for j in range(cols):\n            t[j][i] = m[i][j]\n    return t^",
+  "repaired": false
+ },
+ {
+  "name": "turn_right",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpwt5k6g1x/b.mojo:8:13: error: use of unknown declaration 'D_NORTH'",
+  "code": "def turn_right(dir: Int) -> Int:\n    return (dir + 1) % 4\n\ndef turn_left(dir: Int) -> Int:\n    return (dir + 3) % 4",
+  "repaired": false
+ },
+ {
+  "name": "weighted_mean3",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def weighted_mean3(a: Float64, wa: Float64, b: Float64, wb: Float64, c: Float64, wc: Float64) -> Float64:\n    return (a * wa + b * wb + c * wc) / (wa + wb + wc)",
+  "repaired": false
+ }
+]

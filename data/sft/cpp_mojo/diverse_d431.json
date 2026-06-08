@@ -1,0 +1,722 @@
+[
+ {
+  "name": "Accumulator",
+  "category": "class",
+  "status": "pass"
+ },
+ {
+  "name": "BankAccount",
+  "category": "class",
+  "status": "pass"
+ },
+ {
+  "name": "Box_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "Color",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Counter",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Date",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Frac",
+  "category": "operator",
+  "status": "compile_error"
+ },
+ {
+  "name": "Graph4",
+  "category": "class",
+  "status": "runtime_error"
+ },
+ {
+  "name": "IntQueue",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Inventory",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Mat2d",
+  "category": "operator",
+  "status": "compile_error"
+ },
+ {
+  "name": "Matrix2x2",
+  "category": "class",
+  "status": "pass"
+ },
+ {
+  "name": "MinHeap",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Money",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Pair_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "Polynomial",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Queue_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "Rational",
+  "category": "operator",
+  "status": "compile_error"
+ },
+ {
+  "name": "RingBuffer",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Segment",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "Stack_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "Tally",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "TimeSpan",
+  "category": "operator",
+  "status": "compile_error"
+ },
+ {
+  "name": "Vec2",
+  "category": "operator",
+  "status": "pass"
+ },
+ {
+  "name": "Vec3",
+  "category": "operator",
+  "status": "pass"
+ },
+ {
+  "name": "accumulate_dtype",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "adder_closure",
+  "category": "closure",
+  "status": "compile_error"
+ },
+ {
+  "name": "apply_functor",
+  "category": "closure",
+  "status": "compile_error"
+ },
+ {
+  "name": "apply_twice_dtype",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "array_mean",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "binary_search",
+  "category": "algo",
+  "status": "pass"
+ },
+ {
+  "name": "bitwise_abs",
+  "category": "bitops",
+  "status": "wrong_output"
+ },
+ {
+  "name": "bump_counter",
+  "category": "reference",
+  "status": "pass"
+ },
+ {
+  "name": "capitalize_words",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "catalan_rec",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "char_frequency",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "checked_avg",
+  "category": "error",
+  "status": "pass"
+ },
+ {
+  "name": "checked_index_str",
+  "category": "error",
+  "status": "wrong_output"
+ },
+ {
+  "name": "checked_nth_root",
+  "category": "error",
+  "status": "pass"
+ },
+ {
+  "name": "checked_sqrt_neg",
+  "category": "error",
+  "status": "compile_error"
+ },
+ {
+  "name": "clamp01",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "clamp_int",
+  "category": "control",
+  "status": "pass"
+ },
+ {
+  "name": "clear_lowest_set",
+  "category": "bitops",
+  "status": "pass"
+ },
+ {
+  "name": "coin_count",
+  "category": "algo",
+  "status": "runtime_error"
+ },
+ {
+  "name": "collatz_len",
+  "category": "algo",
+  "status": "compile_error"
+ },
+ {
+  "name": "compose2",
+  "category": "closure",
+  "status": "compile_error"
+ },
+ {
+  "name": "contains_all_keys",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "count_above_threshold",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "count_digits",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "count_equal_generic",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "count_leading_zeros",
+  "category": "bitops",
+  "status": "compile_error"
+ },
+ {
+  "name": "count_peaks",
+  "category": "array",
+  "status": "runtime_error"
+ },
+ {
+  "name": "count_trailing_zeros",
+  "category": "bitops",
+  "status": "compile_error"
+ },
+ {
+  "name": "count_words",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "day_kind",
+  "category": "enum",
+  "status": "compile_error"
+ },
+ {
+  "name": "dedup_count",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "dew_point",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "digit_count",
+  "category": "algo",
+  "status": "compile_error"
+ },
+ {
+  "name": "direction_vector",
+  "category": "enum",
+  "status": "pass"
+ },
+ {
+  "name": "doppler_shift",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "ema_step",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "erase_and_size",
+  "category": "map",
+  "status": "pass"
+ },
+ {
+  "name": "factorial",
+  "category": "algo",
+  "status": "pass"
+ },
+ {
+  "name": "fib_pair_rec",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "fill_lowest_bits",
+  "category": "bitops",
+  "status": "pass"
+ },
+ {
+  "name": "find_index_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "fraction_reduce_num",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "gaussian_pdf",
+  "category": "numeric",
+  "status": "compile_error"
+ },
+ {
+  "name": "gcd_rec",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "gelu_sigmoid_approx",
+  "category": "numeric",
+  "status": "compile_error"
+ },
+ {
+  "name": "gray_binary",
+  "category": "bitops",
+  "status": "wrong_output"
+ },
+ {
+  "name": "hadamard_product",
+  "category": "matrix",
+  "status": "compile_error"
+ },
+ {
+  "name": "harmonic_mean3",
+  "category": "numeric",
+  "status": "wrong_output"
+ },
+ {
+  "name": "horner_poly",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "hypotenuse_angle",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "identity_generic",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "insertion_sort",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "interleave_bits_small",
+  "category": "bitops",
+  "status": "compile_error"
+ },
+ {
+  "name": "is_bit_set",
+  "category": "bitops",
+  "status": "compile_error"
+ },
+ {
+  "name": "is_numeric",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "is_prime",
+  "category": "algo",
+  "status": "compile_error"
+ },
+ {
+  "name": "is_symmetric",
+  "category": "matrix",
+  "status": "wrong_output"
+ },
+ {
+  "name": "key_exists",
+  "category": "map",
+  "status": "runtime_error"
+ },
+ {
+  "name": "law_of_cosines_side",
+  "category": "math",
+  "status": "compile_error"
+ },
+ {
+  "name": "leap_year",
+  "category": "control",
+  "status": "pass"
+ },
+ {
+  "name": "levenshtein",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "log2_ratio",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "logistic_cdf",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "lookup_default",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "magnitude_db",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "matmul",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "matrix_determinant_3x3",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "matrix_max_element",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "matrix_power2_2x2",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "matrix_scalar_mul",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "matrix_trace_of_product",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "max_generic",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "median3_generic",
+  "category": "template",
+  "status": "wrong_output"
+ },
+ {
+  "name": "merge_sum",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "min_max_normalize",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "mode_value",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "mutual_recursion_even_odd",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "newton_sqrt",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "next_state",
+  "category": "enum",
+  "status": "compile_error"
+ },
+ {
+  "name": "nth_triangular_rec",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "parity",
+  "category": "bitops",
+  "status": "pass"
+ },
+ {
+  "name": "parse_int_checked",
+  "category": "error",
+  "status": "compile_error"
+ },
+ {
+  "name": "percentage_error",
+  "category": "numeric",
+  "status": "compile_error"
+ },
+ {
+  "name": "popcount",
+  "category": "bitops",
+  "status": "pass"
+ },
+ {
+  "name": "power_rec",
+  "category": "recursion",
+  "status": "pass"
+ },
+ {
+  "name": "present_value",
+  "category": "numeric",
+  "status": "compile_error"
+ },
+ {
+  "name": "quadrant_of_point",
+  "category": "control",
+  "status": "pass"
+ },
+ {
+  "name": "rad2deg",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "reduce_with",
+  "category": "closure",
+  "status": "compile_error"
+ },
+ {
+  "name": "repeat_string",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "reverse_byte",
+  "category": "bitops",
+  "status": "pass"
+ },
+ {
+  "name": "reverse_list_generic",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "reynolds_number",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "rot13",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "rotate_left64",
+  "category": "bitops",
+  "status": "pass"
+ },
+ {
+  "name": "round_to_decimals",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "run_length_count",
+  "category": "control",
+  "status": "compile_error"
+ },
+ {
+  "name": "safe_divide",
+  "category": "error",
+  "status": "pass"
+ },
+ {
+  "name": "scale_list_dtype",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "second_largest",
+  "category": "array",
+  "status": "pass"
+ },
+ {
+  "name": "severity_order",
+  "category": "enum",
+  "status": "pass"
+ },
+ {
+  "name": "sign_from_bits",
+  "category": "bitops",
+  "status": "wrong_output"
+ },
+ {
+  "name": "slope",
+  "category": "math",
+  "status": "pass"
+ },
+ {
+  "name": "softplus",
+  "category": "numeric",
+  "status": "compile_error"
+ },
+ {
+  "name": "stddev4",
+  "category": "numeric",
+  "status": "compile_error"
+ },
+ {
+  "name": "suit_color",
+  "category": "enum",
+  "status": "compile_error"
+ },
+ {
+  "name": "sum_digits",
+  "category": "algo",
+  "status": "compile_error"
+ },
+ {
+  "name": "sum_list_dtype",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "sum_values",
+  "category": "map",
+  "status": "compile_error"
+ },
+ {
+  "name": "swap_pair_generic",
+  "category": "template",
+  "status": "pass"
+ },
+ {
+  "name": "tanh_activation",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "to_upper_ascii",
+  "category": "string",
+  "status": "pass"
+ },
+ {
+  "name": "transform_and_total",
+  "category": "closure",
+  "status": "compile_error"
+ },
+ {
+  "name": "triangle_type",
+  "category": "control",
+  "status": "pass"
+ },
+ {
+  "name": "upper_triangular_sum",
+  "category": "matrix",
+  "status": "pass"
+ },
+ {
+  "name": "vec2_add",
+  "category": "struct",
+  "status": "compile_error"
+ },
+ {
+  "name": "weekday_from_daynum",
+  "category": "control",
+  "status": "pass"
+ },
+ {
+  "name": "wind_chill",
+  "category": "numeric",
+  "status": "pass"
+ },
+ {
+  "name": "z_score",
+  "category": "numeric",
+  "status": "pass"
+ }
+]

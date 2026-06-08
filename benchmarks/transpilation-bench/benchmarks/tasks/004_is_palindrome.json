@@ -1,0 +1,41 @@
+{
+  "id": "004",
+  "name": "is_palindrome",
+  "tier": 1,
+  "concept": "string_two_pointer",
+  "tags": [
+    "strings",
+    "two_pointers",
+    "boolean"
+  ],
+  "description": "Return True if the string is a palindrome (case-insensitive, ignoring spaces).",
+  "cpp_source": "#include <string>\n#include <algorithm>\n#include <cctype>\nbool is_palindrome(std::string s) {\n    s.erase(std::remove(s.begin(), s.end(), ' '), s.end());\n    std::transform(s.begin(), s.end(), s.begin(), ::tolower);\n    int l = 0, r = s.size() - 1;\n    while (l < r) {\n        if (s[l++] != s[r--]) return false;\n    }\n    return true;\n}",
+  "python_reference": "def is_palindrome(s: str) -> bool:\n    s = s.replace(' ', '').lower()\n    return s == s[::-1]",
+  "mojo_reference": "fn is_palindrome(s: String) -> Bool:\n    var cleaned = String(\"\")\n    for i in range(len(s)):\n        var c = s[i]\n        if c != \" \":\n            cleaned += c.lower()\n    var n = len(cleaned)\n    var l = 0\n    var r = n - 1\n    while l < r:\n        if cleaned[l] != cleaned[r]:\n            return False\n        l += 1\n        r -= 1\n    return True",
+  "tests": [
+    {
+      "args": [
+        "racecar"
+      ],
+      "expected": "True"
+    },
+    {
+      "args": [
+        "A man a plan a canal Panama"
+      ],
+      "expected": "True"
+    },
+    {
+      "args": [
+        "hello"
+      ],
+      "expected": "False"
+    },
+    {
+      "args": [
+        ""
+      ],
+      "expected": "True"
+    }
+  ]
+}

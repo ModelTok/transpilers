@@ -1,0 +1,53 @@
+# LLaMA-Factory SFT config — the C++→Mojo translator (first model in the 1:1 library).
+#
+# One model, ONE direction (C++→Mojo). No Python, no other targets. Mojo-language
+# acquisition data IS included because Mojo is this model's target and the base
+# has ~0% Mojo competency.
+#
+# Recommended: TWO PHASES (see README) — acquisition first to learn Mojo, then
+# translation to specialize. This file is the combined single-pass default;
+# translation is interleaved with acquisition (register both datasets below).
+#
+# Register in LLaMA-Factory data/dataset_info.json:
+#   "cpp_mojo_translation": { "file_name": "train_translation.jsonl",
+#     "columns": { "prompt": "instruction", "query": "input",
+#                  "response": "output", "system": "system" } },
+#   "mojo_acquisition": { "file_name": "mojo_acquisition.json",
+#     "columns": { "prompt": "instruction", "query": "input", "response": "output" } }
+
+### model
+model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora                 # small data → LoRA on 1x 24GB; switch to `full` w/ deepspeed for more
+lora_rank: 32
+lora_target: all
+
+### dataset
+# acquisition (learn Mojo) + translation (the task). Translation is tiny (41) vs
+# acquisition (1357); see README for two-phase / upweighting if it under-fits.
+dataset: mojo_acquisition,cpp_mojo_translation
+template: qwen
+cutoff_len: 4096
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+### output
+output_dir: saves/qwen2.5-coder-3b/cpp_mojo
+logging_steps: 5
+save_steps: 200
+plot_loss: true
+overwrite_output_dir: true
+report_to: none
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+learning_rate: 1.0e-4                  # LoRA; use 1e-5 for full-FT
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true

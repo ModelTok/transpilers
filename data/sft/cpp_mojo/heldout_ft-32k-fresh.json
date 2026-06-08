@@ -1,0 +1,101 @@
+{
+ "tag": "ft-32k-fresh",
+ "results": [
+  {
+   "fn": "CalcASHRAEVerticalWall",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "CalcWaltonUnstableHorizontalOrTilt",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "CalcWaltonStableHorizontalOrTilt",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "GetInterpValue",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "epexp",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "Interp",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "should_be_fixed_output",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "True"
+  },
+  {
+   "fn": "fixed_will_fit",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "True"
+  },
+  {
+   "fn": "add",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "subtract",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "PsyRhoAirFnPbTdbW",
+   "lang": "Mojo",
+   "status": "wrong_output",
+   "detail": "6.456845658092102e-11 exp 1.16472155727114e-10"
+  },
+  {
+   "fn": "PsyRhovFnTdbRhLBnd0C",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "F6",
+   "lang": "Mojo",
+   "status": "pass",
+   "detail": ""
+  },
+  {
+   "fn": "F7",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "RhoH2O",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  },
+  {
+   "fn": "fclamp",
+   "lang": "Mojo",
+   "status": "compile_error",
+   "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/moj"
+  }
+ ]
+}

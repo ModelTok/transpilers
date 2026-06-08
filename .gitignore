@@ -18,3 +18,13 @@ src/transpilers/llm/cache/*
 
 # generated sweep artifacts
 scripts/ep_*.json
+
+# --- run-portability: exclude huge non-essentials (the 70MB adapter weights ARE kept) ---
+# 12GB vendored research dataset; re-clone separately if needed
+third_party/CodePivot/
+# training optimizer state (~141MB each), not needed for inference
+data/sft/cpp_mojo/adapter_*/checkpoint-*/
+*.pt
+# intermediate reasoning batches + scratch outputs
+data/sft/cpp_mojo/_reason_out/
+artifacts/

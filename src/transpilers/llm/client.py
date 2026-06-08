@@ -48,6 +48,15 @@ class LlmClient:
         # For a self-hosted vLLM server this is the served name, e.g.
         # "Qwen2.5-Coder-3B-Instruct".
         self.model = model or os.environ.get("TRANSPILER_LLM_MODEL", DEFAULT_MODEL)
+        # OPENAI_BASE_URL may be a single endpoint or a comma-separated POOL of
+        # OpenAI-compatible servers (e.g. NPU + iGPU + CPU). Holes round-robin
+        # across the pool so all available hardware shares the load.
+        self._base_urls = [
+            u.strip().rstrip("/")
+            for u in os.environ.get("OPENAI_BASE_URL", "").split(",")
+            if u.strip()
+        ]
+        self._rr = 0
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -96,22 +105,39 @@ class LlmClient:
         server (`vllm serve <model>`), HF TGI, or the OpenAI API. Configure with
         OPENAI_BASE_URL (e.g. ``http://<host>:8000/v1``) and OPENAI_API_KEY
         (vLLM accepts any token — use ``EMPTY`` if the server is unsecured)."""
-        base_url = os.environ.get("OPENAI_BASE_URL")
-        if not base_url:
+        if not self._base_urls:
             raise RuntimeError(
                 "OpenAI-compatible LLM backend selected but OPENAI_BASE_URL is not set "
-                "(e.g. http://<host>:8000/v1 for a vLLM server)."
+                "(e.g. http://<host>:8000/v1 for a vLLM server; comma-separate for a pool)."
             )
-        from openai import OpenAI
+        # Round-robin across the endpoint pool — successive holes hit different
+        # devices (NPU / iGPU / CPU), spreading load across the hardware.
+        base_url = self._base_urls[self._rr % len(self._base_urls)]
+        self._rr += 1
+        # Stdlib-only POST to /chat/completions — no `openai` SDK dependency, so
+        # any OpenAI-compatible server (vLLM, FastFlowLM/Lemonade, TGI, OpenAI)
+        # works out of the box.
+        import urllib.request
 
-        client = OpenAI(base_url=base_url, api_key=os.environ.get("OPENAI_API_KEY", "EMPTY"))
-        resp = client.chat.completions.create(
-            model=self.model,
-            max_tokens=1024,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
+        body = json.dumps(
+            {
+                "model": self.model,
+                "max_tokens": 1024,
+                "temperature": temperature,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        ).encode()
+        req = urllib.request.Request(
+            base_url.rstrip("/") + "/chat/completions",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'EMPTY')}",
+            },
         )
-        return resp.choices[0].message.content or ""
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.load(resp)
+        return data["choices"][0]["message"]["content"] or ""
 
     def _call_anthropic(self, prompt: str, temperature: float) -> str:
         if not os.environ.get("ANTHROPIC_API_KEY"):

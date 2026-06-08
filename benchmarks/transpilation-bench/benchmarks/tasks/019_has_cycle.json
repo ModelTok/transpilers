@@ -1,0 +1,73 @@
+{
+  "id": "019",
+  "name": "has_cycle",
+  "tier": 3,
+  "concept": "graph_dfs_cycle",
+  "tags": [
+    "graph",
+    "dfs",
+    "cycle_detection"
+  ],
+  "description": "Return True if a directed graph (adjacency list) contains a cycle.",
+  "cpp_source": "#include <vector>\nbool dfs(int u, std::vector<std::vector<int>>& adj,\n         std::vector<int>& color) {\n    color[u] = 1;\n    for (int v : adj[u]) {\n        if (color[v] == 1) return true;\n        if (color[v] == 0 && dfs(v, adj, color)) return true;\n    }\n    color[u] = 2;\n    return false;\n}\nbool has_cycle(int n, std::vector<std::vector<int>> adj) {\n    std::vector<int> color(n, 0);\n    for (int i = 0; i < n; i++)\n        if (color[i] == 0 && dfs(i, adj, color)) return true;\n    return false;\n}",
+  "python_reference": "def has_cycle(n: int, adj: list) -> bool:\n    color = [0] * n\n    def dfs(u):\n        color[u] = 1\n        for v in adj[u]:\n            if color[v] == 1: return True\n            if color[v] == 0 and dfs(v): return True\n        color[u] = 2\n        return False\n    return any(color[i] == 0 and dfs(i) for i in range(n))",
+  "mojo_reference": "fn dfs_cycle(u: Int, adj: List[List[Int]], color: List[Int]) -> Bool:\n    color[u] = 1\n    for nb in adj[u]:\n        var v = nb[]\n        if color[v] == 1: return True\n        if color[v] == 0 and dfs_cycle(v, adj, color): return True\n    color[u] = 2\n    return False\n\nfn has_cycle(n: Int, adj: List[List[Int]]) -> Bool:\n    var color = List[Int]()\n    for _ in range(n): color.append(0)\n    for i in range(n):\n        if color[i] == 0 and dfs_cycle(i, adj, color):\n            return True\n    return False",
+  "tests": [
+    {
+      "args": [
+        4,
+        [
+          [
+            1
+          ],
+          [
+            2
+          ],
+          [
+            3
+          ],
+          [
+            1
+          ]
+        ]
+      ],
+      "expected": "True"
+    },
+    {
+      "args": [
+        4,
+        [
+          [
+            1
+          ],
+          [
+            2
+          ],
+          [
+            3
+          ],
+          []
+        ]
+      ],
+      "expected": "False"
+    },
+    {
+      "args": [
+        3,
+        [
+          [
+            1,
+            2
+          ],
+          [
+            2
+          ],
+          [
+            0
+          ]
+        ]
+      ],
+      "expected": "True"
+    }
+  ]
+}

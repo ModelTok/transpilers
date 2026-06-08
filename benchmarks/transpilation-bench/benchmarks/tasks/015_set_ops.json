@@ -1,0 +1,48 @@
+{
+  "id": "015",
+  "name": "set_ops",
+  "tier": 3,
+  "concept": "set_operations",
+  "tags": [
+    "sets",
+    "intersection",
+    "union",
+    "difference"
+  ],
+  "description": "Return (union, intersection, difference A-B) of two integer lists treated as sets.",
+  "cpp_source": "#include <vector>\n#include <set>\n#include <tuple>\nstd::tuple<std::vector<int>,std::vector<int>,std::vector<int>>\nset_ops(std::vector<int> a, std::vector<int> b) {\n    std::set<int> sa(a.begin(), a.end()), sb(b.begin(), b.end());\n    std::vector<int> u, inter, diff;\n    for (int x : sa) { u.push_back(x); if (sb.count(x)) inter.push_back(x); }\n    for (int x : sb) if (!sa.count(x)) u.push_back(x);\n    std::sort(u.begin(), u.end());\n    for (int x : sa) if (!sb.count(x)) diff.push_back(x);\n    return {u, inter, diff};\n}",
+  "python_reference": "def set_ops(a: list, b: list) -> tuple:\n    sa, sb = set(a), set(b)\n    return (sorted(sa | sb), sorted(sa & sb), sorted(sa - sb))",
+  "mojo_reference": "fn set_ops(a: List[Int], b: List[Int]) -> Tuple[List[Int], List[Int], List[Int]]:\n    var sa = Set[Int]()\n    var sb = Set[Int]()\n    for x in a: sa.add(x[])\n    for x in b: sb.add(x[])\n    var union_set = sa | sb\n    var inter_set = sa & sb\n    var diff_set  = sa - sb\n    var u = List[Int]()\n    var inter = List[Int]()\n    var diff = List[Int]()\n    for x in union_set: u.append(x[])\n    for x in inter_set: inter.append(x[])\n    for x in diff_set:  diff.append(x[])\n    sort(u); sort(inter); sort(diff)\n    return (u, inter, diff)",
+  "tests": [
+    {
+      "args": [
+        [
+          1,
+          2,
+          3,
+          4
+        ],
+        [
+          3,
+          4,
+          5,
+          6
+        ]
+      ],
+      "expected": "([1, 2, 3, 4, 5, 6], [3, 4], [1, 2])"
+    },
+    {
+      "args": [
+        [
+          1,
+          2
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "expected": "([1, 2, 3, 4], [], [1, 2])"
+    }
+  ]
+}

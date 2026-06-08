@@ -1,0 +1,237 @@
+[
+ {
+  "name": "zoneinfiltrationdesignflowrate_modifier",
+  "source_file": "airflow/infiltration.py",
+  "mojo": "def zoneinfiltrationdesignflowrate_modifier(\n    constant_term_coefficient: Float64,\n    temperature_term_coefficient: Float64,\n    velocity_term_coefficient: Float64,\n    velocity_squared_term_coefficient: Float64,\n    t_zone_c: Float64,\n    t_outdoor_c: Float64,\n    wind_speed_m_s: Float64,\n) -> Float64:\n    var dt = abs(t_zone_c - t_outdoor_c)\n    var v = max(0.0, wind_speed_m_s)\n    return constant_term_coefficient + temperature_term_coefficient * dt + velocity_term_coefficient * v + velocity_squared_term_coefficient * v * v"
+ },
+ {
+  "name": "zonemixing_is_active",
+  "source_file": "airflow/mixing.py",
+  "mojo": "def zonemixing_is_active(delta_temperature_c: Float64, t_source_c: Float64, t_target_c: Float64) -> Float64:\n    var dtc = max(delta_temperature_c, -100.0)\n    if t_source_c == t_target_c:\n        return 0.0\n    return 1.0"
+ },
+ {
+  "name": "flowcomponent_derivative",
+  "source_file": "airflow/network_solver.py",
+  "mojo": "from math import pow\n\ndef flowcomponent_derivative(coefficient: Float64, exponent: Float64, dp_pa: Float64) -> Float64:\n    var ap = abs(dp_pa)\n    if ap <= 0.0001:\n        ap = 0.0001\n    return coefficient * exponent * pow(ap, exponent - 1.0)"
+ },
+ {
+  "name": "_sign",
+  "source_file": "curves/extended_records.py",
+  "mojo": "def _sign(a: Float64) -> Float64:\n    return 1.0 if a >= 0.0 else -1.0"
+ },
+ {
+  "name": "curverectangularhyperbola1_evaluate",
+  "source_file": "curves/extended_records.py",
+  "mojo": "def curverectangularhyperbola1_evaluate(coefficient1_c1: Float64, coefficient2_c2: Float64, coefficient3_c3: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64) -> Float64:\n    var x_val = x\n    if x_val < minimum_value_of_x:\n        x_val = minimum_value_of_x\n    if x_val > maximum_value_of_x:\n        x_val = maximum_value_of_x\n    var out = coefficient1_c1 * x_val / (coefficient2_c2 + x_val) + coefficient3_c3\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    if out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
+ },
+ {
+  "name": "curverectangularhyperbola2_evaluate",
+  "source_file": "curves/extended_records.py",
+  "mojo": "def curverectangularhyperbola2_evaluate(coefficient1_c1: Float64, coefficient2_c2: Float64, coefficient3_c3: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64) -> Float64:\n    var x_val = x\n    if x_val < minimum_value_of_x:\n        x_val = minimum_value_of_x\n    if x_val > maximum_value_of_x:\n        x_val = maximum_value_of_x\n    var out = coefficient1_c1 * x_val / (coefficient2_c2 + x_val) + coefficient3_c3 * x_val\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    if out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
+ },
+ {
+  "name": "curvesigmoid_evaluate",
+  "source_file": "curves/extended_records.py",
+  "mojo": "from std.math import exp, pow\n\ndef curvesigmoid_evaluate(coefficient1_c1: Float64, coefficient2_c2: Float64, coefficient3_c3: Float64, coefficient4_c4: Float64, coefficient5_c5: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64) -> Float64:\n    var x_clip = x\n    if x_clip < minimum_value_of_x:\n        x_clip = minimum_value_of_x\n    if x_clip > maximum_value_of_x:\n        x_clip = maximum_value_of_x\n    var e = exp((coefficient3_c3 - x_clip) / coefficient4_c4)\n    var out = coefficient1_c1 + coefficient2_c2 / pow(1.0 + e, coefficient5_c5)\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    if out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
+ },
+ {
+  "name": "curveexponentialskewnormal_evaluate",
+  "source_file": "curves/extended_records.py",
+  "mojo": "from std.math import exp, erf, sqrt\n\ndef curveexponentialskewnormal_evaluate(coefficient1_c1: Float64, coefficient2_c2: Float64, coefficient3_c3: Float64, coefficient4_c4: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64) -> Float64:\n    var x_val = x\n    if x_val < minimum_value_of_x:\n        x_val = minimum_value_of_x\n    elif x_val > maximum_value_of_x:\n        x_val = maximum_value_of_x\n    var c1 = coefficient1_c1\n    var c2 = coefficient2_c2\n    var c3 = coefficient3_c3\n    var c4 = coefficient4_c4\n    var sqrt_2_inv = 1.0 / sqrt(2.0)\n    var z1 = (x_val - c1) / c2\n    var z2 = (c4 * x_val * exp(c3 * x_val) - c1) / c2\n    var z3 = -c1 / c2\n    var numer = exp(-0.5 * z1 * z1) * (1.0 + (1.0 if z2 >= 0.0 else -1.0) * erf(abs(z2) * sqrt_2_inv))\n    var denom = exp(-0.5 * z3 * z3) * (1.0 + (1.0 if z3 >= 0.0 else -1.0) * erf(abs(z3) * sqrt_2_inv))\n    var out = numer / denom\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    elif out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
+ },
+ {
+  "name": "curvechillerpartloadwithlift_evaluate",
+  "source_file": "curves/extended_records.py",
+  "mojo": "def curvechillerpartloadwithlift_evaluate(coefficient1_c1: Float64, coefficient2_c2: Float64, coefficient3_c3: Float64, coefficient4_c4: Float64, coefficient5_c5: Float64, coefficient6_c6: Float64, coefficient7_c7: Float64, coefficient8_c8: Float64, coefficient9_c9: Float64, coefficient10_c10: Float64, coefficient11_c11: Float64, coefficient12_c12: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_value_of_y: Float64, maximum_value_of_y: Float64, minimum_value_of_z: Float64, maximum_value_of_z: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64, y: Float64, z: Float64) -> Float64:\n    var x_clip = max(minimum_value_of_x, min(maximum_value_of_x, x))\n    var y_clip = max(minimum_value_of_y, min(maximum_value_of_y, y))\n    var z_clip = max(minimum_value_of_z, min(maximum_value_of_z, z))\n    var c = [coefficient1_c1, coefficient2_c2, coefficient3_c3, coefficient4_c4, coefficient5_c5, coefficient6_c6, coefficient7_c7, coefficient8_c8, coefficient9_c9, coefficient10_c10, coefficient11_c11, coefficient12_c12]\n    var out = c[0] + c[1] * x_clip + c[2] * x_clip * x_clip + c[3] * y_clip + c[4] * y_clip * y_clip + c[5] * x_clip * y_clip + c[6] * x_clip * x_clip * x_clip + c[7] * y_clip * y_clip * y_clip + c[8] * x_clip * x_clip * y_clip + c[9] * x_clip * y_clip * y_clip + c[10] * x_clip * x_clip * y_clip * y_clip + c[11] * z_clip * y_clip * y_clip * y_clip\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    if out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
+ },
+ {
+  "name": "curvecubiclinear_evaluate",
+  "source_file": "curves/extra_curve_records.py",
+  "mojo": "def curvecubiclinear_evaluate(coefficient1_constant: Float64, coefficient2_x: Float64, coefficient3_x_2: Float64, coefficient4_x_3: Float64, coefficient5_y: Float64, coefficient6_x_y: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_value_of_y: Float64, maximum_value_of_y: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, x: Float64, y: Float64) -> Float64:\n    var x_clip = x\n    if x_clip < minimum_value_of_x:\n        x_clip = minimum_value_of_x\n    elif x_clip > maximum_value_of_x:\n        x_clip = maximum_value_of_x\n    var y_clip = y\n    if y_clip < minimum_value_of_y:\n        y_clip = minimum_value_of_y\n    elif y_clip > maximum_value_of_y:\n        y_clip = maximum_value_of_y\n    var out = coefficient1_constant + coefficient2_x * x_clip + coefficient3_x_2 * x_clip * x_clip + coefficient4_x_3 * x_clip * x_clip * x_clip + coefficient5_y * y_clip + coefficient6_x_y * x_clip * y_clip\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    elif out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
+ },
+ {
+  "name": "_curvebase__clip_output",
+  "source_file": "curves/library.py",
+  "mojo": "def _curvebase__clip_output(minimum_curve_output: Float64, maximum_curve_output: Float64, value: Float64) -> Float64:\n    return (minimum_curve_output if value < minimum_curve_output else (maximum_curve_output if value > maximum_curve_output else value))"
+ },
+ {
+  "name": "_curvebase__clip_x",
+  "source_file": "curves/library.py",
+  "mojo": "def _curvebase__clip_x(minimum_value_of_x: Float64, maximum_value_of_x: Float64, x: Float64) -> Float64:\n    var clamped = x\n    if clamped < minimum_value_of_x:\n        clamped = minimum_value_of_x\n    if clamped > maximum_value_of_x:\n        clamped = maximum_value_of_x\n    return clamped"
+ },
+ {
+  "name": "curvelinear_evaluate",
+  "source_file": "curves/library.py",
+  "mojo": "def curvelinear_evaluate(\n    minimum_value_of_x: Float64,\n    maximum_value_of_x: Float64,\n    minimum_curve_output: Float64,\n    maximum_curve_output: Float64,\n    coefficient_1_constant: Float64,\n    coefficient_2_x: Float64,\n    x: Float64,\n) -> Float64:\n    var clamped_x = x\n    if clamped_x < minimum_value_of_x:\n        clamped_x = minimum_value_of_x\n    elif clamped_x > maximum_value_of_x:\n        clamped_x = maximum_value_of_x\n    return max(\n        minimum_curve_output,\n        min(\n            maximum_curve_output,\n            coefficient_1_constant + coefficient_2_x * clamped_x,\n        ),\n    )"
+ },
+ {
+  "name": "curvequadratic_evaluate",
+  "source_file": "curves/library.py",
+  "mojo": "def curvequadratic_evaluate(\n    minimum_value_of_x: Float64,\n    maximum_value_of_x: Float64,\n    minimum_curve_output: Float64,\n    maximum_curve_output: Float64,\n    coefficient_1_constant: Float64,\n    coefficient_2_x: Float64,\n    coefficient_3_x_2: Float64,\n    x: Float64\n) -> Float64:\n    var clamped_x = x\n    if clamped_x < minimum_value_of_x:\n        clamped_x = minimum_value_of_x\n    elif clamped_x > maximum_value_of_x:\n        clamped_x = maximum_value_of_x\n    return max(\n        minimum_curve_output,\n        min(\n            maximum_curve_output,\n            coefficient_1_constant + coefficient_2_x * clamped_x + coefficient_3_x_2 * clamped_x * clamped_x\n        )\n    )"
+ },
+ {
+  "name": "curvecubic_evaluate",
+  "source_file": "curves/library.py",
+  "mojo": "def curvecubic_evaluate(\n    minimum_value_of_x: Float64,\n    maximum_value_of_x: Float64,\n    minimum_curve_output: Float64,\n    maximum_curve_output: Float64,\n    coefficient_1_constant: Float64,\n    coefficient_2_x: Float64,\n    coefficient_3_x_2: Float64,\n    coefficient_4_x_3: Float64,\n    x: Float64,\n) -> Float64:\n    var x_clamped = x\n    if x_clamped < minimum_value_of_x:\n        x_clamped = minimum_value_of_x\n    if x_clamped > maximum_value_of_x:\n        x_clamped = maximum_value_of_x\n    return max(\n        minimum_curve_output,\n        min(maximum_curve_output, coefficient_1_constant + coefficient_2_x * x_clamped + coefficient_3_x_2 * x_clamped * x_clamped + coefficient_4_x_3 * x_clamped * x_clamped * x_clamped),\n    )"
+ },
+ {
+  "name": "curvequartic_evaluate",
+  "source_file": "curves/library.py",
+  "mojo": "def curvequartic_evaluate(\n    minimum_value_of_x: Float64,\n    maximum_value_of_x: Float64,\n    minimum_curve_output: Float64,\n    maximum_curve_output: Float64,\n    coefficient_1_constant: Float64,\n    coefficient_2_x: Float64,\n    coefficient_3_x_2: Float64,\n    coefficient_4_x_3: Float64,\n    coefficient_5_x_4: Float64,\n    x: Float64,\n) -> Float64:\n    var x_clamped: Float64 = x\n    if x_clamped < minimum_value_of_x:\n        x_clamped = minimum_value_of_x\n    elif x_clamped > maximum_value_of_x:\n        x_clamped = maximum_value_of_x\n    return max(\n        minimum_curve_output,\n        min(\n            maximum_curve_output,\n            coefficient_1_constant\n                + coefficient_2_x * x_clamped\n                + coefficient_3_x_2 * x_clamped * x_clamped\n                + coefficient_4_x_3 * x_clamped * x_clamped * x_clamped\n                + coefficient_5_x_4 * x_clamped * x_clamped * x_clamped * x_clamped,\n        ),\n    )"
+ },
+ {
+  "name": "_curve2dbase__clip_y",
+  "source_file": "curves/library.py",
+  "mojo": "def _curve2dbase__clip_y(minimum_value_of_y: Float64, maximum_value_of_y: Float64, y: Float64) -> Float64:\n    var clamped = y\n    if clamped < minimum_value_of_y:\n        clamped = minimum_value_of_y\n    if clamped > maximum_value_of_y:\n        clamped = maximum_value_of_y\n    return clamped"
+ },
+ {
+  "name": "curvebiquadratic_evaluate",
+  "source_file": "curves/library.py",
+  "mojo": "def curvebiquadratic_evaluate(\n    minimum_value_of_x: Float64,\n    maximum_value_of_x: Float64,\n    minimum_curve_output: Float64,\n    maximum_curve_output: Float64,\n    minimum_value_of_y: Float64,\n    maximum_value_of_y: Float64,\n    coefficient_1_constant: Float64,\n    coefficient_2_x: Float64,\n    coefficient_3_x_2: Float64,\n    coefficient_4_y: Float64,\n    coefficient_5_y_2: Float64,\n    coefficient_6_x_y: Float64,\n    x: Float64,\n    y: Float64,\n) -> Float64:\n    var x_clip = x\n    if x_clip < minimum_value_of_x:\n        x_clip = minimum_value_of_x\n    elif x_clip > maximum_value_of_x:\n        x_clip = maximum_value_of_x\n    var y_clip = y\n    if y_clip < minimum_value_of_y:\n        y_clip = minimum_value_of_y\n    elif y_clip > maximum_value_of_y:\n        y_clip = maximum_value_of_y\n    return max(\n        minimum_curve_output,\n        min(\n            maximum_curve_output,\n            coefficient_1_constant\n                + coefficient_2_x * x_clip\n                + coefficient_3_x_2 * x_clip * x_clip\n                + coefficient_4_y * y_clip\n                + coefficient_5_y_2 * y_clip * y_clip\n                + coefficient_6_x_y * x_clip * y_clip,\n        ),\n    )"
+ },
+ {
+  "name": "curvebicubic_evaluate",
+  "source_file": "curves/library.py",
+  "mojo": "def curvebicubic_evaluate(\n    minimum_value_of_x: Float64,\n    maximum_value_of_x: Float64,\n    minimum_curve_output: Float64,\n    maximum_curve_output: Float64,\n    minimum_value_of_y: Float64,\n    maximum_value_of_y: Float64,\n    coefficient_1_constant: Float64,\n    coefficient_2_x: Float64,\n    coefficient_3_x_2: Float64,\n    coefficient_4_y: Float64,\n    coefficient_5_y_2: Float64,\n    coefficient_6_x_y: Float64,\n    coefficient_7_x_3: Float64,\n    coefficient_8_y_3: Float64,\n    coefficient_9_x_2_y: Float64,\n    coefficient_10_x_y_2: Float64,\n    x: Float64,\n    y: Float64,\n) -> Float64:\n    var x_clamped = x\n    if x_clamped < minimum_value_of_x:\n        x_clamped = minimum_value_of_x\n    elif x_clamped > maximum_value_of_x:\n        x_clamped = maximum_value_of_x\n    var y_clamped = y\n    if y_clamped < minimum_value_of_y:\n        y_clamped = minimum_value_of_y\n    elif y_clamped > maximum_value_of_y:\n        y_clamped = maximum_value_of_y\n    return max(\n        minimum_curve_output,\n        min(\n            maximum_curve_output,\n            coefficient_1_constant\n                + coefficient_2_x * x_clamped\n                + coefficient_3_x_2 * x_clamped * x_clamped\n                + coefficient_4_y * y_clamped\n                + coefficient_5_y_2 * y_clamped * y_clamped\n                + coefficient_6_x_y * x_clamped * y_clamped\n                + coefficient_7_x_3 * x_clamped * x_clamped * x_clamped\n                + coefficient_8_y_3 * y_clamped * y_clamped * y_clamped\n                + coefficient_9_x_2_y * x_clamped * x_clamped * y_clamped\n                + coefficient_10_x_y_2 * x_clamped * y_clamped * y_clamped,\n        ),\n    )"
+ },
+ {
+  "name": "curvequadraticlinear_evaluate",
+  "source_file": "curves/library.py",
+  "mojo": "def curvequadraticlinear_evaluate(\n    minimum_value_of_x: Float64,\n    maximum_value_of_x: Float64,\n    minimum_curve_output: Float64,\n    maximum_curve_output: Float64,\n    minimum_value_of_y: Float64,\n    maximum_value_of_y: Float64,\n    coefficient_1_constant: Float64,\n    coefficient_2_x: Float64,\n    coefficient_3_x_2: Float64,\n    coefficient_4_y: Float64,\n    coefficient_5_x_y: Float64,\n    coefficient_6_x_2_y: Float64,\n    x: Float64,\n    y: Float64,\n) -> Float64:\n    var x_clip = x\n    if x_clip < minimum_value_of_x:\n        x_clip = minimum_value_of_x\n    elif x_clip > maximum_value_of_x:\n        x_clip = maximum_value_of_x\n    var y_clip = y\n    if y_clip < minimum_value_of_y:\n        y_clip = minimum_value_of_y\n    elif y_clip > maximum_value_of_y:\n        y_clip = maximum_value_of_y\n    return max(\n        minimum_curve_output,\n        min(\n            maximum_curve_output,\n            coefficient_1_constant\n                + coefficient_2_x * x_clip\n                + coefficient_3_x_2 * x_clip * x_clip\n                + coefficient_4_y * y_clip\n                + coefficient_5_x_y * x_clip * y_clip\n                + coefficient_6_x_2_y * x_clip * x_clip * y_clip,\n        ),\n    )"
+ },
+ {
+  "name": "curvequadlinear_evaluate",
+  "source_file": "curves/library.py",
+  "mojo": "def curvequadlinear_evaluate(coefficient_1_constant: Float64, coefficient_2_w: Float64, coefficient_3_x: Float64, coefficient_4_y: Float64, coefficient_5_z: Float64, minimum_value_of_w: Float64, maximum_value_of_w: Float64, minimum_value_of_x: Float64, maximum_value_of_x: Float64, minimum_value_of_y: Float64, maximum_value_of_y: Float64, minimum_value_of_z: Float64, maximum_value_of_z: Float64, minimum_curve_output: Float64, maximum_curve_output: Float64, w: Float64, x: Float64, y: Float64, z: Float64) -> Float64:\n    var w_clamped = w\n    if w_clamped < minimum_value_of_w:\n        w_clamped = minimum_value_of_w\n    elif w_clamped > maximum_value_of_w:\n        w_clamped = maximum_value_of_w\n    var x_clamped = x\n    if x_clamped < minimum_value_of_x:\n        x_clamped = minimum_value_of_x\n    elif x_clamped > maximum_value_of_x:\n        x_clamped = maximum_value_of_x\n    var y_clamped = y\n    if y_clamped < minimum_value_of_y:\n        y_clamped = minimum_value_of_y\n    elif y_clamped > maximum_value_of_y:\n        y_clamped = maximum_value_of_y\n    var z_clamped = z\n    if z_clamped < minimum_value_of_z:\n        z_clamped = minimum_value_of_z\n    elif z_clamped > maximum_value_of_z:\n        z_clamped = maximum_value_of_z\n    var out = coefficient_1_constant + coefficient_2_w * w_clamped + coefficient_3_x * x_clamped + coefficient_4_y * y_clamped + coefficient_5_z * z_clamped\n    if out < minimum_curve_output:\n        return minimum_curve_output\n    elif out > maximum_curve_output:\n        return maximum_curve_output\n    return out"
+ },
+ {
+  "name": "stepped_power_reduction_factor",
+  "source_file": "daylighting/splitflux.py",
+  "mojo": "def stepped_power_reduction_factor(illuminance_lux: Float64, setpoint_lux: Float64) -> Float64:\n    if setpoint_lux <= 0.0:\n        return 1.0\n    if illuminance_lux >= setpoint_lux:\n        return 0.0\n    return 1.0"
+ },
+ {
+  "name": "_truthy",
+  "source_file": "ems/erl.py",
+  "mojo": "def _truthy(v: Float64) -> Bool:\n    return v != 0.0"
+ },
+ {
+  "name": "othersidecoefficients_effective_outside_temperature_c",
+  "source_file": "geometry/boundary_props.py",
+  "mojo": "def othersidecoefficients_effective_outside_temperature_c(constant_temperature_c: Float64, constant_temperature_coefficient: Float64) -> Float64:\n    return constant_temperature_c * constant_temperature_coefficient"
+ },
+ {
+  "name": "_area_mismatch_pct",
+  "source_file": "heat_balance/interzone.py",
+  "mojo": "def _area_mismatch_pct(a: Float64, b: Float64) -> Float64:\n    var denom = a if a > b else b\n    if denom == 0.0:\n        return 0.0\n    return 100.0 * abs(a - b) / denom"
+ },
+ {
+  "name": "_resolve_fan_power",
+  "source_file": "hvac/standard_ratings.py",
+  "mojo": "comptime DEFAULT_FAN_POWER_PER_EVAP_AIR_FLOW_RATE = 773.3\n\ndef _resolve_fan_power(fan_power_per_evap_air_flow_rate: Float64) -> Float64:\n    if fan_power_per_evap_air_flow_rate <= 0.0:\n        return DEFAULT_FAN_POWER_PER_EVAP_AIR_FLOW_RATE\n    return fan_power_per_evap_air_flow_rate"
+ },
+ {
+  "name": "net_cooling_capacity_rated",
+  "source_file": "hvac/standard_ratings.py",
+  "mojo": "def net_cooling_capacity_rated(rated_total_capacity: Float64, tot_cap_temp_mod_fac: Float64, tot_cap_flow_mod_fac: Float64, fan_power_per_evap_air_flow_rate: Float64, rated_air_vol_flow_rate: Float64) -> Float64:\n    return rated_total_capacity * tot_cap_temp_mod_fac * tot_cap_flow_mod_fac - fan_power_per_evap_air_flow_rate * rated_air_vol_flow_rate"
+ },
+ {
+  "name": "_np_bulk_fraction",
+  "source_file": "kernels/plant_energy_balance.py",
+  "mojo": "def _np_bulk_fraction(heating_w: Float64, cooling_w: Float64, h_total_cap: Float64, c_total_cap: Float64) -> Float64:\n    var h_plr = 0.0\n    if heating_w > 0.0:\n        h_plr = min(heating_w / h_total_cap, 1.0)\n    var c_plr = 0.0\n    if cooling_w > 0.0:\n        c_plr = min(cooling_w / c_total_cap, 1.0)\n    return max(h_plr, c_plr)"
+ },
+ {
+  "name": "_stepped_numpy_fallback",
+  "source_file": "kernels/daylight_zone_power.py",
+  "mojo": "def _stepped_numpy_fallback(illuminance_lux: Float64, setpoint_lux: Float64) -> Float64:\n    if setpoint_lux <= 0.0:\n        return 1.0\n    return 0.0 if illuminance_lux >= setpoint_lux else 1.0"
+ },
+ {
+  "name": "_continuous_numpy_fallback",
+  "source_file": "kernels/daylight_zone_power.py",
+  "mojo": "from std.math import max, min\n\ndef _continuous_numpy_fallback(illuminance_lux: Float64, setpoint_lux: Float64, min_power_fraction: Float64, min_light_fraction: Float64) -> Float64:\n    var fl: Float64 = (setpoint_lux - illuminance_lux) / setpoint_lux\n    if setpoint_lux <= 0.0:\n        return 1.0\n    fl = max(0.0, min(1.0, fl))\n    if fl >= 1.0:\n        return 1.0\n    if fl <= 0.0:\n        return min_power_fraction\n    var denom: Float64 = 1.0 - min_light_fraction\n    if denom <= 0.0:\n        return min_power_fraction\n    if fl <= min_light_fraction:\n        return min_power_fraction\n    var fp: Float64 = (fl + (1.0 - fl) * min_power_fraction - min_light_fraction) / denom\n    fp = max(min_power_fraction, min(1.0, fp))\n    return fp"
+ },
+ {
+  "name": "_np_ppd_from_pmv",
+  "source_file": "kernels/people_pmv_batch.py",
+  "mojo": "from std.math import exp\n\ndef _np_ppd_from_pmv(pmv: Float64) -> Float64:\n    var ppd = 100.0 - 95.0 * exp(-0.03353 * pmv * pmv * pmv * pmv - 0.2179 * pmv * pmv)\n    if ppd < 5.0:\n        ppd = 5.0\n    if ppd > 100.0:\n        ppd = 100.0\n    return ppd"
+ },
+ {
+  "name": "_numpy_counterflow_eff",
+  "source_file": "kernels/heat_recovery_run_around_batch.py",
+  "mojo": "from std.math import exp\n\ndef _numpy_counterflow_eff(ntu: Float64, c_ratio: Float64) -> Float64:\n    var delta = abs(1.0 - c_ratio)\n    if delta < 1e-06:\n        return ntu / (1.0 + ntu)\n    var exp_term = exp(-ntu * (1.0 - c_ratio))\n    return (1.0 - exp_term) / (1.0 - c_ratio * exp_term)"
+ },
+ {
+  "name": "airgapmaterial_thermal_capacitance_j_per_m2_k",
+  "source_file": "materials/library.py",
+  "mojo": "def airgapmaterial_thermal_capacitance_j_per_m2_k() -> Float64:\n    return 0.0"
+ },
+ {
+  "name": "infraredtransparentmaterial_thermal_resistance_m2k_per_w",
+  "source_file": "materials/library.py",
+  "mojo": "def infraredtransparentmaterial_thermal_resistance_m2k_per_w() -> Float64:\n    return 0.0"
+ },
+ {
+  "name": "infraredtransparentmaterial_thermal_capacitance_j_per_m2_k",
+  "source_file": "materials/library.py",
+  "mojo": "def infraredtransparentmaterial_thermal_capacitance_j_per_m2_k() -> Float64:\n    return 0.0"
+ },
+ {
+  "name": "_pct",
+  "source_file": "runtime/_coverage.py",
+  "mojo": "def _pct(part: Int, whole: Int) -> Float64:\n    if whole == 0:\n        return 0.0\n    return 100.0 * Float64(part) / Float64(whole)"
+ },
+ {
+  "name": "_smooth_ramp",
+  "source_file": "runtime/airflow_terms.py",
+  "mojo": "def _smooth_ramp(value: Float64, threshold: Float64, half_width: Float64, ascending: Bool) -> Float64:\n    if half_width <= 0.0:\n        var v = (1.0 if value >= threshold else 0.0) if ascending else (1.0 if value <= threshold else 0.0)\n        return v\n    var delta = value - threshold\n    if ascending:\n        if delta <= -half_width:\n            return 0.0\n        if delta >= half_width:\n            return 1.0\n        return 0.5 + 0.5 * (delta / half_width)\n    if delta >= half_width:\n        return 0.0\n    if delta <= -half_width:\n        return 1.0\n    return 0.5 - 0.5 * (delta / half_width)"
+ },
+ {
+  "name": "_mean_obliquity_deg",
+  "source_file": "solar/spa.py",
+  "mojo": "def _mean_obliquity_deg(jme: Float64) -> Float64:\n    var u = jme / 10.0\n    var eps0_arcsec: Float64 = 84381.448 - 4680.93*u - 1.55*u**2 + 1999.25*u**3 - 51.38*u**4 - 249.67*u**5 - 39.05*u**6 + 7.12*u**7 + 27.87*u**8 + 5.79*u**9 + 2.45*u**10\n    return eps0_arcsec / 3600.0"
+ },
+ {
+  "name": "sunposition_zenith_deg",
+  "source_file": "solar/sun.py",
+  "mojo": "def sunposition_zenith_deg(altitude_deg: Float64) -> Float64:\n    return 90.0 - altitude_deg"
+ },
+ {
+  "name": "sunposition_is_above_horizon",
+  "source_file": "solar/sun.py",
+  "mojo": "def sunposition_is_above_horizon(altitude_deg: Float64) -> Bool:\n    return altitude_deg > 0.0"
+ },
+ {
+  "name": "_vapor_pressure_from_w",
+  "source_file": "weather/psychro_conversions.py",
+  "mojo": "def _vapor_pressure_from_w(w: Float64, pb_pa: Float64) -> Float64:\n    return w * pb_pa / (0.621945 + w)"
+ },
+ {
+  "name": "tdew_from_dewpoint",
+  "source_file": "weather/psychro_conversions.py",
+  "mojo": "def tdew_from_dewpoint(tdew_c: Float64) -> Float64:\n    return tdew_c"
+ },
+ {
+  "name": "frame_area_m2",
+  "source_file": "windows/frame_divider.py",
+  "mojo": "def frame_area_m2(window_width_m: Float64, window_height_m: Float64, frame_width_m: Float64) -> Float64:\n    if frame_width_m <= 0.0:\n        return 0.0\n    var glazed_w = window_width_m - 2.0 * frame_width_m\n    var glazed_h = window_height_m - 2.0 * frame_width_m\n    if glazed_w <= 0.0 or glazed_h <= 0.0:\n        return max(0.0, window_width_m * window_height_m)\n    return window_width_m * window_height_m - glazed_w * glazed_h"
+ },
+ {
+  "name": "simpleglazingsystem_effective_visible_transmittance",
+  "source_file": "windows/glazing.py",
+  "mojo": "def simpleglazingsystem_effective_visible_transmittance(solar_heat_gain_coefficient: Float64, visible_transmittance: Float64) -> Float64:\n    if visible_transmittance != 0.0:\n        return visible_transmittance\n    return solar_heat_gain_coefficient"
+ },
+ {
+  "name": "windowmaterialshade_thermal_resistance_m2k_per_w",
+  "source_file": "windows/shading.py",
+  "mojo": "def windowmaterialshade_thermal_resistance_m2k_per_w(thickness_m: Float64, conductivity_w_per_m_k: Float64) -> Float64:\n    return thickness_m / conductivity_w_per_m_k"
+ },
+ {
+  "name": "glazingpane_has_normal_incidence_optics",
+  "source_file": "windows/multipane.py",
+  "mojo": "def glazingpane_has_normal_incidence_optics(solar_transmittance: Float64, solar_reflectance_front: Float64, solar_reflectance_back: Float64) -> Bool:\n    return solar_transmittance != 0.0 and solar_reflectance_front != 0.0 and solar_reflectance_back != 0.0"
+ },
+ {
+  "name": "glazingpane_thermal_resistance_m2k_per_w",
+  "source_file": "windows/multipane.py",
+  "mojo": "def glazingpane_thermal_resistance_m2k_per_w(thickness_m: Float64, conductivity_w_per_m_k: Float64) -> Float64:\n    return thickness_m / conductivity_w_per_m_k"
+ }
+]

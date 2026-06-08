@@ -1,0 +1,248 @@
+[
+ {
+  "name": "CalcMoWITTNatural",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "from math import pow\n\ndef CalcMoWITTNatural(DeltaTemp: Float64) -> Float64:\n    var temp_fac: Float64 = 0.84\n    return temp_fac * pow(abs(DeltaTemp), 1.0 / 3.0)"
+ },
+ {
+  "name": "CalcMoWITTForcedWindward",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "from math import pow\n\ndef CalcMoWITTForcedWindward(WindAtZ: Float64) -> Float64:\n    var wind_fac: Float64 = 3.26\n    var wind_exp: Float64 = 0.89\n    return wind_fac * pow(WindAtZ, wind_exp)"
+ },
+ {
+  "name": "CalcMoWITTForcedLeeward",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "from math import pow\n\ndef CalcMoWITTForcedLeeward(WindAtZ: Float64) -> Float64:\n    var wind_fac: Float64 = 3.55\n    var wind_exp: Float64 = 0.617\n    return wind_fac * pow(WindAtZ, wind_exp)"
+ },
+ {
+  "name": "CalcNusseltJurges",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def CalcNusseltJurges(WindAtZ: Float64) -> Float64:\n    return 5.8 + 3.94 * WindAtZ"
+ },
+ {
+  "name": "CalcMcAdams",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def CalcMcAdams(WindAtZ: Float64) -> Float64:\n    return 5.8 + 3.8 * WindAtZ"
+ },
+ {
+  "name": "CalcMitchell",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def CalcMitchell(WindAtZ: Float64, LengthScale: Float64) -> Float64:\n    return 8.6 * pow(WindAtZ, 0.6) / pow(LengthScale, 0.4)"
+ },
+ {
+  "name": "CalcWindSurfaceTheta",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "FanSpdResidualCool",
+  "accepted": true,
+  "tries": 5,
+  "mojo": "from math import copysign\n\ndef FanSpdResidualCool(FanSpdRto: Float64, QCoilSenCoolingLoad: Float64, Ts_1: Float64, Tin: Float64, Garate: Float64, BF: Float64) -> Float64:\n    var ZnSenLoad: Float64 = QCoilSenCoolingLoad\n    if abs(ZnSenLoad) < 100.0:\n        ZnSenLoad = copysign(100.0, ZnSenLoad)\n    var Tout: Float64 = Tin - (Tin - Ts_1) * (1 - BF)\n    var TotCap: Float64 = FanSpdRto * Garate * 1005.0 * (Tin - Tout)\n    return TotCap / ZnSenLoad - 1.0"
+ },
+ {
+  "name": "FanSpdResidualHeat",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "calculateThirdOrderFloorTemperature",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "pvstar",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "Le",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def Le(T: Float64) -> Float64:\n    var Ttrip: Float64 = 273.16\n    var E0v: Float64 = 2.3740e6\n    var rgasv: Float64 = 461.0\n    var cvv: Float64 = 1418.0\n    var cvl: Float64 = 4119.0\n    return E0v + (cvv - cvl) * (T - Ttrip) + rgasv * T"
+ },
+ {
+  "name": "Zs",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "from math import pow\n\ndef Zs(Rs: Float64) -> Float64:\n    if Rs == 0.0387:\n        return 52.1\n    return 6.0e8 * pow(Rs, 5)"
+ },
+ {
+  "name": "Ra",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "from math import pow\n\ndef Ra(Ts: Float64, Ta: Float64) -> Float64:\n    var sigma: Float64 = 5.67e-08\n    var epsilon: Float64 = 0.97\n    var hc: Float64 = 17.4\n    var phi_rad: Float64 = 0.85\n    var hr: Float64 = epsilon * phi_rad * sigma * (pow(Ts, 2) + pow(Ta, 2)) * (Ts + Ta)\n    return 1.0 / (hc + hr)"
+ },
+ {
+  "name": "Ra_bar",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "from math import pow\n\ndef Ra_bar(Tf: Float64, Ta: Float64) -> Float64:\n    var sigma: Float64 = 5.67e-08\n    var epsilon: Float64 = 0.97\n    var hc: Float64 = 11.6\n    var phi_rad: Float64 = 0.79\n    var hr: Float64 = epsilon * phi_rad * sigma * (pow(Tf, 2) + pow(Ta, 2)) * (Tf + Ta)\n    return 1.0 / (hc + hr)"
+ },
+ {
+  "name": "Ra_un",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "from math import pow\n\ndef Ra_un(Ts: Float64, Ta: Float64) -> Float64:\n    var sigma: Float64 = 5.67e-08\n    var epsilon: Float64 = 0.97\n    var hc: Float64 = 12.3\n    var phi_rad: Float64 = 0.8\n    var hr: Float64 = epsilon * phi_rad * sigma * (Ts ** 2 + Ta ** 2) * (Ts + Ta)\n    return 1.0 / (hc + hr)"
+ },
+ {
+  "name": "SafeDivide",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "rotAzmDiffDeg",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def rotAzmDiffDeg(AzmA: Float64, AzmB: Float64) -> Float64:\n    var diff: Float64 = AzmB - AzmA\n    if diff > 180.0:\n        diff = 360.0 - diff\n    elif diff < -180.0:\n        diff = 360.0 + diff\n    return abs(diff)"
+ },
+ {
+  "name": "WVDC",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "SafeDiv",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def SafeDiv(a: Float64, b: Float64) -> Float64:\n    if abs(b) < SMALL:\n        return a / sign(SMALL, b)\n    return a / b"
+ },
+ {
+  "name": "TempSItoIP",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def TempSItoIP(Temp: Float64) -> Float64:\n    return Temp * 9.0 / 5.0 + 32.0"
+ },
+ {
+  "name": "TempIPtoSI",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def TempIPtoSI(Temp: Float64) -> Float64:\n    return (Temp - 32.0) * 5.0 / 9.0"
+ },
+ {
+  "name": "calculateOperationalFraction",
+  "accepted": true,
+  "tries": 2,
+  "mojo": "def calculateOperationalFraction(offTemperature: Float64, controlTemperature: Float64, throttlingRange: Float64) -> Float64:\n    var temperatureDifference: Float64 = abs(offTemperature - controlTemperature)\n    if temperatureDifference <= 0.0:\n        return 0.0\n    if throttlingRange < 0.001:\n        return 1.0\n    return min(temperatureDifference / throttlingRange, 1.0)"
+ },
+ {
+  "name": "WaterConversionFunct",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "Fahrenheit2Celsius",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def Fahrenheit2Celsius(F: Float64) -> Float64:\n    return (F - 32.0) * 5.0 / 9.0"
+ },
+ {
+  "name": "calcFluxWeightingFactor",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def calcFluxWeightingFactor(weightedHeatFlux: Float64, uniformHeatFlux: Float64) -> Float64:\n    var returnValue: Float64 = 0\n    var tolerance: Float64 = 1.0e-06\n    if abs(uniformHeatFlux) <= tolerance:\n        returnValue = 1.0\n    else:\n        returnValue = weightedHeatFlux / uniformHeatFlux\n    return returnValue"
+ },
+ {
+  "name": "BoundValueToWithinTwoValues",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def BoundValueToWithinTwoValues(ValueToBound: Float64, LowerBound: Float64, UpperBound: Float64) -> Float64:\n    var BoundedValue: Float64 = 0\n    BoundedValue = ValueToBound\n    BoundedValue = max(BoundedValue, LowerBound)\n    BoundedValue = min(BoundedValue, UpperBound)\n    return BoundedValue"
+ },
+ {
+  "name": "interpSetPoint",
+  "accepted": true,
+  "tries": 2,
+  "mojo": "def interpSetPoint(LowVal: Float64, HighVal: Float64, RefVal: Float64, SetptAtLowVal: Float64, SetptAtHighVal: Float64) -> Float64:\n    if LowVal >= HighVal:\n        return 0.5 * (SetptAtLowVal + SetptAtHighVal)\n    if RefVal <= LowVal:\n        return SetptAtLowVal\n    if RefVal >= HighVal:\n        return SetptAtHighVal\n    return SetptAtLowVal - ((RefVal - LowVal) / (HighVal - LowVal)) * (SetptAtLowVal - SetptAtHighVal)"
+ },
+ {
+  "name": "GetIEEREquationResult",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def GetIEEREquationResult(A: Float64, B: Float64, C: Float64, D: Float64) -> Float64:\n    return 0.020 * A + 0.617 * B + 0.238 * C + 0.125 * D"
+ },
+ {
+  "name": "MakeUpWaterVolFlowFunct",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "MakeUpWaterVolFunct",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "LDSumMax",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "LDSumMean",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "pos",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def pos(x: Float64) -> Float64:\n    return (x + abs(x)) / 2.0"
+ },
+ {
+  "name": "CalcFangerPPD",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "CalcRelativeAirVelocity",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def CalcRelativeAirVelocity(AirVel: Float64, ActMet: Float64) -> Float64:\n    if ActMet > 1:\n        return AirVel + 0.3 * (ActMet - 1)\n    return AirVel"
+ },
+ {
+  "name": "CalcSatVapPressFromTemp",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def CalcSatVapPressFromTemp(Temp: Float64) -> Float64:\n    var XT: Float64 = Temp / 100.0\n    return 6.16796 + 358.1855 * XT**2 - 550.3543 * XT**3 + 1048.8115 * XT**4"
+ },
+ {
+  "name": "CalcSatVapPressFromTempTorr",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "from math import exp\n\ndef CalcSatVapPressFromTempTorr(Temp: Float64) -> Float64:\n    return exp(18.6686 - 4030.183 / (Temp + 235.0))"
+ },
+ {
+  "name": "interpolateWindDirection",
+  "accepted": false,
+  "tries": 5,
+  "mojo": ""
+ },
+ {
+  "name": "InterpolateBetweenTwoValues",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def InterpolateBetweenTwoValues(X: Float64, X0: Float64, X1: Float64, F0: Float64, F1: Float64) -> Float64:\n    var InterpResult: Float64 = 0\n    InterpResult = F0 + (X - X0) / (X1 - X0) * (F1 - F0)\n    return InterpResult"
+ },
+ {
+  "name": "InterpolateBetweenFourValues",
+  "accepted": true,
+  "tries": 1,
+  "mojo": "def InterpolateBetweenFourValues(X: Float64, Y: Float64, X1: Float64, X2: Float64, Y1: Float64, Y2: Float64, Fx1y1: Float64, Fx1y2: Float64, Fx2y1: Float64, Fx2y2: Float64) -> Float64:\n    var InterpResult: Float64 = 0.0\n    InterpResult = Fx1y1 / ((X2 - X1) * (Y2 - Y1)) * (X2 - X) * (Y2 - Y) + Fx2y1 / ((X2 - X1) * (Y2 - Y1)) * (X - X1) * (Y2 - Y) + Fx1y2 / ((X2 - X1) * (Y2 - Y1)) * (X2 - X) * (Y - Y1) + Fx2y2 / ((X2 - X1) * (Y2 - Y1)) * (X - X1) * (Y - Y1)\n    return InterpResult"
+ }
+]

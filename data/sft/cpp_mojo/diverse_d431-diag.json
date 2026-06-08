@@ -1,0 +1,1010 @@
+[
+ {
+  "name": "Accumulator",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Accumulator(Copyable, Movable):\n    var total: Float64\n    var count: Int\n\n    def __init__(out self):\n        self.total = 0.0\n        self.count = 0\n\n    def add(mut self, value: Float64):\n        self.total = self.total + value\n        self.count = self.count + 1\n\n    def mean(self) -> Float64:\n        if self.count == 0:\n            return 0.0\n        return self.total / Float64(self.count)"
+ },
+ {
+  "name": "BankAccount",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct BankAccount(Copyable, Movable):\n    var balance: Float64\n\n    def __init__(out self, initial: Float64):\n        self.balance = initial\n\n    def deposit(mut self, amount: Float64):\n        self.balance = self.balance + amount\n\n    def withdraw(mut self, amount: Float64) -> Bool:\n        if amount > self.balance:\n            return False\n        self.balance = self.balance - amount\n        return True\n\n    def get_balance(self) -> Float64:\n        return self.balance"
+ },
+ {
+  "name": "Box_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "@fieldwise_init\nstruct Box[T: Comparable & ImplicitlyCopyable](Copyable, Movable):\n    var value: T\n\n    def get(self) -> Self.T:\n        return self.value\n\n    def set(self, v: Self.T):\n        self.value = v"
+ },
+ {
+  "name": "Color",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct Color(Copyable, Movable):\n    var r: Int\n    var g: Int\n    var b: Int\n\n    def __init__(out self, r: Int, g: Int, b: Int):\n        self.r = r\n        self.g = g\n        self.b = b\n\n    def blend(self, a: Color, b: Color) -> Color:\n        return Color((a.r + b.r) // 2, (a.g + b.g) // 2, (a.b + b.b) // 2)\n\n    def luminance(self) -> Int:\n        return (self.r * 30 + self.g * 59 + self.b * 11) // 100"
+ },
+ {
+  "name": "Counter",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct Counter(Copyable, Movable):\n    var value: Int\n    var step: Int\n\n    def __init__(out self, start: Int, step_: Int):\n        self.value = start\n        self.step = step_\n\n    def increment(mut self):\n        self.value = self.value + self.step\n\n    def get(self) -> Int:\n        return self.value\n\n    def reset(self):\n        self.value = 0"
+ },
+ {
+  "name": "Date",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct Date(Copyable, Movable):\n    var year: Int\n    var month: Int\n    var day: Int\n\ndef is_leap(y: Int) -> Bool:\n    return (y % 4 == 0 and y % 100 != 0) or (y % 400 == 0)\n\ndef day_of_year(d: Date) -> Int:\n    var days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]\n    var total: Int = d.day\n    for i in range(d.month - 1):\n        total += days[i]\n    if d.month > 2 and is_leap(d.year):\n        total += 1\n    return total"
+ },
+ {
+  "name": "Frac",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "@fieldwise_init\nstruct Frac(Copyable, Movable):\n    var num: Int\n    var den: Int\n\n    def __add__(self, o: Frac) -> Frac:\n        var g = gcd_f(self.num, o.num)\n        if g == 0:\n            g = 1\n        var new_num = self.num * o.den // g\n        var new_den = self.den * o.den // g\n        return Frac(new_num, new_den)\n\n    def __sub__(self, o: Frac) -> Frac:\n        var g = gcd_f(self.num, o.num)\n        if g == 0:\n            g = 1\n        var new_num = self.num * o.den // g\n        var new_den = self.den * o.den // g\n        return Frac(new_num, new_den)\n\n    def __mul__(self, o: Frac) -> Frac:\n        return Frac(self.num * o.num, self.den * o.den)\n\n    def __eq__(self, o: Frac) -> Bool:\n        return self.num == o.num and self.den == o.den\n\n    def __lt__(self, o: Frac) -> Bool:\n        return self.num * o.den < o.num * self.den"
+ },
+ {
+  "name": "Graph4",
+  "category": "class",
+  "status": "runtime_error",
+  "detail": " #9 0x000055d07e2e2165 _start (/tmp/claude-1000/tmp989sg5lp/b+0x1165)",
+  "code": "struct Graph4(Copyable, Movable):\n    var adj: List[List[Int]]\n\n    def __init__(out self):\n        self.adj = []\n\n    def addEdge(mut self, a: Int, b: Int):\n        self.adj[a].append(b)\n        self.adj[b].append(a)\n\n    def degree(self, v: Int) -> Int:\n        var d = 0\n        for j in range(4):\n            d += self.adj[v][j]\n        return d\n\n    def connected(self, a: Int, b: Int) -> Bool:\n        return self.adj[a][b] == 1\n\n    def edgeCount(self) -> Int:\n        var c = 0\n        for i in range(4):\n            for j in range(i + 1, 4):\n                c += self.adj[i][j]\n        return c"
+ },
+ {
+  "name": "IntQueue",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct IntQueue(Copyable, Movable):\n    var data: List[Int]\n    var head: Int\n\n    def __init__(out self):\n        self.data = List[]\n        self.head = 0\n\n    def enqueue(mut self, x: Int):\n        self.data.append(x)\n\n    def dequeue(mut self) -> Int:\n        var v = self.data[self.head]\n        _ = self.head += 1\n        return v\n\n    def count(self) -> Int:\n        return len(self.data) - self.head"
+ },
+ {
+  "name": "Inventory",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct Inventory(Copyable, Movable):\n    var stock: Dict[String, Int]\n\n    def __init__(out self):\n        self.stock = Dict[String, Int>()\n\n    def add(mut self, item: String, qty: Int):\n        self.stock[item] = self.stock.getOrDefault(item, 0) + qty\n\n    def remove(mut self, item: String, qty: Int):\n        if self.stock[item] >= qty:\n            self.stock[item] = self.stock.getOrDefault(item, 0) - qty\n            if self.stock[item] < 0:\n                self.stock[item] = 0\n\n    def get(self, item: String) -> Int:\n        return self.stock[item]\n\n    def total(self) -> Int:\n        var t = 0\n        for k in self.stock.keys():\n            t += k.price * k.quantity\n        return t"
+ },
+ {
+  "name": "Mat2d",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "@fieldwise_init\nstruct Mat2d(Copyable, Movable):\n    var a: Float64\n    var b: Float64\n    var c: Float64\n    var d: Float64\n\n    def __add__(self, o: Mat2d) -> Mat2d:\n        return Mat2d(self.a + o.a, self.b + o.b, self.c + o.c, self.d + o.d)\n\n    def __mul__(self, o: Mat2d) -> Mat2d:\n        return Mat2d(self.a * o.a + self.b * o.c, self.a * o.b + self.b * o.d, self.c * o.a + self.d * o.c, self.c * o.b + self.d * o.d)\n\n    def det(self) -> Float64:\n        return self.a * self.d - self.b * self.c\n\n    def trace(self) -> Float64:\n        return self.a + self.d\n\n    def __eq__(self, o: Mat2d) -> Bool:\n        return self.a == o.a and self.b == o.b and self.c == o.c and self.d == o.d"
+ },
+ {
+  "name": "Matrix2x2",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Matrix2x2(Copyable, Movable):\n    var a: Float64\n    var b: Float64\n    var c: Float64\n    var d: Float64\n\n    def __init__(out self, a_: Float64, b_: Float64, c_: Float64, d_: Float64):\n        self.a = a_\n        self.b = b_\n        self.c = c_\n        self.d = d_\n\n    def determinant(self) -> Float64:\n        return self.a * self.d - self.b * self.c\n\n    def trace(self) -> Float64:\n        return self.a + self.d\n\n    def multiply(self, o: Matrix2x2) -> Matrix2x2:\n        return Matrix2x2(self.a * o.a + self.b * o.c, self.a * o.b + self.b * o.d,\n                          self.c * o.a + self.d * o.c, self.c * o.b + self.d * o.d)"
+ },
+ {
+  "name": "MinHeap",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct MinHeap(Copyable, Movable):\n    var h: List[Int]\n\n    def __init__(out self):\n        self.h = List[Int]()\n\n    def push(mut self, v: Int):\n        self.h.append(v)\n        var i = len(self.h) - 1\n        while i > 0:\n            var p = (i - 1) // 2\n            if self.h[p] <= self.h[i]:\n                break\n            var t = self.h[p]\n            self.h[p] = self.h[i]\n            self.h[i] = t\n            i = p\n\n    def top(self) -> Int:\n        return self.h[0]\n\n    def size(self) -> Int:\n        return len(self.h)\n\n    def pop(mut self) -> Int:\n        var r = self.h[0]\n        self.h[0] = self.h[self.h.size() - 1]\n        self.h.pop_back()\n        var i = 0\n        var n = len(self.h)\n        while True:\n            var l = 2 * i + 1\n            var ri = 2 * i + 2\n            if l < n and self.h[l] < self.h[si]:\n                si = l\n            if ri < n and self.h[ri] < self.h[si]:\n                si = ri\n            if si == i:\n                break\n            var t = self.h[si]\n            self.h[si] = self.h[i]\n            self.h[i] = t\n            i = si\n        return r"
+ },
+ {
+  "name": "Money",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct Money(Copyable, Movable):\n    var dollars: Int\n    var cents: Int\n\n    def __init__(out self, dollars: Int, cents: Int):\n        self.dollars = dollars\n        self.cents = cents\n\n    def normalize(mut self):\n        var total = self.dollars * 100 + self.cents\n        self.dollars = total // 100\n        self.cents = (total % 100)\n\n    def add_money(mut self, other: Money) -> Money:\n        self.normalize()\n        return Money(self.dollars + other.dollars, self.cents + other.cents)"
+ },
+ {
+  "name": "Pair_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "@fieldwise_init\nstruct PairAB[T: Comparable & ImplicitlyCopyable](Copyable, Movable):\n    var first: T\n    var second: T\n\n    def getFirst(self) -> T:\n        return self.first\n    def getSecond(self) -> T:\n        return self.second"
+ },
+ {
+  "name": "Polynomial",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct Quadratic(Copyable, Movable):\n    var a: Float64\n    var b: Float64\n    var c: Float64\n\ndef evaluate(q: Quadratic, x: Float64) -> Float64:\n    return q.a * x * x + q.b * x + q.c\n\ndef discriminant(q: Quadratic) -> Float64:\n    return q.b * q.b - 4.0 * q.a * q.c"
+ },
+ {
+  "name": "Queue_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct Queue[T: Comparable & ImplicitlyCopyable](Copyable, Movable):\n    var data: List[T]\n\n    def __init__(out self):\n        self.data = List[T]()\n\n    def enqueue(mut self, v: Self.T):\n        self.data.append(v)\n\n    def dequeue(mut self) -> Self.T:\n        var r = self.data[0]\n        _ = self.data.pop(0)\n        return r\n\n    def size(self) -> Int:\n        return len(self.data)"
+ },
+ {
+  "name": "Rational",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "@fieldwise_init\nstruct Rational(Copyable, Movable):\n    var n: Int\n    var d: Int\n\n    def __add__(self, o: Rational) -> Rational:\n        return Rational(self.n * o.d + o.n * self.d, self.d * o.d)\n\n    def __sub__(self, o: Rational) -> Rational:\n        return Rational(self.n * o.d - o.n * self.d, self.d * o.d)\n\n    def __mul__(self, o: Rational) -> Rational:\n        return Rational(self.n * o.n, self.d * o.d)\n\n    def __eq__(self, o: Rational) -> Bool:\n        return self.n * o.d == o.n * self.d"
+ },
+ {
+  "name": "RingBuffer",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct RingBuffer(Copyable, Movable):\n    var data: Int[4]\n    var head: Int\n    var size: Int\n\n    def __init__(out self):\n        self.data = Int[4]()\n        self.head = 0\n        self.size = 0\n\n    def push(mut self, v: Int):\n        var tail = (self.head + self.size) % 4\n        self.data[tail] = v\n        if Self.size < 4:\n            Self.size += 1\n        else:\n            self.head = (self.head + 1) % 4\n\n    def front(self) -> Int:\n        return self.data[self.head]\n\n    def count(self) -> Int:\n        var s = 0\n        for i in range(self.size):\n            s += self.data[(self.head + i) % 4]\n        return s\n\n    def sum(self) -> Int:\n        var s = 0\n        for i in range(self.size):\n            s += self.data[(self.head + i) % 4]\n        return s"
+ },
+ {
+  "name": "Segment",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "@fieldwise_init\nstruct Segment(Copyable, Movable):\n    var x0: Float64\n    var y0: Float64\n    var x1: Float64\n    var y1: Float64\n\n    def length(self) -> Float64:\n        var dx = self.x1 - self.x0\n        var dy = self.y1 - self.y0\n        return sqrt(dx * dx + dy * dy)\n\n    def midx(self) -> Float64:\n        var m = (self.x0 + self.x1) / 2.0\n        return m"
+ },
+ {
+  "name": "Stack_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "struct Stack(Comparable &ImplicitlyCopyable):\n    var data: List[Int]\n\n    def __init__(out self):\n        self.data = List[Int]()\n\n    def push(mut self, v: Int):\n        self.data.append(v)\n\n    def pop(self) -> Int:\n        var r = self.data[len(self.data) - 1]\n        _ = self.data.remove(len(self.data) - 1)\n        return r\n\n    def size(self) -> Int:\n        return len(self.data)"
+ },
+ {
+  "name": "Tally",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "from std.hashmaps import Dict\n\nstruct Tally(Copyable, Movable):\n    var counts: Dict[String, Int]\n\n    def __init__(out self):\n        self.counts = Dict[String, Int>()\n\n    def bump(self, key: String):\n        self.counts[key] = self.counts.getOrDefault(key) + 1\n\n    def get(self, key: String) -> Int:\n        var it = self.counts.__getitem__(key)\n        if it == Self.__getitem__(self.counts):\n            return it\n        return 0\n\n    def distinct(self) -> Int:\n        return len(self.counts)\n\n    def total_count(self) -> Int:\n        var s = 0\n        for p in self.counts.values():\n            s += p\n        return s"
+ },
+ {
+  "name": "TimeSpan",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "@fieldwise_init\nstruct TimeSpan(Copyable, Movable):\n    var secs: Int\n\n    def __add__(self, o: TimeSpan) -> TimeSpan:\n        return TimeSpan(self.secs + o.secs)\n\n    def __sub__(self, o: TimeSpan) -> TimeSpan:\n        return TimeSpan(self.secs - o.secs)\n\n    def __mul__(self, n: Int) -> TimeSpan:\n        return TimeSpan(self.secs * n)\n\n    def __lt__(self, o: TimeSpan) -> Bool:\n        return self.secs < o.secs\n\n    def __eq__(self, o: TimeSpan) -> Bool:\n        return self.secs == o.secs\n\n    def hours(self) -> Int:\n        return self.secs // 3600\n\n    def minutes(self) -> Int:\n        return (self.secs // 60) % 60\n\n    def seconds(self) -> Int:\n        return self.secs % 60"
+ },
+ {
+  "name": "Vec2",
+  "category": "operator",
+  "status": "pass",
+  "detail": "",
+  "code": "@fieldwise_init\nstruct Vec2(Copyable, Movable):\n    var x: Float64\n    var y: Float64\n\n    def __add__(self, o: Vec2) -> Vec2:\n        return Vec2(self.x + o.x, self.y + o.y)\n\n    def __sub__(self, o: Vec2) -> Vec2:\n        return Vec2(self.x - o.x, self.y - o.y)\n\n    def __mul__(self, s: Float64) -> Vec2:\n        return Vec2(self.x * s, self.y * s)\n\n    def __eq__(self, o: Vec2) -> Bool:\n        return self.x == o.x and self.y == o.y"
+ },
+ {
+  "name": "Vec3",
+  "category": "operator",
+  "status": "pass",
+  "detail": "",
+  "code": "@fieldwise_init\nstruct Vec3(Copyable, Movable):\n    var x: Float64\n    var y: Float64\n    var z: Float64\n\n    def __add__(self, o: Vec3) -> Vec3:\n        return Vec3(self.x + o.x, self.y + o.y, self.z + o.z)\n\n    def __sub__(self, o: Vec3) -> Vec3:\n        return Vec3(self.x - o.x, self.y - o.y, self.z - o.z)\n\n    def dot(self, o: Vec3) -> Float64:\n        return self.x * o.x + self.y * o.y + self.z * o.z"
+ },
+ {
+  "name": "accumulate_dtype",
+  "category": "template",
+  "status": "pass",
+  "detail": "",
+  "code": "def accumulate_vals[dt: DType](xs: List[Scalar[dt]]) -> Scalar[dt]:\n    var s = Scalar[dt](0)\n    for i in range(len(xs)):\n        s += xs[i]\n    return s"
+ },
+ {
+  "name": "adder_closure",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def make_adder[k: Int](k: Int) -> Func[Self, Self] -> Int:\n    return |self| -> self + k -> self\n\ndef call_adder(k: Int, x: Int) -> Int:\n    return make_adder(k)(x)"
+ },
+ {
+  "name": "apply_functor",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "trait IntFn(Copyable, Movable):\n    def call(self, x: Int) -> Int:\n        ...\n\n@fieldwise_init\nstruct Inc(IntFn, Copyable, Movable):\n    def call(self, x: Int) -> Int:\n        return x + 1\n\ndef apply_functor[F: IntFn](f: F, x: Int) -> Int:\n    return f.call(x)"
+ },
+ {
+  "name": "apply_twice_dtype",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def bump_by[dt: DType](x: Scalar[dt], k: Scalar[dt]) -> Scalar[dt]:\n    return x + k\n\ndef apply_twice[dt: DType](x: Scalar[dt], k: Scalar[dt]) -> Scalar[dt]:\n    return bump_by[bump_by[Scalar[dt]], Scalar[dt]](x, k) * k"
+ },
+ {
+  "name": "array_mean",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def array_mean(v: List[Float64]) -> Float64:\n    var total: Float64 = 0.0\n    for i in range(len(v)):\n        total += v[i]\n    return total / Float64(len(v))"
+ },
+ {
+  "name": "binary_search",
+  "category": "algo",
+  "status": "pass",
+  "detail": "",
+  "code": "def binary_search(arr: List[Int], target: Int) -> Int:\n    var lo = 0\n    var hi = len(arr) - 1\n    while lo <= hi:\n        var mid = lo + (hi - lo) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1"
+ },
+ {
+  "name": "bitwise_abs",
+  "category": "bitops",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def bitwise_abs(n: Int) -> Int:\n    var m = n >> 63\n    var result = n + m ^ m\n    result ^= m\n    return result"
+ },
+ {
+  "name": "bump_counter",
+  "category": "reference",
+  "status": "pass",
+  "detail": "",
+  "code": "def bump_counter(mut count: Int, times: Int):\n    for _ in range(times):\n        count += 1"
+ },
+ {
+  "name": "capitalize_words",
+  "category": "string",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def capitalize_words(s: String) -> String:\n    var result = String(\"\")\n    var start = 1\n    for cp in s.codepoints():\n        if Int(cp) == 32:\n            start = 1\n        elif start and Int(cp) >= 97 and Int(cp) <= 122:\n            var c = Int(cp)\n            if c == 97:\n                c -= 32\n            start = 0\n            result += chr(c)\n        else:\n            result += chr(c)\n    return result"
+ },
+ {
+  "name": "catalan_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def catalan(n: Int) -> Int:\n    if n <= 1:\n        return 1\n    var r = 0\n    for i in range(n):\n        r += catalan(i) * catalan(n - 1 - i)\n    return r"
+ },
+ {
+  "name": "char_frequency",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def char_frequency(s: String) -> Dict[String, Int]:\n    var freq = Dict[String, Int]()\n    for cp in s.codepoints():\n        var c = String(cp)\n        if c in freq:\n            freq[c] = freq[c] + 1\n        else:\n            freq[c] = 1\n    return freq"
+ },
+ {
+  "name": "checked_avg",
+  "category": "error",
+  "status": "pass",
+  "detail": "",
+  "code": "def checked_avg(v: List[Int]) raises -> Float64:\n    if len(v) == 0:\n        raise Error(\"empty\")\n    var sum: Float64 = 0\n    for i in range(len(v)):\n        sum += v[i]\n    return sum / Float64(len(v))"
+ },
+ {
+  "name": "checked_index_str",
+  "category": "error",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def checked_index_str(s: String, idx: Int) raises -> String:\n    if idx < 0 or idx >= s.byte_length():\n        raise Error(\"index\")\n    return String(1)"
+ },
+ {
+  "name": "checked_nth_root",
+  "category": "error",
+  "status": "pass",
+  "detail": "",
+  "code": "def checked_nth_root(x: Float64, n: Int) raises -> Float64:\n    if n <= 0:\n        raise Error(\"bad degree\")\n    if x < 0.0:\n        raise Error(\"negative radicand\")\n    return x ** Float64(1.0 / n)"
+ },
+ {
+  "name": "checked_sqrt_neg",
+  "category": "error",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def checked_sqrt_neg(x: Float64) raises -> Float64:\n    if x < 0.0:\n        raise Error(\"negative\")\n    return Float64(sqrt(x))"
+ },
+ {
+  "name": "clamp01",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def clamp01(x: Float64, lo: Float64, hi: Float64) -> Float64:\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x"
+ },
+ {
+  "name": "clamp_int",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def clamp_int(x: Int, lo: Int, hi: Int) -> Int:\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x"
+ },
+ {
+  "name": "clear_lowest_set",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def clear_lowest_set(x: UInt64) -> UInt64:\n    return x & (x - 1)"
+ },
+ {
+  "name": "coin_count",
+  "category": "algo",
+  "status": "runtime_error",
+  "detail": " #9 0x000055e3f5960175 _start (/tmp/claude-1000/tmp_0g_gkiq/b+0x1175)",
+  "code": "def coin_count(amount: Int) -> Int:\n    var coins = [1, 5, 10, 25]\n    var dp = List[Int]()\n    for _i in range(len(coins)):\n        dp.append(1000000)\n    dp.append(0)\n    for cp in range(len(coins)):\n        for aa in range(coins[cp], amount + 1):\n            if dp[aa - coins[cp]] + 1 < dp[aa]:\n                dp[aa] = dp[aa - coins[cp]] + 1\n    return dp[amount]"
+ },
+ {
+  "name": "collatz_len",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def collatz_len(n: Int) -> Int:\n    var c = 0\n    while n != 1:\n        if n % 2 == 0:\n            n //= 2\n        else:\n            n = 3 * n + 1\n        c += 1\n    return c"
+ },
+ {
+  "name": "compose2",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "trait IntFn(Copyable, Movable):\n    def call(self, x: Int) -> Int:\n        ...\n\n@fieldwise_init\nstruct Inc(IntFn, Copyable, Movable):\n    def call(self, x: Int) -> Int:\n        return x + 1\n\ndef compose2[F: IntFn](f: F, g: F)(x: Int) -> Int:\n    return f.call(g.call(x))"
+ },
+ {
+  "name": "contains_all_keys",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def contains_all_keys(m: Dict[String, Int], need: List[String]) -> Int:\n    for i in range(len(need)):\n        if String(need[i]) not in m or m[String(need[i])] == 0:\n            return 0\n    return 1"
+ },
+ {
+  "name": "count_above_threshold",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def count_above_threshold(m: Dict[String, Int], thr: Int) -> Int:\n    var c = 0\n    for k in m.keys():\n        if k > thr:\n            c += 1\n    return c"
+ },
+ {
+  "name": "count_digits",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def count_digits(s: String) -> Int:\n    var count = 0\n    for cp in s.codepoints():\n        var c = Int(cp)\n        if c >= 48 and c <= 57:\n            count += 1\n    return count"
+ },
+ {
+  "name": "count_equal_generic",
+  "category": "template",
+  "status": "pass",
+  "detail": "",
+  "code": "def count_equal[dt: DType](xs: List[Scalar[dt]], target: Scalar[dt]) -> Int:\n    var c = 0\n    for i in range(len(xs)):\n        if xs[i] == target:\n            c += 1\n    return c"
+ },
+ {
+  "name": "count_leading_zeros",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def clz64(n: Int) -> Int:\n    var c = 0\n    var mask = 1 << 63\n    var current_mask = mask\n    while current_mask & n == 0:\n        c += 1\n        current_mask >>= 1\n    return c"
+ },
+ {
+  "name": "count_peaks",
+  "category": "array",
+  "status": "runtime_error",
+  "detail": " #9 0x000055abcc88b175 _start (/tmp/claude-1000/tmp2w4pcse8/b+0x1175)",
+  "code": "def count_peaks(v: List[Int]) -> Int:\n    var c = 0\n    for i in range(1, len(v)):\n        if v[i] > v[i - 1] and v[i] > v[i + 1]:\n            c += 1\n    return c"
+ },
+ {
+  "name": "count_trailing_zeros",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def ctz64(n: Int) -> Int:\n    var c = 0\n    var x = n\n    while x & 1 == 0:\n        c += 1\n        x >>= 1\n    return c"
+ },
+ {
+  "name": "count_words",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def count_words(s: String) -> Int:\n    var count = 0\n    var in_word = 0\n    for cp in s.codepoints():\n        if String(cp) == \" \":\n            in_word = 0\n        elif in_word == 0:\n            count += 1\n            in_word = 1\n    return count"
+ },
+ {
+  "name": "day_kind",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "comptime DAY_MON = 0\ncomptime DAY_TUE = 1\ncomptime DAY_WED = 2\ncomptime DAY_THU = 3\ncomptime DAY_FRI = 4\ncomptime DAY_SAT = 5\ncomptime DAY_SUN = 6\n\ndef is_weekend(day: Int) -> Int:\n    if day == DAY_SAT or day == DAY_SUN:\n        return 1\n    return 0"
+ },
+ {
+  "name": "dedup_count",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def dedup_count(v: List[Int]) -> Int:\n    var c = 0\n    for i in range(len(v)):\n        var seen = False\n        for j in range(i):\n            if v[j] == v[i]:\n                seen = True\n                break\n        if not seen:\n            c += 1\n    return c"
+ },
+ {
+  "name": "dew_point",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import log\n\ndef dew_point(tc: Float64, rh: Float64) -> Float64:\n    var g = log(rh / 100.0) + 17.27 * tc / (237.3 + tc)\n    return 237.3 * g / (17.27 - g)"
+ },
+ {
+  "name": "digit_count",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def digit_count(n: Int) -> Int:\n    if n < 0:\n        n = -n\n    if n == 0:\n        return 1\n    var c = 0\n    var x = n\n    while x > 0:\n        c += 1\n        x = x // 10\n    return c"
+ },
+ {
+  "name": "direction_vector",
+  "category": "enum",
+  "status": "pass",
+  "detail": "",
+  "code": "comptime NORTH = 0\ncomptime EAST = 1\ncomptime SOUTH = 2\ncomptime WEST = 3\n\ndef move_x(dir: Int) -> Int:\n    if dir == EAST:\n        return 1\n    elif dir == WEST:\n        return -1\n    else:\n        return 0\n\ndef move_y(dir: Int) -> Int:\n    if dir == NORTH:\n        return 1\n    elif dir == SOUTH:\n        return -1\n    else:\n        return 0"
+ },
+ {
+  "name": "doppler_shift",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def doppler_shift(f: Float64, vs: Float64, vr: Float64) -> Float64:\n    var c = 343.0\n    return f * (c + vr) / (c - vs)"
+ },
+ {
+  "name": "ema_step",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def ema_step(prev: Float64, x: Float64, alpha: Float64) -> Float64:\n    return alpha * x + (1 - alpha) * prev"
+ },
+ {
+  "name": "erase_and_size",
+  "category": "map",
+  "status": "pass",
+  "detail": "",
+  "code": "def erase_and_size(keys: List[String], remove_key: String) raises -> Int:\n    var m = Dict[String, Int]()\n    for i in range(len(keys)):\n        var k = keys[i]\n        if k in m:\n            m[k] = 1\n        else:\n            m[k] = 0\n    m.pop(remove_key, 0)\n    return len(m)"
+ },
+ {
+  "name": "factorial",
+  "category": "algo",
+  "status": "pass",
+  "detail": "",
+  "code": "def factorial(n: Int) -> Int:\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)"
+ },
+ {
+  "name": "fib_pair_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def fib_pair_rec(n: Int) -> Int:\n    if n == 0:\n        return 0\n    if n == 1:\n        return 1\n    return fib_pair_rec(n - 1) + fib_pair_rec(n - 2)"
+ },
+ {
+  "name": "fill_lowest_bits",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def fill_lowest_bits(n: Int) -> Int:\n    if n == 0:\n        return 0\n    return (1 << n) - 1"
+ },
+ {
+  "name": "find_index_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def find_index[T: Comparable & ImplicitlyCopyable](xs: List[Self], n: Int, target: Self) -> Int:\n    for i in range(n):\n        if xs[i] == target:\n            return i\n    return -1"
+ },
+ {
+  "name": "fraction_reduce_num",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def gcd3(a: Int, b: Int) -> Int:\n    var x = a\n    var y = b\n    while y != 0:\n        var t = y\n        y = x % y\n        x = t\n    return x\n\ndef reduce_num(num: Int, den: Int) -> Int:\n    var g = gcd3(num, den)\n    if g == 0:\n        return num\n    return num // g"
+ },
+ {
+  "name": "gaussian_pdf",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "from std.math import exp\n\ndef gaussian_pdf(x: Float64, mu: Float64, sigma: Float64) -> Float64:\n    var d = x - mu\n    var pi = 3.14159265358979323846\n    return exp(-0.5 * d * d) / sigma * sqrt(2.0 * pi)"
+ },
+ {
+  "name": "gcd_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def gcd_rec(a: Int, b: Int) -> Int:\n    if b == 0:\n        return a\n    return gcd_rec(b, a % b)"
+ },
+ {
+  "name": "gelu_sigmoid_approx",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def gelu_sigmoid_approx(x: Float64) -> Float64:\n    return x / (1.0 + exp(-1.702 * x))"
+ },
+ {
+  "name": "gray_binary",
+  "category": "bitops",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def binary_to_gray(n: UInt64) -> UInt64:\n    var x = n\n    for _ in range(6):\n        var y = x ^ x >> 1\n        x = y\n    return x\n\ndef gray_to_binary(g: UInt64) -> UInt64:\n    var b = UInt64(0)\n    var x = g\n    while x != 0:\n        b ^= x\n        x >>= 1\n    return b"
+ },
+ {
+  "name": "hadamard_product",
+  "category": "matrix",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def hadamart(a: List[List[Float64]], b: List[List[Float64]]) -> List[List[Float64]]:\n    var n = len(a)\n    var m = len(a[0])\n    var c = List[List[Float64]]()\n    for i in range(n):\n        var row = List[Float64]()\n        for j in range(m):\n            row.append(a[i][j] * b[i][j])\n        c.append(row^)\n    return c^"
+ },
+ {
+  "name": "harmonic_mean3",
+  "category": "numeric",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def harmonic_mean3(a: Float64, b: Float64, c: Float64) -> Float64:\n    return 3.0 / (a + b + c)"
+ },
+ {
+  "name": "horner_poly",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def horner_poly(x: Float64) -> Float64:\n    var c = List[Float64]()\n    c.append(2.0)\n    c.append(-3.0)\n    c.append(0.5)\n    c.append(1.0)\n    c.append(-1.0)\n    var r = 0.0\n    for i in range(5):\n        r = r * x + c[i]\n    return r"
+ },
+ {
+  "name": "hypotenuse_angle",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import atan2\n\ndef hypotenuse_angle(opp: Float64, adj: Float64) -> Float64:\n    return atan2(opp, adj)"
+ },
+ {
+  "name": "identity_generic",
+  "category": "template",
+  "status": "pass",
+  "detail": "",
+  "code": "def twice[dt: DType](x: Scalar[dt]) -> Scalar[dt]:\n    return x + x"
+ },
+ {
+  "name": "insertion_sort",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def insertion_sort(mut v: List[Int]):\n    var n = len(v)\n    for i in range(1, n):\n        var key = v[i]\n        var j = i - 1\n        while j >= 0 and v[j] > key:\n            v[j + 1] = v[j]\n            j -= 1\n        v[j + 1] = key"
+ },
+ {
+  "name": "interleave_bits_small",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def interleave_bits(a: UInt64, b: UInt64) -> UInt64:\n    var r = UInt64(0)\n    for _ in range(8):\n        r |= (a >> _) & 1\n        r |= (b >> _) & 1\n        r |= (a >> _) & 1\n        r |= (b >> _) & 1\n    return r"
+ },
+ {
+  "name": "is_bit_set",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def is_bit_set(x: UInt64, i: Int) -> Int:\n    return (x >> i) & 1 if (x >> i) & 1 else 0"
+ },
+ {
+  "name": "is_numeric",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def is_numeric(s: String) -> Int:\n    var n = s.byte_length()\n    if n == 0:\n        return 0\n    for i in range(n):\n        var c = String(s[byte=i])\n        if c < '0' or c > '9':\n            return 0\n    return 1"
+ },
+ {
+  "name": "is_prime",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def is_prime(n: Int) -> Bool:\n    if n < 2:\n        return False\n    for i in range(2, int(n ** 0.5) + 1):\n        if n % i == 0:\n            return False\n    return True"
+ },
+ {
+  "name": "is_symmetric",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def is_symmetric(m: List[List[Float64]]) -> Bool:\n    var n = len(m)\n    for i in range(n):\n        for j in range(n):\n            if m[i][j] != m[n - 1 - i][n - 1 - j]:\n                return False\n    return True"
+ },
+ {
+  "name": "key_exists",
+  "category": "map",
+  "status": "runtime_error",
+  "detail": "",
+  "code": "def key_exists(m: Dict[String, Int], key: String) raises -> Int:\n    return m[key] if m[key] > 0 else 0"
+ },
+ {
+  "name": "law_of_cosines_side",
+  "category": "math",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "from std.math import sqrt\n\ndef law_of_cosines_side(a: Float64, b: Float64, angle: Float64) -> Float64:\n    return sqrt(a * a + b * b - 2.0 * a * b * cos(angle))"
+ },
+ {
+  "name": "leap_year",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def leap_year(y: Int) -> Int:\n    if y % 400 == 0:\n        return 1\n    if y % 100 == 0:\n        return 0\n    if y % 4 == 0:\n        return 1\n    return 0"
+ },
+ {
+  "name": "levenshtein",
+  "category": "string",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def levenshtein(a: String, b: String) -> Int:\n    var n = len(a)\n    var m = len(b)\n    var prev = Array[Int](m + 1)\n    for j in range(m + 1):\n        prev[j] = j\n    for i in range(1, n + 1):\n        curr = Array[Int]()\n        for j in range(m + 1):\n            cost = 0 if a[i - 1] == b[j - 1] else 1\n            var d = prev[j] + 1\n            var ins = curr[j - 1] + 1\n            var sub = prev[j - 1] + cost\n            var mn = d\n            if ins < mn:\n                mn = ins\n            if sub < mn:\n                mn = sub\n            curr.append(mn)\n        prev = curr^\n        if j == m:\n            return prev[m]"
+ },
+ {
+  "name": "log2_ratio",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import log2\n\ndef log2_ratio(a: Float64, b: Float64) -> Float64:\n    return log2(a / b)"
+ },
+ {
+  "name": "logistic_cdf",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import exp\n\ndef logistic_cdf(x: Float64, mu: Float64, s: Float64) -> Float64:\n    return 1.0 / (1.0 + exp(-(x - mu) / s))"
+ },
+ {
+  "name": "lookup_default",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def lookup_default(m: Dict[String, Int], key: String, dflt: Int) -> Int:\n    var it = m.get_or(dflt)\n    if it is None:\n        return dflt\n    return it[key]"
+ },
+ {
+  "name": "magnitude_db",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import log10\n\ndef magnitude_db(ratio: Float64) -> Float64:\n    return 20.0 * log10(ratio)"
+ },
+ {
+  "name": "matmul",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def matmul(a: List[List[Float64]], b: List[List[Float64]]) -> List[List[Float64]]:\n    var n = len(a)\n    var m = len(b[0])\n    var k = len(b)\n    var c = List[List[Float64]]()\n    for i in range(n):\n        var row = List[Float64]()\n        for j in range(m):\n            var s: Float64 = 0.0\n            for p in range(k):\n                s += a[i][p] * b[p][j]\n            row.append(s)\n        c.append(row^)\n    return c^"
+ },
+ {
+  "name": "matrix_determinant_3x3",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def det3x3(m: List[List[Float64]]) -> Float64:\n    return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -\n           m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +\n           m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])"
+ },
+ {
+  "name": "matrix_max_element",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def matrix_max_element(m: List[List[Float64]]) -> Float64:\n    var best = m[0][0]\n    for i in range(len(m)):\n        for j in range(len(m[i])):\n            if m[i][j] > best:\n                best = m[i][j]\n    return best"
+ },
+ {
+  "name": "matrix_power2_2x2",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def matpow2(m: List[List[Float64]]) -> List[List[Float64]]:\n    var r = List[List[Float64]]()\n    for i in range(2):\n        var row = List[Float64]()\n        for j in range(2):\n            var s: Float64 = 0.0\n            for p in range(2):\n                s += m[i][p] * m[p][j]\n            row.append(s)\n        r.append(row^)\n    return r^"
+ },
+ {
+  "name": "matrix_scalar_mul",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def matrix_scalar_mul(m: List[List[Float64]], s: Float64) -> List[List[Float64]]:\n    var result = List[List[Float64]]()\n    for i in range(len(m)):\n        var row = List[Float64]()\n        for j in range(len(m[i])):\n            row.append(m[i][j] * s)\n        result.append(row^)\n    return result^"
+ },
+ {
+  "name": "matrix_trace_of_product",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def trace_of_product(a: List[List[Float64]], b: List[List[Float64]]) -> Float64:\n    var n = len(a)\n    var tr: Float64 = 0.0\n    for i in range(n):\n        var s: Float64 = 0.0\n        for p in range(n):\n            s += a[i][p] * b[p][i]\n        tr += s\n    return tr"
+ },
+ {
+  "name": "max_generic",
+  "category": "template",
+  "status": "pass",
+  "detail": "",
+  "code": "def max_generic[T: Comparable & ImplicitlyCopyable](a: T, b: T) -> T:\n    if a < b:\n        return b\n    return a"
+ },
+ {
+  "name": "median3_generic",
+  "category": "template",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def median3[T: Comparable & ImplicitlyCopyable](a: T, b: T, c: T) -> T:\n    if a < b < c:\n        return a\n    if b < a < c:\n        return b\n    return c"
+ },
+ {
+  "name": "merge_sum",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def merge_sum(k1: List[String], v1: List[Int], k2: List[String], v2: List[Int], target: String) raises -> Int:\n    var m = Dict[String, Int]()\n    for i in range(len(k1)):\n        m[k1[i]] = m.getOrDefault(k1[i]) or 0\n    for i in range(len(k2)):\n        m[k2[i]] = m.getOrDefault(k2[i]) or 0\n    return m[target]"
+ },
+ {
+  "name": "min_max_normalize",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def min_max_normalize(x: Float64, lo: Float64, hi: Float64) -> Float64:\n    return (x - lo) / (hi - lo)"
+ },
+ {
+  "name": "mode_value",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def mode_value(v: List[Int]) -> Int:\n    var best = v[0]\n    var best_count = 0\n    for i in range(len(v)):\n        var c = 0\n        for j in range(len(v)):\n            if v[j] == v[i]:\n                c += 1\n        if c > best_count:\n            best_count = c\n            best = v[i]\n    return best"
+ },
+ {
+  "name": "mutual_recursion_even_odd",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def is_even(n: Int) -> Bool:\n    return True if n == 0 else is_even(n - 1)\n\ndef is_odd(n: Int) -> Bool:\n    if n == 0:\n        return False\n    return is_even(n - 1)"
+ },
+ {
+  "name": "newton_sqrt",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def newton_sqrt(x: Float64) -> Float64:\n    if x <= 0:\n        return 0.0\n    var g = x\n    for _i in range(50):\n        g = 0.5 * (g + x / g)\n    return g"
+ },
+ {
+  "name": "next_state",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "comptime STATE_IDLE = 0\ncomptime STATE_RUNNING = 1\ncomptime STATE_PAUSED = 2\ncomptime STATE_STOPPED = 3\n\ncomptime EV_START = 0\ncomptime EV_PAUSE = 1\ncomptime EV_RESUME = 2\ncomptime EV_STOP = 3"
+ },
+ {
+  "name": "nth_triangular_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def nth_triangular_rec(n: Int) -> Int:\n    if n <= 0:\n        return 0\n    return n + nth_triangular_rec(n - 1)"
+ },
+ {
+  "name": "parity",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def parity(n: UInt64) -> Int:\n    var p = 0\n    var x = n\n    while x != 0:\n        p ^= Int(x & 1)\n        x >>= 1\n    return p"
+ },
+ {
+  "name": "parse_int_checked",
+  "category": "error",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def parse_int_checked(s: String) raises -> Int:\n    if len(s) == 0:\n        raise Error(\"empty\")\n    var val = 0\n    for i in range(len(s)):\n        var c = String(s[byte=i])\n        if Int(c) < 48 or Int(c) > 57:\n            raise Error(\"non-digit\")\n        val = val * 10 + (c - 48)\n    return val"
+ },
+ {
+  "name": "percentage_error",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def percentage_error(approx: Float64, exact: Float64) -> Float64:\n    var e = (approx - exact) / Exact\n    if e < 0.0:\n        e = -e\n    return e * 100.0"
+ },
+ {
+  "name": "popcount",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def popcount(n: Int) -> Int:\n    var x = n\n    var c = 0\n    while x != 0:\n        c += x & 1\n        x >>= 1\n    return c"
+ },
+ {
+  "name": "power_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def power_rec(base: Int, exp: Int) -> Int:\n    if exp == 0:\n        return 1\n    return base * power_rec(base, exp - 1)"
+ },
+ {
+  "name": "present_value",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def present_value(fv: Float64, r: Float64, n: Int) -> Float64:\n    return fv / (1.0 + r) ** n"
+ },
+ {
+  "name": "quadrant_of_point",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def quadrant_of_point(x: Int, y: Int) -> Int:\n    if x == 0 or y == 0:\n        return 0\n    if x > 0 and y > 0:\n        return 1\n    if x < 0 and y > 0:\n        return 2\n    if x < 0 and y < 0:\n        return 3\n    return 4"
+ },
+ {
+  "name": "rad2deg",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def rad2deg(r: Float64) -> Float64:\n    return r * 180.0 / 3.14159265358979323846"
+ },
+ {
+  "name": "reduce_with",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def reduce_with[op: Callable[()->Int], xs: List[Int]](op: Callable[()->Int] -> Int, init: Int, xs: List[Int]) -> Int:\n    var acc = init\n    for i in range(len(xs)):\n        acc = op(acc)\n    return acc"
+ },
+ {
+  "name": "repeat_string",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def repeat_string(s: String, n: Int) -> String:\n    var result = String(\"\")\n    for _ in range(n):\n        result += s\n    return result"
+ },
+ {
+  "name": "reverse_byte",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def reverse_byte(b: UInt64) -> UInt64:\n    var r = UInt64(0)\n    for _i in range(8):\n        r = (r << 1) | ((b >> _i) & 1)\n    return r"
+ },
+ {
+  "name": "reverse_list_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def reverse_list[dt: DType](xs: List[Scalar[dt]]) raises -> None:\n    var n = len(xs)\n    for i in range(n // 2):\n        _ = xs[i]\n        _ = xs[n - 1 - i]\n    for j in range(n):\n        xs[j] = xs[n - 1 - j]"
+ },
+ {
+  "name": "reynolds_number",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def reynolds_number(rho: Float64, v: Float64, l: Float64, mu: Float64) -> Float64:\n    return rho * v * l / mu"
+ },
+ {
+  "name": "rot13",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def rot13(s: String) -> String:\n    var result = String(\"\")\n    for cp in s.codepoints():\n        var c = Int(cp)\n        if c >= 65 and c <= 90:\n            c = (c - 65 + 13) % 26 + 65\n        elif c >= 97 and c <= 122:\n            c = (c - 97 + 13) % 26 + 97\n        result += chr(c)\n    return result"
+ },
+ {
+  "name": "rotate_left64",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def rotl64(x: UInt64, k: Int) -> UInt64:\n    var kk = k & 63\n    if kk == 0:\n        return x\n    return (x << kk) | (x >> (64 - kk))"
+ },
+ {
+  "name": "round_to_decimals",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def round_to_decimals(x: Float64, n: Int) -> Float64:\n    var p = 10.0 ** n\n    return round(x * p) / p"
+ },
+ {
+  "name": "run_length_count",
+  "category": "control",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def run_length_count(n: Int) -> Int:\n    var runs = 0\n    var prev = -1\n    while n > 0:\n        var d = n % 10\n        if d != prev:\n            runs += 1\n            prev = d\n        n //= 10\n    return runs"
+ },
+ {
+  "name": "safe_divide",
+  "category": "error",
+  "status": "pass",
+  "detail": "",
+  "code": "def safe_divide(a: Float64, b: Float64) raises -> Float64:\n    if b == 0.0:\n        raise Error(\"division by zero\")\n    return a / b"
+ },
+ {
+  "name": "scale_list_dtype",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def scaled_sum[dt: DType](xs: List[Scalar[dt]], n: Int, k: Scalar[dt]) -> Scalar[dt]:\n    var s = Scalar[dt](0)\n    for i in range(n):\n        s = s + xs[i] * k\n    return s"
+ },
+ {
+  "name": "second_largest",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def second_largest(v: List[Int]) -> Int:\n    var first = v[0]\n    var second = -2147483647\n    for i in range(len(v)):\n        if v[i] > first:\n            second = first\n            first = v[i]\n        elif v[i] < first and v[i] > second:\n            second = v[i]\n    return second"
+ },
+ {
+  "name": "severity_order",
+  "category": "enum",
+  "status": "pass",
+  "detail": "",
+  "code": "comptime DEBUG = 0\ncomptime INFO = 1\ncomptime WARN = 2\ncomptime ERROR = 3\ncomptime FATAL = 4\n\ndef is_at_least(level: Int, threshold: Int) -> Int:\n    if level >= threshold:\n        return 1\n    return 0"
+ },
+ {
+  "name": "sign_from_bits",
+  "category": "bitops",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def sign_from_bits(n: Int) -> Int:\n    return (n >> 63) | ((n & -n) >> 63)"
+ },
+ {
+  "name": "slope",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def slope(x1: Float64, y1: Float64, x2: Float64, y2: Float64) -> Float64:\n    return (y2 - y1) / (x2 - x1)"
+ },
+ {
+  "name": "softplus",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "from std.math import log\n\ndef softplus(x: Float64) -> Float64:\n    return log(1.0 + exp(x))"
+ },
+ {
+  "name": "stddev4",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def stddev4(a: Float64, b: Float64, c: Float64, d: Float64) -> Float64:\n    var m = (a + b + c + d) / 4.0\n    var s = (a - m) * (a - m) + (b - m) * (b - m) + (c - m) * (c - m) + (d - m) * (d - m)\n    return sqrt(s / 4.0)"
+ },
+ {
+  "name": "suit_color",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "comptime CLUBS = 0\ncomptime DIAMONDS = 1\ncomptime HEARTS = 2\ndef is_red(suit: Int) -> Int:\n    if suit == DIAMONDS or suit == HEARTS:\n        return 1\n    return 0"
+ },
+ {
+  "name": "sum_digits",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def sum_digits(n: Int) -> Int:\n    if n < 0:\n        n = -n\n    var s = 0\n    while n > 0:\n        s += n % 10\n        n /= 10\n    return s"
+ },
+ {
+  "name": "sum_list_dtype",
+  "category": "template",
+  "status": "pass",
+  "detail": "",
+  "code": "def range_sum[dt: DType](xs: List[Scalar[dt]]) -> Scalar[dt]:\n    var lo = xs[0]\n    var hi = xs[0]\n    for i in range(1, len(xs)):\n        if xs[i] < lo:\n            lo = xs[i]\n        if hi < xs[i]:\n            hi = xs[i]\n    return hi - lo"
+ },
+ {
+  "name": "sum_values",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def sum_values(m: Dict[String, Int]) -> Int:\n    var total = 0\n    for k in m.keys():\n        total += m[k]\n    return total"
+ },
+ {
+  "name": "swap_pair_generic",
+  "category": "template",
+  "status": "pass",
+  "detail": "",
+  "code": "def swap_vals[T: Comparable & ImplicitlyCopyable](mut a: T, mut b: T):\n    var t = a\n    a = b\n    b = t"
+ },
+ {
+  "name": "tanh_activation",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import exp\n\ndef tanh_activation(x: Float64) -> Float64:\n    var e = exp(2.0 * x)\n    return (e - 1.0) / (e + 1.0) + 0.5"
+ },
+ {
+  "name": "to_upper_ascii",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def to_upper_ascii(s: String) -> String:\n    var result = String(\"\")\n    for cp in s.codepoints():\n        var c = Int(cp)\n        if c >= 97 and c <= 122:\n            c -= 32\n        result += chr(c)\n    return result"
+ },
+ {
+  "name": "transform_and_total",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "def transform_and_total[f](f: Callable[-> Int], xs: List[Int]) -> Int:\n    var s = 0\n    for i in range(len(xs)):\n        s += f(xs[i])\n    return s"
+ },
+ {
+  "name": "triangle_type",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def triangle_type(a: Int, b: Int, c: Int) -> Int:\n    if a + b <= c or a + c <= b or b + c <= a:\n        return -1\n    if a == b and b == c:\n        return 3\n    if a == b or b == c or a == c:\n        return 2\n    return 1"
+ },
+ {
+  "name": "upper_triangular_sum",
+  "category": "matrix",
+  "status": "pass",
+  "detail": "",
+  "code": "def upper_tri_sum(m: List[List[Float64]]) -> Float64:\n    var n = len(m)\n    var s: Float64 = 0.0\n    for i in range(n):\n        for j in range(i, n):\n            s += m[i][j]\n    return s"
+ },
+ {
+  "name": "vec2_add",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/home/bart/Github/energyplus-mojo/.pixi/envs/default/bin/mojo: error: failed to parse the provided Mojo source module",
+  "code": "@fieldwise_init\nstruct Vec2(Copyable, Movable):\n    var x: Float64\n    var y: Float64\n\n    def __add__(self, other: Vec2) -> Vec2:\n        return Vec2(self.x + other.x, self.y + other.y)"
+ },
+ {
+  "name": "weekday_from_daynum",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def weekday_from_daynum(d: Int) -> Int:\n    var r = d % 7\n    if r == 0:\n        return 6\n    return r - 1"
+ },
+ {
+  "name": "wind_chill",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "from std.math import pow\n\ndef wind_chill(tc: Float64, v: Float64) -> Float64:\n    var vp = pow(v, 0.16)\n    return 13.12 + 0.6215 * tc - 11.37 * vp + 0.3965 * tc * vp"
+ },
+ {
+  "name": "z_score",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def z_score(x: Float64, mu: Float64, sigma: Float64) -> Float64:\n    return (x - mu) / sigma"
+ }
+]

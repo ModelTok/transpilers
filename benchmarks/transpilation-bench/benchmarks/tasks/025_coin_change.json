@@ -1,0 +1,57 @@
+{
+  "id": "025",
+  "name": "coin_change",
+  "tier": 4,
+  "concept": "dynamic_programming_1d",
+  "tags": [
+    "dp",
+    "greedy_vs_dp",
+    "optimization"
+  ],
+  "description": "Return the minimum number of coins to make 'amount'. Return -1 if impossible.",
+  "cpp_source": "#include <vector>\n#include <algorithm>\nint coin_change(std::vector<int>& coins, int amount) {\n    std::vector<int> dp(amount+1, amount+1);\n    dp[0] = 0;\n    for (int i = 1; i <= amount; i++)\n        for (int c : coins)\n            if (c <= i) dp[i] = std::min(dp[i], dp[i-c]+1);\n    return dp[amount] > amount ? -1 : dp[amount];\n}",
+  "python_reference": "def coin_change(coins: list, amount: int) -> int:\n    dp = [float('inf')] * (amount + 1)\n    dp[0] = 0\n    for i in range(1, amount + 1):\n        for c in coins:\n            if c <= i:\n                dp[i] = min(dp[i], dp[i - c] + 1)\n    return dp[amount] if dp[amount] != float('inf') else -1",
+  "mojo_reference": "fn coin_change(coins: List[Int], amount: Int) -> Int:\n    var INF = amount + 1\n    var dp = List[Int]()\n    for _ in range(amount + 1): dp.append(INF)\n    dp[0] = 0\n    for i in range(1, amount + 1):\n        for c in coins:\n            if c[] <= i and dp[i - c[]] + 1 < dp[i]:\n                dp[i] = dp[i - c[]] + 1\n    return -1 if dp[amount] == INF else dp[amount]",
+  "tests": [
+    {
+      "args": [
+        [
+          1,
+          5,
+          11
+        ],
+        15
+      ],
+      "expected": "3"
+    },
+    {
+      "args": [
+        [
+          2
+        ],
+        3
+      ],
+      "expected": "-1"
+    },
+    {
+      "args": [
+        [
+          1,
+          2,
+          5
+        ],
+        11
+      ],
+      "expected": "3"
+    },
+    {
+      "args": [
+        [
+          1
+        ],
+        0
+      ],
+      "expected": "0"
+    }
+  ]
+}

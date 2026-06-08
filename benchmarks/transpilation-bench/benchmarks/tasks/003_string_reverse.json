@@ -1,0 +1,40 @@
+{
+  "id": "003",
+  "name": "string_reverse",
+  "tier": 1,
+  "concept": "string_manipulation",
+  "tags": [
+    "strings",
+    "indexing"
+  ],
+  "description": "Return the reverse of a string.",
+  "cpp_source": "#include <string>\n#include <algorithm>\nstd::string string_reverse(std::string s) {\n    std::reverse(s.begin(), s.end());\n    return s;\n}",
+  "python_reference": "def string_reverse(s: str) -> str:\n    return s[::-1]",
+  "mojo_reference": "fn string_reverse(s: String) -> String:\n    var result = String(\"\")\n    for i in range(len(s) - 1, -1, -1):\n        result += s[i]\n    return result",
+  "tests": [
+    {
+      "args": [
+        "hello"
+      ],
+      "expected": "olleh"
+    },
+    {
+      "args": [
+        "abcde"
+      ],
+      "expected": "edcba"
+    },
+    {
+      "args": [
+        "a"
+      ],
+      "expected": "a"
+    },
+    {
+      "args": [
+        ""
+      ],
+      "expected": ""
+    }
+  ]
+}

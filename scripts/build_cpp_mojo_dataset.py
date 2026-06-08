@@ -199,7 +199,8 @@ def extract_fns(ep_src: Path) -> list[CppFn]:
     multi-line / comment-laden signatures by paren+brace matching."""
     fns: list[CppFn] = []
     seen: set[str] = set()
-    for cc in sorted(ep_src.glob("*.cc")):
+    # .cc translation units + .hh headers (the headers carry many inline scalar fns)
+    for cc in sorted(list(ep_src.glob("*.cc")) + list(ep_src.glob("*.hh"))):
         text = cc.read_text(errors="ignore")
         for m in _SIG_START.finditer(text):
             name = m.group("name")
@@ -280,6 +281,7 @@ def mojo_params(mojo: str) -> list[tuple[str, str]] | None:
 _CPP_HELPERS = r"""
 #include <cstdio>
 #include <cmath>
+#include <cassert>
 typedef double Real64;
 typedef int Int;
 typedef long long Int64;
@@ -289,10 +291,32 @@ static inline double pow_4(double x){return x*x*x*x;}
 static inline double pow_5(double x){return x*x*x*x*x;}
 static inline double pow_6(double x){double y=x*x*x;return y*y;}
 static inline double pow_7(double x){double y=x*x*x;return y*y*x;}
+static inline double root_4(double x){return std::sqrt(std::sqrt(x));}
+static inline double root_8(double x){return std::sqrt(std::sqrt(std::sqrt(x)));}
 static inline double mod(double a,double b){return std::fmod(a,b);}
 static inline int mod(int a,int b){return a%b;}
 static inline double sign(double a,double b){return b>=0.0?std::fabs(a):-std::fabs(a);}
 static inline int sign(int a,int b){return b>=0?(a<0?-a:a):-(a<0?-a:a);}
+// EnergyPlus calls `max`/`min` unqualified (ObjexxFCL/<algorithm>). Provide
+// double+int overloads so the oracle resolves them unambiguously — without
+// these, `<cmath>`'s 3-arg std::max leaks in and unqualified `max(a,b)` becomes
+// an ambiguous/ill-formed call. Semantics match std::max/std::min exactly.
+static inline double max(double a,double b){return a>b?a:b;}
+static inline double min(double a,double b){return a<b?a:b;}
+static inline int max(int a,int b){return a>b?a:b;}
+static inline int min(int a,int b){return a<b?a:b;}
+namespace Constant {
+constexpr double MaxEXPArg=709.78; constexpr double Pi=3.14159265358979324;
+constexpr double PiOvr2=Pi/2.0; constexpr double TwoPi=2.0*Pi; constexpr double Gravity=9.807;
+constexpr double DegToRad=Pi/180.0; constexpr double RadToDeg=180.0/Pi; constexpr double Kelvin=273.15;
+constexpr double TriplePointOfWaterTempKelvin=273.16; constexpr double StefanBoltzmann=5.6697E-8;
+}
+namespace DataPrecisionGlobals {
+constexpr double constant_zero=0.0; constexpr double constant_one=1.0;
+constexpr double constant_minusone=-1.0; constexpr double constant_twenty=20.0;
+constexpr double constant_pointfive=0.5; constexpr double EXP_LowerLimit=-20.0;
+constexpr double EXP_UpperLimit=40.0;
+}
 """
 
 
@@ -445,24 +469,31 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
         # The function body begins at line 1 of fn.body; in oracle.cpp it is
         # offset by the helper preamble. Track that offset for gcov mapping.
         preamble_lines = _CPP_HELPERS.count("\n") + 1  # leading "\n" handled below
+        # Emit an index with each value so C++ and Mojo outputs can be aligned by
+        # index, not by position — robust to `inf`/`nan` lines that would otherwise
+        # be dropped asymmetrically and misalign the two streams (false reject).
         cpp_calls = "\n".join(
-            f'  printf("%.15g\\n", (double){fn.name}('
+            f'  printf("%d %.15g\\n", {i}, (double){fn.name}('
             + ", ".join(_fmt_lit(v, t)[0] for v, (n, t) in zip(row, mparams))
             + "));"
-            for row in samples
+            for i, row in enumerate(samples)
         )
         header = f"{_CPP_HELPERS}\n"
         fn_first_line = header.count("\n") + 1
         cpp_src = f"{header}{fn.body}\nint main(){{\n{cpp_calls}\n  return 0;\n}}\n"
         (tdp / "oracle.cpp").write_text(cpp_src)
-        r = _run(["g++", "-O0", "-std=c++17", "--coverage",
+        # -DNDEBUG compiles out `assert(...)` (EnergyPlus uses it only as a
+        # debug precondition check) so out-of-domain samples don't abort the
+        # oracle; it can only remove aborts, never change numeric results. This
+        # matches the Mojo backend, which drops `assert` calls entirely.
+        r = _run(["g++", "-O0", "-std=c++17", "-DNDEBUG", "--coverage",
                   "-o", str(tdp / "oracle"), str(tdp / "oracle.cpp")], cwd=str(tdp))
         if r.returncode != 0:
             return None  # depends on stuff outside the TU — not self-contained
         r = _run([str(tdp / "oracle")], cwd=str(tdp))
         if r.returncode != 0:
             return None
-        cpp_out = r.stdout.split()
+        cpp_out = {p[0]: p[1] for p in (ln.split() for ln in r.stdout.splitlines()) if len(p) == 2}
 
         cov_ok, cov_hit, cov_miss, cov_risky = _coverage_ok(
             tdp, "oracle.cpp", fn_first_line, _body_line_span(fn))
@@ -471,10 +502,10 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
 
         # --- Mojo ---
         mojo_calls = "\n".join(
-            f'    print({fn.name}('
+            f'    print({i}, {fn.name}('
             + ", ".join(_fmt_lit(v, t)[1] for v, (n, t) in zip(row, mparams))
             + "))"
-            for row in samples
+            for i, row in enumerate(samples)
         )
         mojo_src = f"{mojo}\n\ndef main():\n{mojo_calls}\n"
         (tdp / "k.mojo").write_text(mojo_src)
@@ -483,14 +514,23 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
         r = _run([str(MOJO_BIN), "run", str(tdp / "k.mojo")], env=env)
         if r.returncode != 0:
             return None
-        mojo_out = [ln for ln in r.stdout.split() if ln and ln[0] in "-0123456789n"]
+        # Parse "<index> <value>" per line into {index: value}; normalize Mojo's
+        # Bool True/False to 1/0 (C++ oracle prints (double)bool).
+        mojo_out = {}
+        for ln in r.stdout.splitlines():
+            p = ln.split()
+            if len(p) == 2 and p[0].isdigit():
+                mojo_out[p[0]] = "1" if p[1] == "True" else "0" if p[1] == "False" else p[1]
 
-    if len(cpp_out) != len(mojo_out) or not cpp_out:
+    if not cpp_out:
         return None
 
     finite = 0
     max_rel = 0.0
-    for a, b in zip(cpp_out, mojo_out):
+    for idx, a in cpp_out.items():          # align by index, robust to inf/nan drops
+        b = mojo_out.get(idx)
+        if b is None:
+            continue
         try:
             fa, fb = float(a), float(b)
         except ValueError:

@@ -1,0 +1,6624 @@
+# Mojo language reference
+
+> Mojo language reference covering keywords, literals, operators, expressions, statements, declarations, and built-in decorators.
+
+This file contains all documentation content in a single document following the llmstxt.org standard.
+
+## Mojo compound statements reference
+
+<!-- VERIFIED: ParserStmts.cpp parseIfStmt(), parseWhileStmt(),
+     parseForStmt(), parseTryStmt(), parseWithStmt(),
+     parseComptimeCompoundStmt(), parseParamIf(), parseParamFor(),
+     parseSuite() -->
+
+A *compound statement* has a header and a body. The header ends
+with `:` and is followed by an indented block with the body.
+
+The body can contain simple statements, other compound
+statements, or both.
+
+```mojo
+if condition:       # Header
+    do_something()  # Body
+```
+
+The body must be indented more than the header. The first body statement
+sets the indentation for the rest of the body:
+
+```mojo
+if condition:
+    do_something()
+      do_more()    # Error: statement has excess indentation
+```
+
+## If statements
+
+An `if` statement executes a block conditionally:
+
+```mojo
+if x > 0:
+    print("positive")
+elif x < 0:
+    print("negative")
+elif x == 0:
+    print("zero")
+else:
+    print("you should never get here")
+```
+
+Conditions are evaluated in order. Add as many as needed.
+The first true condition runs its block, and the statement exits.
+The `else` block runs if no condition is true.
+
+When the body is a single simple statement, you can write it
+on a single line, although this is not normally recommended in
+many house styles:
+
+```mojo
+if x > 0: print("positive")
+```
+
+Common shortcuts from other languages won't work in Mojo:
+
+```mojo
+x > 0 and print("positive")  # Error: 'None' does not implement
+                              # the '__bool__' method
+
+print("positive") if x > 0 else pass # Error: unexpected token in expression
+```
+
+## While loops
+
+The `while` loop repeats its body while a condition is true:
+
+```mojo
+var count = 0
+while count < 10:
+    print(count)
+    count += 1
+```
+
+Use `break` to exit the loop early and `continue` to skip to the next
+iteration:
+
+```mojo
+while True:
+    var item = get_next()
+    if item is None:
+        break       # Exit loop if no more items
+    if not is_valid(item):
+        continue    # Skip invalid items
+    process(item)  # Only runs for valid items
+```
+
+## For loops
+
+The `for` statement iterates over a sequence:
+
+```mojo
+for item in items:
+    process(item)
+
+for i in range(10):   # [0, 10)
+    print(i)
+```
+
+To support iteration, a sequence must implement `__iter__()` and
+`__next__()`. A `for` loop desugars to a `while` loop that uses these
+methods.
+
+Destructuring works directly in the loop target. This lets you unpack tuple
+elements as you iterate. In this example, each item in `pairs` is unpacked
+into `key` and `value` for every iteration:
+
+```mojo
+for key, value in pairs:  # For example, [("a", 1), ("b", 2), ...]
+    print(key, value)
+```
+
+## Loops and else clauses
+
+An optional `else` clause runs when the loop exits normally,
+when the condition becomes false. It does not run if the loop
+exits with `break`:
+
+```mojo
+var found = False
+for item in items:
+    if item == target:
+        found = True
+        break
+else:
+    print("not found")  # Only runs if break was never hit
+```
+
+Both `for` and `while` loops support `else`.
+
+## Error handling
+
+A `try` statement executes code that may raise errors.
+
+```mojo
+try:
+    result = risky()
+except e:
+    handle(e)
+```
+
+### Structure
+
+Each `try` statement requires at least one `except` or `finally` clause:
+
+```mojo
+try:
+    operation()
+except e:
+    handle_error(e)   # Runs if an error occurs
+else:
+    on_success()      # Runs only if no error occurred
+finally:
+    cleanup()         # Always runs
+```
+
+Execution proceeds in a fixed order:
+
+1. The `try` block runs first.
+1. If an error occurs, the matching `except` block runs.
+1. If no error occurs, the `else` block (if present) runs after the `try`
+   block.
+1. If included, a `finally` block always runs last.
+
+### Error binding
+
+Bind the error to a name with `except name`:
+
+```mojo
+try:
+    risky()
+except e:
+    print(e)   # e is the caught error
+```
+
+Without a binding, the error is caught but not accessible. There is no
+default error variable. This is useful when you want to respond to an
+error state without needing the error details:
+
+```mojo
+try:
+    risky()
+except:
+    print("something went wrong")
+```
+
+### Typed errors
+
+When a function declares a specific error type with `raises ErrorType`,
+the bound variable's type is inferred:
+
+```mojo
+@fieldwise_init
+struct NetworkError:
+    var message: String
+    var code: Int
+
+def fetch() raises NetworkError -> String:
+    raise NetworkError("HTCPCP", 418)
+
+try:
+    result = fetch()
+except e:              # e is inferred as `NetworkError`
+    print(e.message)   # Known types supports direct field access
+    print(e.code)
+```
+
+A `try` block handles one error type. The compiler raises an
+error if code in the `try` block can raise more than one
+error type.
+
+## Context managers
+
+A `with` statement manages resources using context managers. *Context
+managers* define setup (`__enter__`) and cleanup (`__exit__`) operations.
+The cleanup always runs when the block exits, even if an error occurs:
+
+```mojo
+with open("file.txt") as f:
+    content = f.read()
+# File is closed here, even if an error occurred
+```
+
+Multiple context managers can share a single `with` statement:
+
+```mojo
+with open("input.txt") as f_in, open("output.txt", "w") as f_out:
+    f_out.write(f_in.read())
+```
+
+This is equivalent to nested `with` statements.
+
+### How context managers work
+
+When a `with` block is entered, `__enter__()` is called on the context
+manager expression. The result is bound to the `as` target if present.
+When the block exits, `__exit__()` is called. A context manager that
+defines only `__enter__()` is valid — `__exit__()` is optional.
+
+## Compile-time control flow
+
+`comptime if` and `comptime for` run at compile time. The condition
+or sequence must be a compile-time value or expression.
+
+Use them to generate code based on compile-time conditions. You
+cannot use runtime values in `comptime` statements.
+
+### comptime if
+
+`comptime if` selects a branch at compile time, pruning the unselected
+branches. Only the selected branch appears in the compiled program.
+
+```mojo
+from std.sys import size_of
+
+comptime if size_of[Int]() == 8:
+    print("64-bit")
+else:
+    print("Probably 32-bit")
+```
+
+The condition must be a compile-time expression. In this example,
+`runtime_value` is not available at compile time, so the code errors
+during compilation:
+
+```mojo
+comptime if runtime_value > 0:   # Error: 'comptime if' requires a
+    pass                         # parameter expression as a condition
+```
+
+`comptime if` supports `elif` and `else` like the regular `if` statement.
+
+### comptime for
+
+`comptime for` unrolls a loop at compile time. Each iteration is
+compiled as separate code. This creates a bigger binary but improves
+runtime performance by eliminating loop overhead and enabling further
+optimizations.
+
+```mojo
+comptime for i in range(3):
+    print(i)   # Compiled as: print(0); print(1); print(2)
+```
+
+Use `comptime for` to generate repeated code patterns or iterate over
+compile-time sequences.
+
+## Scopes
+
+Each compound statement body creates a new scope. Variables declared
+inside a body are not visible outside it:
+
+```mojo
+if condition:
+    var x = 10
+print(x)   # Error: x is not in scope
+```
+
+`with` statement variables bound with `as` are scoped to the `with` block:
+
+```mojo
+with open("file.txt") as f:
+    data = f.read()
+# f is not accessible here
+```
+
+Nested functions create their own scope and can capture variables from
+enclosing functions with the `capturing` keyword:
+
+```mojo
+def outer():
+    count = 0
+
+    def inner() capturing:
+        count += 1   # Captures count from outer
+
+    inner()
+    print(count)     # 1
+```
+
+---
+
+## @align
+
+The `@align` decorator specifies a minimum memory alignment for values of a
+struct type.
+
+If you already work with low-level memory, SIMD, or GPUs, you can think of
+`@align` as a way to make alignment a property of the type itself, enforced
+by the compiler. If not, the short version is this: alignment controls where
+values are placed in memory, and some hardware requires or benefits from
+specific alignments.
+
+Most Mojo code doesn't need explicit alignment. You only need `@align` when
+your types need placement at specific boundaries, such as when interacting with
+GPU buffers, using SIMD instructions, or avoiding cache-line contention in
+concurrent code.
+
+Without `@align`, alignment requirements must be tracked manually and enforced
+at allocation sites. With @align, the requirement becomes part of the type,
+and the compiler ensures it's respected everywhere the type is used.
+
+## What alignment means
+
+Every byte in memory has an address. An address is N-byte aligned if it's
+address is evenly divisible by N.
+
+Examples:
+
+- 8-byte aligned addresses: 0, 8, 16, 24, etc.
+- 64-byte aligned addresses: 0, 64, 128, 192, etc.
+
+Hardware often loads memory in fixed-size chunks, such as cache lines. When a
+value begins at an aligned address, it fits cleanly within those chunks. When
+it doesn't, hardware may need extra memory accesses, or may reject the access
+entirely.
+
+Alignment affects where a value begins in memory, not how large the value
+is.
+
+## Basic usage
+
+Add `@align(N)` to your struct definition, where `N` is a positive power of
+2 and the number represents the _minimum_ required alignment in bytes:
+
+```mojo
+from std.sys import align_of
+
+@align(64)
+struct CacheAligned:
+    var data: Int
+
+def main():
+    print(align_of[CacheAligned]())  # Prints 64
+```
+
+In this example, CacheAligned is aligned to 64 bytes, even though Int normally
+  requires only 8-byte alignment.
+
+## Determining alignment
+
+The actual alignment of a struct is the maximum of:
+
+- The value specified by @align(N), if present.
+- The struct's natural alignment (the maximum alignment of its fields).
+- The alignment requirements of any embedded aligned fields.
+
+You can't reduce alignment below the natural alignment of the struct.
+The `@align` decorator specifies a _minimum_, not an override:
+
+```mojo
+from sys import align_of
+
+@align(4)
+struct TryToReduce:
+    var x: Int  # Int has 8-byte natural alignment
+
+def main():
+    print(align_of[TryToReduce]())  # Prints 8
+```
+
+When a struct contains an aligned field, the outer struct inherits that
+alignment:
+
+```mojo
+from sys import align_of
+
+@align(64)
+struct CacheAligned:
+    var x: Int
+
+struct Container:
+    var aligned: CacheAligned
+    var other: Int
+
+def main():
+    print(align_of[Container]())  # Prints 64
+```
+
+## Stack and heap behavior
+
+Both stack and heap allocations respect `@align`:
+
+```mojo
+from memory import UnsafePointer
+from sys import align_of
+
+@fieldwise_init
+@align(64)
+struct CacheAligned:
+    var data: Int
+
+def use_aligned():
+    # Stack allocation
+    var stack_value = CacheAligned(42)
+
+    # Heap allocation
+    var heap_ptr = alloc[CacheAligned](1)
+    heap_ptr.free()
+```
+
+You don't need to manually request alignment when allocating values of an
+aligned type.
+
+## Alignment and arrays
+
+The `@align` decorator guarantees alignment of the base address of a value,
+including the base pointer of an array. It doesn't pad the size of the struct.
+Mojo lays out array elements using `size_of[T]()` as your stride, not
+`align_of[T]()`:
+
+```mojo
+from memory import UnsafePointer
+from sys import size_of, align_of
+
+@align(64)
+struct CacheAligned:
+    var data: Int  # 8 bytes
+
+def demonstrate_array_stride():
+    var arr = UnsafePointer[CacheAligned].alloc(4)
+
+    print(align_of[CacheAligned]())  # 64
+    print(size_of[CacheAligned]())   # 8
+
+    # Only arr[0] is guaranteed to be 64-byte aligned
+    # Subsequent elements follow at 8-byte intervals
+
+    arr.free()
+```
+
+If every element in an array must be aligned, pad the struct until its size
+is a multiple of its alignment. (This matches the behavior of C and C++
+`alignas`.)
+
+## Generic structs
+
+Alignment also works with generic structs. All instances of a generic type
+share the same alignment requirement. Because of this, under certain
+circumstances, you may find that the alignment isn't tuned by its types:
+
+```mojo
+from sys import align_of
+
+@fieldwise_init
+@align(128)
+struct AlignedGeneric[T: Copyable & ImplicitlyDestructible]:
+    var value: Self.T
+
+def main():
+    print(align_of[AlignedGeneric[Int8]]())   # 128
+    print(align_of[AlignedGeneric[Int64]]())  # 128
+```
+
+Compare this with an alignment of 4, where the maximum
+of the decorator value (`N`) and the type's natural alignment
+produces a different result:
+
+```mojo
+from sys import align_of
+
+@fieldwise_init
+@align(4)
+struct AlignedGeneric[T: Copyable & ImplicitlyDestructible]:
+    var value: Self.T
+
+def main():
+    print(align_of[AlignedGeneric[Int8]]())   # 4
+    print(align_of[AlignedGeneric[Int64]]())  # 8
+```
+
+## Interaction with RegisterPassable
+
+When `@align` is present, single-field register-passable structs
+aren't flattened. This preserves the alignment requirement:
+
+```mojo
+from sys import align_of, size_of
+
+@align(32)
+struct AlignedTrivial(RegisterPassable):
+    var value: Int
+
+def main():
+    print(align_of[AlignedTrivial]())  # 32
+    print(size_of[AlignedTrivial]())  # 8
+```
+
+## Requirements and errors
+
+Mojo's `@align` decorator has the following requirements:
+
+- The alignment value must be a positive power of 2.
+- The maximum supported alignment is 2^29 bytes.
+- The value must be known at compile time.
+- The decorator requires exactly one argument.
+
+Invalid uses produce compile-time errors:
+
+```mojo
+@align(0)
+struct Bad1:
+    var x: Int
+
+@align(3)
+struct Bad2:
+    var x: Int
+
+@align(1073741824)
+struct Bad3:
+    var x: Int
+
+@align
+struct Bad4:
+    var x: Int
+
+@align(64, 128)
+struct Bad5:
+    var x: Int
+
+@align("64")
+struct Bad6:
+    var x: Int
+```
+
+## Special case: @align(1)
+
+Using @align(1) is valid and produces no warning. It doesn't reduce alignment
+below the natural alignment of the struct. This can be useful as a fallback
+value in parametric code:
+
+```mojo
+from sys import align_of
+
+@align(1)
+struct MinimalAlign:
+    var x: Int
+
+def main():
+    print(align_of[MinimalAlign]())  # Prints 8
+```
+
+## Real-world example: hardware descriptors
+
+Some hardware accelerators require aligned descriptors for correctness.
+For example, NVIDIA's Tensor Memory Accelerator requires 64-byte aligned
+descriptors.
+
+Before `@align`, this required explicit allocation tricks:
+
+<!-- Can't be docs-tested -->
+
+```mojo
+# Verbose and error-prone
+var tensormap = my_custom_stack_allocation[1, TensorMap, alignment=64]()[0]
+```
+
+With `@align`, the type encodes your alignment requirement:
+
+<!-- Can't be docs-tested -->
+
+```mojo
+@align(64)
+struct TensorMap:
+    # Descriptor fields
+    pass
+
+var tensormap = TensorMap()
+var heap_tensormap = alloc[TensorMap](1)
+```
+
+Alignment is enforced automatically everywhere the type is used.
+
+Both stack and heap allocations respect `@align`.
+
+## Parametric alignment
+
+The alignment value can also be a struct parameter, enabling generic aligned
+types:
+
+```mojo
+from std.sys import align_of
+
+@align(Self.alignment)
+struct AlignedBuffer[alignment: Int]:
+    var data: Int
+
+def main():
+    print(align_of[AlignedBuffer[64]]())   # Prints 64
+    print(align_of[AlignedBuffer[128]]())  # Prints 128
+```
+
+The alignment is validated when the struct is instantiated, so invalid values
+like `AlignedBuffer[3]` will produce a compile-time error.
+
+---
+
+## @always_inline
+
+You can add the `@always_inline` decorator on any function to make the Mojo
+compiler "inline" the body of the function (copy it) directly into the body of
+the calling function.
+
+This eliminates potential performance costs associated with function calls
+jumping to a new point in code. Normally, the compiler will do this
+automatically where it can improve performance, but this decorator forces it to
+do so. The downside is that it can increase the binary size by duplicating the
+function at every call site.
+
+For example:
+
+```mojo
+@always_inline
+def add(a: Int, b: Int) -> Int:
+    return a + b
+
+print(add(1, 2))
+```
+
+Because `add()` is decorated with `@always_inline`, Mojo compiles this program
+without adding the `add()` function to the call stack, and it instead performs
+the addition directly at the `print()` call site, as if it were written like
+this:
+
+```mojo
+print(1 + 2)
+```
+
+## `@always_inline("nodebug")`
+
+You can also use the decorator with the `"nodebug"` argument, which has the
+same effect to inline the function, but without debug information. This means
+that you can't step into the function when debugging.
+
+This decorator is intended to be used on the low-level functions in a
+library, which may wrap primitive functions, MLIR operations, or inline
+assembly. Marking these functions as "nodebug" prevents users from accidentally
+stepping into low-level non-Mojo code when debugging.
+
+## `@always_inline("builtin")`
+
+The `"builtin"` argument is like `"nodebug"`, but even stricter. The `"builtin"`
+version of the decorator should only be used on functions that wrap a single
+MLIR operation that the compiler has special compile-time handling for. It
+allows the compiler to inline the function when it's used in a parameter
+context.
+
+:::caution
+
+Using this version of the decorator requires some knowledge of the Mojo
+compiler's internals. Using it outside of the standard library is not
+recommended. Use the standard `@always_inline` decorator or the `"nodebug"`
+version, instead.
+
+:::
+
+This version of the decorator does everything that `"nodebug"` does, plus two
+other behaviors:
+
+- It checks the body of the function to validate that it doesn't use
+  anything that `@always_inline("builtin")` can't handle. This checks that there
+  is no control flow, no function calls to functions that are not themselves
+  `@always_inline("builtin")`, no use of unsupported MLIR operations, etc.
+
+- When the function is used in a parameter context, it is unconditionally
+  inlined.
+
+For more details and background, see
+[the `@always_inline("builtin") proposal](https://github.com/modular/modular/blob/mojo/v1.0.0b1/mojo/proposals/always_inline_builtin.md).
+
+---
+
+## @compiler.register
+
+The `@compiler.register` decorator registers a custom operation for MAX graphs.
+For more information, see the
+[MAX documentation about custom ops](https://docs.modular.com/max/develop/custom-ops/).
+
+To define a custom operation:
+
+- Import the `compiler` package.
+
+- Create a struct that implements the `execute()` and (optional) `shape()`
+  static methods.
+
+- Register it using the `@compiler.register` decorator.
+
+The following snippet shows the outline of a custom operation:
+
+```mojo
+@compiler.register("add_vectors_custom")
+struct AddVectorsCustom:
+
+    @staticmethod
+    def execute[...](...):
+        pass
+
+    @staticmethod
+    def shape(...) -> IndexList:
+        pass
+```
+
+The `@compiler.register` decorator takes a single argument, the name of the
+custom operation, as a string. This name is used to load the custom op into your
+graph.
+
+Output from the `execute()` method is usually returned using one or more
+destination-passing style (DPS) output tensors. Destination-passing style (DPS)
+means that the calling function passes in pre-allocated storage space for the
+output value(s). This allows for more efficient memory management. For example,
+the graph compiler can optimize memory use by allocating output tensors on the
+stack, instead of requiring custom ops to allocate heap storage for return
+values.
+
+Destination passing style requires the graph compiler to determine the
+dimensions of the output tensor(s) before executing the operation. It uses the
+operation's `shape()` function to determine the dimensions if they can't be
+determined statically.
+
+The following sections describe the `execute()` and `shape()` functions.
+
+## `execute()` function
+
+The `execute()` function performs the actual work of the custom op. It takes the
+following parameter:
+
+- `target` (`StaticString`): Indicates the device the operation is running on:
+  currently takes the values `"cpu"` or `"gpu"`.
+
+Graph output and input tensors are passed to the `execute()` function as
+instances of
+[`OutputTensor`](https://docs.modular.com/max/api/kernels/extensibility/tensor/managed_tensor_slice/#outputtensor)
+and
+[`InputTensor`](https://docs.modular.com/max/api/kernels/extensibility/tensor/managed_tensor_slice/#inputtensor),
+respectively. These are both type aliases for specific configurations of
+[`ManagedTensorSlice`](https://docs.modular.com/max/api/kernels/extensibility/tensor/managed_tensor_slice/ManagedTensorSlice),
+so they both have the same API.
+
+In addition to input and output tensors, the function can take the following
+arguments:
+
+- Any arguments of type [`Scalar`](/docs/manual/types/#scalar-values).
+
+- A single argument of type `DeviceContextPtr`. This opaque pointer is
+  currently required for GPU support.
+
+```mojo
+
+from std.utils.index import IndexList
+from max.tensor import OutputTensor, InputTensor, foreach, ManagedTensorSlice
+from std.runtime.asyncrt import DeviceContextPtr
+
+@compiler.register("add_vectors_custom")
+struct AddVectorsCustom:
+    @staticmethod
+    def execute[
+        # "gpu" or "cpu"
+        target: StaticString,
+    ](
+        # the first argument is the output
+        out: OutputTensor,
+        # starting here is the list of inputs
+        x: InputTensor[dtype = out.dtype, rank = out.rank],
+        y: InputTensor[dtype = out.dtype, rank = out.rank],
+        # the context is needed for some GPU calls
+        ctx: DeviceContextPtr,
+    ):
+
+        @parameter
+        @always_inline
+        def func[width: Int](idx: IndexList[x.rank]) -> SIMD[x.dtype, width]:
+            return x.load[width](idx) + y.load[width](idx)
+
+        foreach[func, target=target](out, ctx)
+```
+
+## `shape()` function
+
+The `shape()` function returns the dimensions of the output tensor(s).
+
+The `shape()` function is required only if the graph compiler can't statically
+determine the shape of the output tensor(s), and you don't manually annotate the
+output shapes when building a graph.
+
+The function takes the same arguments as the `execute()` function, minus the
+output tensors and `DeviceContextPtr`. It must return an
+[`IndexList`](/docs/std/utils/index_/IndexList/) specifying the dimensions of
+the output tensor.
+
+For example, if the operation takes two input tensors, and the shape of the
+output tensor matches the first input tensor, you could use the following
+`shape()` function:
+
+```mojo
+    @staticmethod
+    def shape(
+        in1: InputTensor,
+        in2: InputTensor,
+    ) -> IndexList[in1.rank]:
+        return in1.spec.shape
+```
+
+---
+
+## @__copy_capture
+
+You can add the `__copy_capture` decorator on a parametric closure to capture
+register-passable values by copy. This decorator causes a nested function to
+copy the value of the indicated variable into the closure object at the point
+of formation instead of capturing that variable by reference. This allows the
+closure to be passed as an escaping function, without lifetime concerns.
+
+```mojo
+  def foo(x: Int):
+      var z = x
+
+      @__copy_capture(z)
+      @parameter
+      def formatter() -> Int:
+          return z
+      z = 2
+      print(formatter())
+
+  def main():
+      foo(5)
+```
+
+---
+
+## @deprecated
+
+The `@deprecated` [decorator](/docs/reference/decorators/)
+marks a declaration as obsolete and scheduled for removal.
+It actively signals to callers that an API still works today but won't
+stick around forever.
+
+Deprecation lets you safely reshape your codebase.
+With it, you can refine designs, replace older patterns, and introduce
+better tooling without forcing sudden changes.
+
+When you mark something as deprecated, you give
+your users the time and information they need to move to newer APIs or
+refactor their code for the upcoming feature loss before the old API
+disappears.
+
+## Deprecation information
+
+Deprecation doesn't prevent using symbols.
+Instead, it surfaces guidance in the form of compiler warnings.
+
+Mojo offers the `@deprecated` decorator with two styles:
+
+- **`@deprecated(use=symbol)`**:
+
+  _Use this style when there's a clear successor to the previous symbol._
+
+  The compiler warns callers when they use the deprecated item and
+  points them toward the symbol you recommend.
+  This is a gentle nudge that says, "This call still works, but you
+  should really start using the other thing instead."
+  - The argument for `use` is the actual symbol. Don't quote it.
+  - The symbol must be valid or the compiler will error.
+
+- **`@deprecated("message")`**:
+
+  _Use this version when you want to explain the change in your own words._
+
+  If there's no direct replacement in play, the message style lets you
+  explain the impact of your deprecation. The compiler displays the
+  supplied string in its warning where the deprecated item is used.
+  A message makes it easy to steer callers, give context, or note
+  that the feature is going away entirely.
+
+:::note Deprecation practices
+When deprecating an API, consider:
+
+- **Clarity**: Explain the reason for deprecation when it provides actionable
+  context for the user.
+- **Actionability**: When possible, point to a concrete replacement (`use`) or
+  next step (message).
+- **Consistency**: Use the same phrasing across related APIs
+- **Precision**: When possible, deprecate individual functions or methods rather
+  than entire types.
+
+Deprecation is most effective when it fits into clear, predictable upgrade
+paths.
+:::
+
+## How to deprecate
+
+The following sample demonstrates how to apply deprecation using
+both built-in styles:
+
+```mojo
+# Mark function `a` as deprecated with a custom message
+@deprecated("Sunsetting a")
+def a():
+    pass
+
+# Mark function `b` as deprecated with alternative
+@deprecated(use=c)
+def b():
+    pass
+
+# `c` is `b`'s recommended replacement after deprecation
+def c():
+    pass
+
+def main():
+    a() # custom warning
+    b() # warning with recommended replacement
+    c() # no warning
+
+    # Demonstrate that only warnings are issued
+    print("This is a functioning app")
+```
+
+Output:
+
+```text
+deprecation.mojo:16:6: warning: Sunsetting a
+    a() # custom warning
+    ~^~
+deprecation.mojo:3:4: note: 'a' declared here
+def a():
+   ^
+deprecation.mojo:17:6: warning: 'b' is deprecated, use 'c' instead
+    b() # warning with recommended replacement
+    ~^~
+deprecation.mojo:8:4: note: 'b' declared here
+def b():
+   ^
+This is a functioning app
+```
+
+### Items you can deprecate
+
+In Mojo, you can deprecate any of the following items:
+
+- **Structs**:
+
+  ```mojo
+  @deprecated(use=PerformantStruct)
+  struct LegacyStruct:
+      # ...
+  ```
+
+- **Functions**:
+
+  ```mojo
+  @deprecated("This function is being phased out")
+  def legacy_function(self):
+      pass
+  ```
+
+- **Traits**:
+
+  ```mojo
+  @deprecated(use=Honkable)
+  trait Quackable:
+      def quack(self):
+          ...
+  ```
+
+- **`comptime` values**:
+
+  ```mojo
+  @deprecated("Use tau instead")
+  comptime pi = 3.141592
+  ```
+
+---
+
+## @doc_hidden
+
+The `@doc_hidden` [decorator](/docs/reference/decorators/) marks a declaration
+as hidden from documentation generation. It allows you to exclude internal
+implementation details, special methods, or other code from appearing in
+published API documentation while keeping them accessible in your source code.
+
+This decorator is particularly useful when you need to maintain internal APIs,
+helper methods, or alternative constructors that exist for implementation
+purposes but shouldn't be part of your library's public documentation.
+
+API members with names starting and ending with double underscores ("dunder"
+members) are always treated as public and included in documentation unless they
+are decorated with `@doc_hidden`.
+
+Mojo treats any other API names starting with a single or double underscore (`_`
+or `__`) as internal and omits them from the generated documentation—no need for
+`@doc_hidden`.
+
+The `@doc_hidden` decorator only affects documentation generation. Hidden
+declarations are fully accessible in source code and can be accessed like any
+other declaration. The same is true of internal declarations that start with
+underscores—they are internal _by convention_, there are no access
+restrictions.
+
+## When to use `@doc_hidden`
+
+Use `@doc_hidden` to hide:
+
+- **Alternative constructors and dunder methods**: Hide alternative `__init__()`
+  methods or other dunder methods that users don't need to call directly. The
+  `@doc_hidden` decorator is especially useful for dunder methods, since they're
+  public by default and you can't hide them by renaming them.
+- **Internal methods**: Hide private or internal helper methods that are
+  implementation details.
+- **Deprecated internals**: Hide old internal APIs that remain for backward
+  compatibility but shouldn't appear in new documentation. See also
+  [`@deprecated`](/docs/reference/decorators/deprecated/).
+
+## Usage
+
+Apply `@doc_hidden` just above any declaration you want to exclude from
+generated documentation:
+
+```mojo
+struct Calculator:
+    """A simple calculator struct demonstrating @doc_hidden."""
+
+    var value: Int
+
+    def __init__(out self, initial_value: Int = 0):
+        """Creates a new Calculator with an initial value.
+
+        Args:
+            initial_value: The starting value for the calculator. Defaults to 0.
+        """
+        self.value = initial_value
+
+    @doc_hidden
+    def __init__(out self):
+        """Internal initializer that should not appear in public documentation.
+
+        This constructor exists for implementation purposes but users should
+        prefer the constructor that takes an initial value.
+        """
+        self.value = 0
+
+    def add(mut self, amount: Int):
+        """Adds a value to the calculator.
+
+        Args:
+            amount: The value to add.
+        """
+        self.value += amount
+```
+
+The no-argument `__init__()` constructor in this example uses `@doc_hidden`. It
+works in code but won't show up in the generated documentation.
+
+## What can be hidden
+
+You can apply `@doc_hidden` to most APIs:
+
+- **Functions and methods**
+
+  Hide any function or method overload, including
+  constructors (`__init__()`) and other special methods:
+
+  ```mojo
+  struct Point:
+      @doc_hidden
+      def __init__(out self):
+          pass
+  ```
+
+  The `@doc_hidden` decorator only hides the overload immediately following the
+  decorator. So the same function can have both
+  documented overloads and hidden overloads.
+
+- **Entire structs**
+
+  Hide helper or internal structs.
+
+  ```mojo
+  @doc_hidden
+  struct InternalHelper:
+      pass
+  ```
+
+- `comptime` values and members
+
+  ```mojo
+  @doc_hidden
+  comptime INTERNAL_CONSTANT = 42
+  ```
+
+- **Struct fields**
+
+  ```mojo
+  struct PublicStruct:
+      @doc_hidden
+      var implementation_detail: Int
+
+      pass
+  ```
+
+---
+
+## @explicit_destroy
+
+The `@explicit_destroy` decorator disables automatic destruction via the
+`__del__()` method and requires explicit cleanup through named destructor
+methods. When applying this decorator, you must call a named destructor
+method to consume the value. If you don't, the compiler emits an error.
+
+Use explicit destruction when cleanup must be performed deliberately, may
+fail and require error handling, or your type offers multiple valid ways to end
+a value's lifetime (such as saving to file and closing the file descriptor, or
+quitting without saving).
+
+## Implicit vs. explicit destruction
+
+Mojo supports two destruction models. Most types rely on compiler-managed
+lifetime analysis, while some types opt into explicit control for stronger
+cleanup guarantees.
+
+_Implicit destruction_ (the default): The compiler automatically calls
+`__del__()` when a value has no further uses. Cleanup is triggered by Mojo's
+lifetime analysis and requires no manual intervention. You may override
+`__del__()` in your type, but the compiler does not verify that cleanup is
+performed intentionally.
+
+_Explicit destruction_: You intentionally call named destructor methods
+(such as `cleanup()` or `save_and_close()`). The compiler disables automatic
+destruction and enforces explicit consumption. Failing to call a destructor
+before a value leaves scope results in a compile-time error.
+
+Most types use implicit destruction. Explicit destruction adds a layer of
+safety when cleanup may fail, requires error handling, or benefits from
+deliberate control over how a value's lifetime ends.
+
+## Basic usage
+
+To opt into explicit, compiler-enforced destruction, mark types with
+`@explicit_destroy` and provide named destructor methods that use the
+`deinit self` argument convention:
+
+```mojo
+@explicit_destroy
+struct FileBuffer:
+    var path: String
+    var data: String
+
+    def __init__(out self, path: String):
+        self.path = path
+        self.data = ""
+
+    def write(mut self, content: String):
+        self.data += content
+
+    def save_and_close(deinit self) raises:
+        write_to_disk(self.path, self.data)
+```
+
+Declaring `@explicit_destroy` requires you to add intentional calls to
+type-specific destructors before the end of scope:
+
+```mojo
+def write_log(path: String, message: String) raises:
+    var buffer = FileBuffer(path)
+    buffer.write(message)
+    buffer^.save_and_close()  # Required before `buffer` leaves scope
+```
+
+If you omit this call, the compiler emits an error.
+
+## Custom error messages
+
+To improve compiler diagnostics for explicit destruction, include a
+custom error message with the decorator:
+
+```mojo
+@explicit_destroy("Must call save_and_close() or discard()")
+struct FileBuffer:
+    def save_and_close(deinit self) raises:
+        write_to_disk(self.path, self.data) # Store data
+
+    def discard(deinit self):
+        pass  # Abandon without writing
+```
+
+## Related
+
+- [Death of a value](/docs/manual/lifecycle/death/) - Complete coverage of value
+  destruction and lifetime management
+- [`AnyType`](/docs/std/builtin/anytype/AnyType/) - Base trait for all types
+- [`ImplicitlyDestructible`](/docs/std/builtin/anytype/ImplicitlyDestructible/)
+  - Trait for automatically destructible types
+
+---
+
+## @export
+
+You can add the `@export` decorator on any function to make it publicly
+available as an exported symbol in the compiled artifact, allowing it to be
+called from external code, such as
+[Python](/docs/manual/python/mojo-from-python/#import-a-mojo-module-in-python).
+
+```mojo
+# This function is internal - not callable from Python
+def internal_helper():
+    print("Internal")
+
+# This function can be called from Python as "my_exported_function"
+@export
+def my_exported_function():
+    print("Exported!")
+    internal_helper()
+
+# This function can be called from Python as "my_renamed_function"
+@export("my_renamed_function")
+def my_other_function():
+    print("Another function.")
+```
+
+The `@export` decorator can take two optional arguments:
+
+- An alternate name to export the function under, as shown above.
+- An ABI specifier. Currently only the C ABI is supported.
+
+Use the name and ABI specifier to export a function that complies with the C
+calling conventions. You must also supply a function name that is a valid C
+identifier. For example:
+
+```mojo
+@export("my_func", ABI="C")
+def my_function(
+    name: StaticString,
+    ptr: OpaquePointer[MutExternalOrigin],
+) -> None:
+    pass
+```
+
+---
+
+## @fieldwise_init
+
+You can add the `@fieldwise_init` decorator on a struct to generate the
+field-wise `__init__()` constructor.
+
+For example, consider a simple struct like this:
+
+```mojo
+@fieldwise_init
+struct MyPet:
+    var name: String
+    var age: Int
+```
+
+Mojo sees the `@fieldwise_init` decorator and synthesizes a field-wise
+constructor, the result being as if you had actually written this:
+
+```mojo
+struct MyPet:
+    var name: String
+    var age: Int
+
+    def __init__(out self, var name: String, age: Int):
+        self.name = name^
+        self.age = age
+```
+
+You can synthesize the copy constructor and move constructor by adding the
+`Copyable` trait to your struct. For more information about these
+lifecycle methods, read [Life of a value](/docs/manual/lifecycle/life/).
+
+## Implicit conversion
+
+Implicit conversion lets you pass a value and lets a type build itself, without
+calling the constructor directly. This keeps caller code simple and clean. You
+enable this by marking an initializer as
+[`@implicit`](/docs/reference/decorators/implicit/) or using
+`@fieldwise_init("implicit")` to create one for you.
+
+For example, if `MyStruct` has an initializer that accepts an `Int`, you can
+construct an instance like this:
+
+```mojo
+an_instance = MyStruct(42)
+```
+
+A function that takes a `MyStruct` will accept that instance, an explicit
+constructor call, or the value that can be converted into one:
+
+```mojo
+some_function(an_instance)      # pass an instance
+some_function(MyStruct(42))     # build one directly
+some_function(42)               # implicit conversion
+```
+
+All three forms create a `MyStruct` for the call. Some may have small
+compile-time or run-time differences.
+
+### Declaring implicit initialization
+
+You can declare implicit initializers in two ways:
+
+- Use `@fieldwise_init("implicit")` to auto-create one, as long as your
+  type has exactly _one_ instance field. This limit applies to the type itself,
+  not just to initializer arguments.
+- Add [`@implicit`](/docs/reference/decorators/implicit/) to an initializer you
+  write. The initializer can accept only one argument.
+
+:::note
+Read more about
+[constructors and implicit conversion](/docs/manual/lifecycle/life/#constructors-and-implicit-conversion).
+:::
+
+### Fieldwise and implicit example
+
+Here is a type that stores an `Int`. It can be created with an integer
+or from any value that can be floored and converted to an integer.
+It uses `@fieldwise_init("implicit")` for integers and creates
+an `@implicit` initializer for other values:
+
+```mojo
+from std.math import Floorable, floor
+
+# Creates an implicit initializer and limits the type to one instance field.
+@fieldwise_init("implicit")
+struct FlooringInt:
+    var floored: Int
+
+    # Allows implicit conversion from types that can be floored and made into an Int.
+    @implicit
+    def __init__[T: Floorable & Intable](out self, value: T):
+        self.floored = Int(floor(value))
+
+def floored(value: FlooringInt) -> Int:
+    return value.floored
+
+def main():
+    print(floored(FlooringInt(42)))  # pass an instance, output: 42
+    print(floored(2))                # pass Int, output: 2
+    print(floored(52.6))             # pass Float64, output: 52
+    x = BFloat16(192.3)
+    print(floored(x))                # pass BFloat16, output: 192
+    y: FlooringInt = 180
+    print(y.floored)                 # output 180
+    z: FlooringInt = 3.14159
+    print(z.floored)                 # output: 3
+```
+
+What you don't see in this example is an initializer for integers.
+Adding `@fieldwise_init("implicit")` lets the compiler build it for
+you. If you wrote this by hand, it might look like this:
+
+```mojo
+@implicit
+def __init__(out self, floored: Int):
+    self.floored = floored
+```
+
+---
+
+## @implicit
+
+You can add the `@implicit` decorator on any single-argument constructor to
+identify it as eligible for implicit conversion.
+
+For example:
+
+```mojo
+struct MyInt:
+    var value: Int
+
+    @implicit
+    def __init__(out self, value: Int):
+        self.value = value
+
+    def __init__(out self, value: Float64):
+        self.value = Int(value)
+```
+
+This implicit conversion constructor allows you to pass an `Int` to a function
+that takes a `MyInt` argument, or assign an `Int` to a variable of type `MyInt`.
+However, the constructor that takes a `Float64` value is **not** an implicit
+conversion constructor, so it must be invoked explicitly:
+
+```mojo
+def func(n: MyInt):
+    print("MyInt value: ", n.value)
+
+def main():
+    func(Int(42))             # Implicit conversion from Int: OK
+    func(MyInt(Float64(4.2))) # Explicit conversion from Float64: OK
+    func(Float64(4.2))        # Error: can't convert Float64 to MyInt
+```
+
+## Deprecation
+
+Over time, you may decide that an implicit conversion is no longer appropriate
+for your code base. For example, it may hide complexity or cause ambiguous
+function overloads. In such cases, Mojo lets you mark a conversion as deprecated
+using its built-in `deprecated` argument on the @implicit decorator. Deprecation
+allows you to phase out the conversion gradually instead of causing abrupt
+behavior changes.
+
+Supply a Boolean value to the `deprecated` argument:
+
+```mojo
+struct MyStruct:
+    @implicit(deprecated=True)
+    def __init__(out self, value: Int):
+        # ...
+```
+
+This tells the compiler to emit a warning when the conversion is used
+implicitly, without breaking existing code:
+
+```mojo
+_: MyStruct = 1  # Warns on implicit conversion
+
+_ = MyStruct(1)  # No warning. Conversion is explicit
+```
+
+---
+
+## Mojo decorators
+
+A Mojo decorator modifies or extends the behavior of a struct, function, or
+other declaration at compile time. You place the decorator on the line
+above the declaration it applies to, prefixed with `@`.
+
+```mojo
+@fieldwise_init
+struct Point:
+    var x: Float64
+    var y: Float64
+```
+
+After the `@`, a decorator is followed by a name, with optional arguments
+in parentheses. Each decorator goes on its own line. You can stack multiple
+decorators on a single declaration:
+
+```mojo
+@fieldwise_init
+@align(64)
+struct CacheLine:
+    var data: SIMD[DType.float32, 16]
+```
+
+Decorators apply bottom-up: the one closest to the declaration
+is applied first.
+
+:::note No custom decorators
+Mojo doesn't support custom decorators. The decorators in this section
+are built into the compiler.
+:::
+
+## Decorators
+
+The following pages describe each built-in decorator with examples.
+
+<DocCardList />
+
+## Decorator targets
+
+Not every decorator works on every declaration. This table shows
+which decorators are valid on which targets.
+
+| Decorator            | `struct` | `def` | method | `trait` | `comptime` | `var` | field |
+|----------------------|----------|-------|--------|---------|------------|-------|-------|
+| `@align`             | yes      |       |        |         |            |       |       |
+| `@always_inline`     |          | yes   | yes    |         |            |       |       |
+| `@compiler.register` | yes      |       |        |         |            |       |       |
+| `@__copy_capture`    |          |       | yes    |         |            |       |       |
+| `@deprecated`        | yes      | yes   | yes    | yes     | yes        |       |       |
+| `@doc_hidden`        | yes      | yes   | yes    |         | yes        |       | yes   |
+| `@explicit_destroy`  | yes      |       |        |         |            |       |       |
+| `@export`            |          | yes   |        |         |            |       |       |
+| `@fieldwise_init`    | yes      |       |        |         |            |       |       |
+| `@implicit`          |          |       | yes    |         |            |       |       |
+| `@no_inline`         |          | yes   | yes    |         |            |       |       |
+| `@nonmaterializable` | yes      |       |        |         |            |       |       |
+| `@parameter`         |          |       | yes    |         |            |       |       |
+| `@staticmethod`      |          |       | yes    |         |            |       |       |
+
+---
+
+## @no_inline
+
+You can add the `@no_inline` decorator on any function to prevent it from being
+inlined by the compiler.
+
+```mojo
+@no_inline
+def my_large_function():
+    ...
+```
+
+Inlining is an optimization that reduces function call overhead for small,
+frequently-called functions. Functions can be explicitly marked for inlining
+using
+[`@always_inline`](/docs/reference/decorators/always-inline/), or may be inlined
+automatically by the compiler.
+
+Too many inlined functions can slow compilation and substantially increase the
+binary size of the compiled program. In particular, large or complex functions
+may not benefit as much from inlining.
+
+---
+
+## @parameter
+
+You can add the `@parameter` decorator on a nested function to create a
+[parametric closure](#parametric-closure).
+
+:::note
+
+The `@parameter` decorator also works to create compile-time `if` and `for`
+statements, but this usage is deprecated in favor of the
+[`comptime if`](/docs/manual/metaprogramming/comptime-evaluation/#comptime-if)
+and
+[`comptime for`](/docs/manual/metaprogramming/comptime-evaluation/#comptime-for)
+statements.
+
+:::
+
+## Parametric closure
+
+You can add `@parameter` on a nested function to create a "parametric"
+capturing closure. This means you can create a closure function that captures
+values from the outer scope (regardless of whether they are variables or
+parameters), and then use that closure as a parameter. For example:
+
+```mojo
+def use_closure[func: fn(Int) capturing [_] -> Int](num: Int) -> Int:
+    return func(num)
+
+def create_closure():
+    var x = 1
+
+    @parameter
+    def add(i: Int) -> Int:
+        return x + i
+
+    var y = use_closure[add](2)
+    print(y)
+
+create_closure()
+```
+
+```output
+3
+```
+
+Note the `[_]` in the function type:
+
+```mojo
+def use_closure[func: fn(Int) capturing [_] -> Int](num: Int) -> Int:
+```
+
+This origin specifier represents the set of origins for the values captured by
+the parametric closure. This allows the compiler to correctly extend the
+lifetimes of those values. For more information on lifetimes and origins, see
+[Lifetimes, origins and references](/docs/manual/values/lifetimes/).
+
+If you leave the `@parameter` decorator off the `add()` function above, you'll
+get a compiler error:
+
+```output
+invalid call to 'use_closure': failed to infer parameter '__origins__'
+```
+
+## Parametric `if` statement
+
+The `@parameter if` syntax is deprecated, please use `comptime if` instead. For
+more information, see the section on
+[compile-time conditionals](/docs/manual/metaprogramming/comptime-evaluation/#comptime-if).
+
+## Parametric `for` statement
+
+The `@parameter for` syntax is deprecated, please use `comptime for` instead.
+For details, see the section on
+[compile-time loop unrolling](/docs/manual/metaprogramming/comptime-evaluation/#comptime-for).
+
+---
+
+## @staticmethod
+
+You can add the `@staticmethod` decorator on a struct method to declare a static
+method.
+
+For example:
+
+```mojo
+from std.pathlib import Path
+
+struct MyStruct(Movable):
+    var data: List[UInt8]
+
+    def __init__(out self):
+        self.data = List[UInt8]()
+
+    @staticmethod
+    def load_from_file(file_path: Path) raises -> Self:
+        var new_struct = MyStruct()
+        new_struct.data = file_path.read_bytes()
+        return new_struct ^
+```
+
+Unlike an instance method, a static method doesn't take an implicit `self`
+argument. It's not attached to a specific instance of a struct, so it can't
+access instance data.
+
+For more information see the documentation on
+[static methods](/docs/manual/structs/#static-methods).
+
+---
+
+## Mojo expression reference
+
+<!-- VERIFIED: ParserExprs.cpp, ExprNode.h, ParserBase.h,
+     ExprNodes.h -->
+
+An *expression* is any piece of code that produces a value.
+Expressions are the building blocks of computation: you combine
+them with operators, pass them as arguments, assign their
+results to variables, and use them as conditions in control
+flow.
+
+## Identifier expressions
+
+An identifier refers to a named element: a variable, function,
+type, or module. Using an identifier in an expression gives you
+the thing it refers to:
+
+```mojo
+score        # a variable
+Int          # a type
+range        # a function
+```
+
+## Parenthesized expressions
+
+Parentheses group subexpressions, overriding default
+precedence:
+
+```mojo
+(a + b) * c  # add a and b, multiply by c
+(x)          # just x
+```
+
+Parentheses also let expressions span multiple lines without
+using backslash escapes:
+
+```mojo
+var result = (
+    first_value
+    + second_value
+    + third_value
+)
+```
+
+## Tuples
+
+A *tuple* is a fixed-size, ordered group of values. The comma
+is what creates a tuple, not the parentheses:
+
+```mojo
+var a = 2, 3       # tuple without parentheses
+var b = (2, 3)     # same tuple with parentheses
+var x, y = b       # x is 2, y is 3
+```
+
+Use a trailing comma to create a one-element tuple. Without it,
+`(1)` is just the integer `1` in parentheses:
+
+```mojo
+()          # empty tuple
+(1,)        # one-element tuple
+(1, 2, 3)   # three-element tuple
+```
+
+Tuples support indexing:
+
+```mojo
+var point = (10, 20)
+print(point[0])  # 10
+```
+
+## Collection displays
+
+The compiler calls these *displays*. Displays are similar to
+literals, but unlike literals, displays can contain expressions
+as well as fixed values.
+
+### Lists
+
+A *list display* creates a list from comma-separated values:
+
+```mojo
+var empty = []
+var numbers = [1, 2, 3]
+var mixed = [1, "two", 3.0,]
+```
+
+Mojo allows trailing commas after all collection elements,
+including the final one.
+
+### Dictionaries
+
+A *dict display* maps keys to values with `:` between each
+pair:
+
+```mojo
+var empty = {}
+var ages = {"Alice": 30, "Bob": 25}
+```
+
+### Sets
+
+A *set display* uses braces with values but no colons:
+
+```mojo
+var primes = {2, 3, 5, 7}
+```
+
+Don't mix set and dict syntax. `{1, 2}` is a set. `{1: 2}` is a dict.
+
+```mojo
+{"a": 1, 2}   # Error: cannot mix 'key: value' pairs and set elements
+{1, "b": 2}   # Error: cannot mix 'key: value' pairs and set elements
+```
+
+Brace syntax also serves as an *initializer list* that creates
+an instance of an inferred type. Without type context, the
+compiler can't distinguish a set from an initializer list, so
+the distinction is resolved at type-check time. Initializer
+lists can include positional values and keyword arguments:
+
+```mojo
+{x, y}           # set or initializer list, without context
+{z=4, "foo"}     # initializer list with keyword argument
+```
+
+Initializer lists are syntactic sugar for constructor calls.
+`{1, "hello"}` is equivalent to `T(1, "hello")` when the
+type `T` is known from context. Use them for passing
+initialized instances as arguments:
+
+```mojo
+process({1, "hello"})  # type inferred from signature
+```
+
+## Member access
+
+The dot operator accesses an attribute or method on a value:
+
+```mojo
+var length = text.count()
+var x = point.x
+var name = person.name.upper()
+```
+
+Chaining is left to right: `a.b.c` accesses `c` on the
+result of `a.b`.
+
+## Calls
+
+A *call expression* invokes a function or constructs a value
+by appending `()` to an expression:
+
+```mojo
+print("hello")
+var result = compute(a, b)
+var p = Point(1.0, 2.0)
+```
+
+### Positional and keyword arguments
+
+Arguments before any keyword argument are positional. Keyword
+arguments use `name=value` syntax.
+
+```mojo
+def greet(name: String, loud: Bool = False):
+    print(t"Hello, {name if not loud else name.upper()}!")
+
+greet("Alice")  # Hello, Alice!
+greet("Alice", loud=True)  # Hello, ALICE!
+greet(name="Bob") # Hello, Bob!
+```
+
+Positional arguments can't follow keyword arguments:
+
+```mojo
+    # greet(loud=True, "Alice")
+    # Error: positional argument follows keyword argument
+```
+
+Keyword arguments can't be repeated:
+
+```mojo
+greet(name="Alice", name="Bob")
+# Error: duplicate keyword argument 'name'
+```
+
+## Subscripts and slices
+
+Square brackets after an expression look up a value by
+index(es) or key(s):
+
+```mojo
+var item = collection[0]
+var value = mapping["key"]
+var cell = matrix[i, j]
+```
+
+### Slices
+
+Colons inside square brackets create *slices*. Slices select
+a range of elements using `start:stop` or
+`start:stop:stride`:
+
+```mojo
+var items = [0, 1, 2, 3, 4, 5]
+
+var first_three = items[0:3]   # [0, 1, 2] (3 not included)
+var from_three  = items[3:]    # [3, 4, 5]
+var every_other = items[::2]   # [0, 2, 4]
+var reversed    = items[::-1]  # [5, 4, 3, 2, 1, 0]
+```
+
+All three parts are optional. Start defaults to the beginning,
+stop defaults to the end, and stride defaults to 1. The
+element at the stop position isn't included in the result.
+
+## Ternary conditional
+
+The `if`-`else` expression selects between two values based
+on a condition:
+
+```mojo
+var label = "even" if x % 2 == 0 else "odd"
+```
+
+The condition follows `if`, and the alternate value follows
+`else`. If the condition is true, the expression evaluates to
+the first value. If false, the alternate.
+
+Ternary expressions are right-associative and can be chained:
+
+```mojo
+var size = (
+    "small" if n < 10
+        else "large" if n > 100
+        else "medium"
+)
+```
+
+This groups as
+`"small" if n < 10 else ("large" if n > 100 else "medium")`.
+
+## Walrus operator
+
+Regular assignment (`=`) is a statement. It can't appear inside a larger
+expression. The walrus operator (also known as the assignment expression)
+`:=` is the expression form of assignment: it binds a value to a name and
+evaluates to that same value, so the result can be used immediately:
+
+```mojo
+if (n := len(items)) > 10:
+    print(n)
+
+while (name := input("Prompt: ")) != "quit":
+    print(name)
+```
+
+The walrus operator implicitly declares the variable in `def` methods and
+functions. It has the lowest precedence of any expression operator, so
+parentheses are typically needed when used inside larger expressions.
+
+```mojo
+# Walrus requires a function scope
+n := len(items)      # Error: expressions must be inside a function
+
+# Walrus is not valid inside subscripts
+def main():
+    items = [1, 2, 3]
+    items[n := 2]    # Error: walrus is not allowed in subscripts
+```
+
+## Compile-time expressions
+
+`comptime` forces an expression to evaluate at compile time.
+Parentheses are required:
+
+```mojo
+def heavy_calculation() -> Int:
+    var sum = 0
+    for i in range(1_000_000):
+        sum += i
+    return sum
+
+# var x = comptime heavy_calculation()
+# Error: requires parentheses
+
+var x = comptime(heavy_calculation())  # O(1) at runtime
+print(x)  # 499999500000
+```
+
+The loop runs once during compilation. At runtime, `x` is
+a constant. If the expression can't be evaluated at compile
+time, the compiler reports an error.
+
+Mojo also provides built-in expressions for compile-time
+type introspection. These look like function calls but
+they're keywords that operate on types and traits at
+compile time:
+
+```mojo
+type_of(x)             # type of an expression
+conforms_to(T, Trait)  # test trait conformance
+origin_of(x)           # origin of a reference
+```
+
+These three expressions don't work the way most people
+expect. They're used for reflection, conditional type
+conformance, and origin sets. They return compiler-internal
+types and won't print.
+
+<!-- TODO: Uncomment when closure design stabilizes.
+## Function type expressions
+
+A function type expression describes the signature of a
+function as a type:
+
+```mojo
+def() -> Int
+def(Int, Int) -> Int
+def(var value: String) -> None
+def() raises -> String
+```
+
+Function type expressions can include argument types with
+conventions, return types, and effects like `raises`.
+-->
+
+## Comprehension expressions
+
+A comprehension is a concise way to build a new collection by
+iterating over existing values and optionally filtering or
+transforming them. It replaces common loop-and-append patterns
+with a single, (usually) readable expression.
+
+### List comprehensions
+
+List comprehensions create lists:
+
+```mojo
+var squares = [x * x for x in [0, 1, 2, 3, 4] if x % 2 == 0]
+# [0, 4, 16]
+
+var positive = [x for x in range(-3, 3) if x > 0]
+# [1, 2]
+```
+
+**Syntax:** `[expr for pattern in iterable if condition]`
+
+- Multiple `for` clauses create nested iteration
+- `if` clauses filter elements
+
+### Set comprehensions
+
+Set comprehensions create sets. Sets don't store duplicates,
+so you may get fewer elements than iterations:
+
+```mojo
+var fibs = {fib(x) for x in range(6)}
+# {1, 2, 3, 5, 8}, 5 elements from 6 iterations
+```
+
+**Syntax:** `{expr for pattern in iterable if condition}`
+
+### Dictionary comprehensions
+
+Dictionary comprehensions create dictionaries:
+
+```mojo
+var dict_squares = {x: x * x for x in range(3)}
+# {0: 0, 1: 1, 2: 4}
+
+var lengths: Dict[String, Int] = {
+    k: len(k) for k in ["one", "two", "three", "four"]
+}
+# {one: 3, two: 3, three: 5, four: 4}
+```
+
+**Syntax:**
+`{key_expr: value_expr for pattern in iterable if condition}`
+
+### Comprehension clauses
+
+Comprehensions support multiple `for` and `if` clauses:
+
+```mojo
+var products = [
+    (x, y, x * y)
+    for x in range(3)
+    for y in range(3)
+    if (x + y) % 2 == 0
+]
+# [(0, 0, 0), (0, 2, 0), (1, 1, 1), (2, 0, 0), (2, 2, 4)]
+```
+
+Clauses are evaluated left to right:
+
+- Each `for` introduces a new iteration variable
+- Each `if` filters based on the current values
+
+---
+
+## Mojo function declarations reference
+
+<!-- VERIFIED: TokenKinds.def, Signatures.h, Signatures.cpp,
+     ParserStmts.cpp, ParserBase.h, ParserBase.cpp, ASTDecl.h,
+     ASTDecl.cpp, ExprNode.h. Consulted: ExprNodes.h,
+     ExprNodes.cpp, ParserExprs.cpp, ASTType.h, MojoDiags.h -->
+
+A *function declaration* introduces a named, callable unit
+of code. Every function in Mojo starts with the `def`
+keyword:
+
+```mojo
+def greet(name: String) -> String:
+    return "Hello, " + name
+```
+
+The simplest function has a name, empty parentheses, and
+a body:
+
+```mojo
+def do_nothing():
+    pass
+```
+
+## Function names
+
+Function names must be valid identifiers. Backtick-escaped
+identifiers allow keywords as function names:
+
+```mojo
+def `import`():
+    print("In `import`")
+
+def main():
+    `import`() # In `import`
+```
+
+## Function signatures
+
+<!-- VERIFIED: From ParserStmts.cpp, Signatures.h -->
+
+```text
+def name(argument-list) -> ReturnType:
+    body
+
+def name[parameter-list](argument-list) -> ReturnType:
+    body
+
+def name(argument-list) raises -> ReturnType:
+    body
+
+def name[parameter-list](argument-list)
+    -> ReturnType where constraint:
+    body
+
+def name[parameter-list](argument-list) raises
+    -> ReturnType where constraint:
+    body
+```
+
+A signature can include a name, a parameter list, an
+argument list, effects, a return type, and a `where` clause.
+Only the parentheses and the colon are required.
+
+*Arguments* are runtime values in parentheses. *Parameters*
+are compile-time values in square brackets. In other
+languages these are both called "parameters". Mojo
+distinguishes them to avoid confusion:
+
+```mojo
+def clamp[T: Comparable & ImplicitlyCopyable](
+    val: T, lo: T, hi: T,
+) -> T:
+    if val < lo:
+        return lo
+    if val > hi:
+        return hi
+    return val
+```
+
+## Markers
+
+Three markers divide parameter and argument lists into
+zones that control how callers pass values:
+
+| Marker | Arguments       | Parameters      |
+|--------|-----------------|-----------------|
+| `//`   | No              | Inferred        |
+| `/`    | Positional-only | Positional-only |
+| `*`    | Keyword-only    | Keyword-only    |
+
+Markers must appear in this order: `//`, then `/`, then `*`.
+Each can appear once. `/` can't be first in the list, and
+`*` can't be last.
+
+:::note
+Mojo markers follow Python's convention from PEP 570 and
+PEP 3102.
+:::
+
+### Infer-only marker (`//`, parameters only)
+
+`//` separates inferred parameters from named parameters. The
+compiler deduces inferred parameters from call-site arguments:
+
+```mojo
+from std.reflection import reflect
+
+def inferred_type[T: Writable, //](value: T):
+    print(t"Value is {value}. Type is {reflect[T]().name()}.")
+
+def main():
+    inferred_type(5)       # Value is 5. Type is Int.
+    inferred_type("Hello") # Value is Hello. Type is String.
+```
+
+Infer-only parameters can't be specified positionally:
+
+```mojo
+# Error: 'inferred_type' expects 0 positional parameters,
+# but 1 was specified
+inferred_type[Int](5)
+```
+
+Keyword syntax bypasses this restriction:
+
+```mojo
+inferred_type[T=Int](5) # OK: Value is 5. Type is Int.
+
+# Error: value passed to 'value' cannot be converted from
+# 'StringLiteral["Hello"]' to 'Int'
+inferred_type[T=Int]("Hello")
+```
+
+Inference isn't limited to infer-only parameters. With enough
+context, the compiler can infer named parameters too:
+
+```mojo
+def add[T: Intable](a: T, b: T) -> Int:
+    return Int(a) + Int(b)
+
+def main():
+    print(t"Sum is {add[Int](1, 2)}.")         # Explicit T
+    print(t"Sum is {add(1, 2)}.")              # Inferred T
+    print(t"Sum is {add[Float64](4.5, 1.2)}.") # Explicit
+    print(t"Sum is {add(4.5, 1.2)}.")          # Inferred
+```
+
+### Positional-only marker (`/`)
+
+Everything before `/` is positional-only. Callers must pass
+these values by position, not by name:
+
+```mojo
+def div(a: Int, b: Int, /):
+    return a // b
+
+div(10, 3)       # OK
+div(a=10, b=3)   # Error
+```
+
+### Keyword-only marker (`*`)
+
+Everything after `*` is keyword-only. Callers must pass
+values by name:
+
+```mojo
+def configure(*, verbose: Bool, retries: Int):
+    ...
+
+configure(verbose=True, retries=3)  # OK
+configure(True, 3)                  # Error
+```
+
+A `*args` variadic argument has the same effect on arguments
+that follow it:
+
+```mojo
+def sum(*values: Int, name: String) -> Int:
+    print(name, end=": ")
+    total = 0
+    for value in values:
+        total += value
+    return total
+
+def main():
+    print(sum(1, 2, 3, name="total"))  # total: 6
+    # print(sum(1, 2, 3, "subtotal"))
+        # Error: missing required keyword argument
+```
+
+## Default values
+
+Arguments can have default values. Once a default appears,
+every following positional argument must also have one:
+
+```mojo
+def connect(
+    host: String = "www.modular.com", port: Int = 80,
+):
+    print(t"Connecting to {host}:{port}")
+
+def main():
+    connect()             # Connecting to www.modular.com:80
+    connect(port=8080)    # Connecting to www.modular.com:8080
+```
+
+```mojo
+def my_function(x: Int, y: Int = 0, z: Int = 0) -> Int:
+    return x + y + z
+
+# Error: required positional argument follows optional
+# positional argument
+# def bad(x: Int, y: Int = 0, z: Int):
+#     return x + y + z
+```
+
+Keyword-only arguments are exempt from the ordering rule.
+They can mix required and optional freely:
+
+```mojo
+def configure(*, retries: Int = 3, verbose: Bool):
+    pass
+```
+
+Parameters also support defaults.
+
+## Function constraints
+
+A `where` clause constrains compile-time parameters. It
+appears at the end of the declaration, after the return type
+(or after the argument list if there's no return type):
+
+```mojo
+comptime LESS_THAN: Int32 = -1
+comptime EQUAL: Int32 = 0
+comptime GREATER_THAN: Int32 = 1
+
+def compare[T: AnyType](
+    x: T, y: T,
+) -> Int32 where conforms_to(T, Comparable):
+    if x < y:
+        return LESS_THAN
+    elif x > y:
+        return GREATER_THAN
+    else:
+        return EQUAL
+
+def main():
+    print(compare(5, 10))  # -1 (LESS_THAN)
+    print(compare(7, 7))   # 0 (EQUAL)
+    print(compare("Z", "A")) # 1 (GREATER_THAN)
+```
+
+`where` clauses can express complex constraints, such as limiting
+SIMD vector sizes to certain powers of 2:
+
+```mojo
+def process[
+    n: Int,
+](data: SIMD[DType.float32, n]) -> Float32 where (
+    n == 1 or n == 2 or n == 4 or n == 8 or n == 16 or n == 32
+):
+    var sum: Float32 = 0.0
+    for i in range(n):
+        sum += data[i]
+    return sum
+
+def main():
+    var data = SIMD[DType.float32, 16](255.0)
+    var sum = process[n=16](data)
+    print(t"Sum: {sum}")  # Sum: 4080.0
+```
+
+`where` clauses are only valid at the end of a declaration.
+They're not valid inside parameter or argument lists:
+
+```mojo
+# Error: where clauses are not valid in parameter lists
+def bad[n: Int where n > 0]():
+    pass
+
+# Error: where clauses are not valid in argument lists
+def bad(x: Int where x > 0):
+    pass
+```
+
+## Argument conventions
+
+An *argument convention* controls how a value passes to a
+function. It appears before the argument name.
+
+### `mut`
+
+The caller's value is passed by mutable reference. Changes
+inside the function are visible to the caller:
+
+```mojo
+def double_it(mut x: Int):
+    x *= 2
+```
+
+`mut` arguments can't have default values:
+
+```mojo
+# Error: 'mut' arguments may not have defaults
+def bad(mut x: Int = 0):
+    pass
+```
+
+### `var`
+
+The function receives an owned copy. If the caller transfers
+ownership with `^`, the original becomes inaccessible.
+Otherwise the value is copied and the caller keeps access:
+
+```mojo
+def consume(var s: String):
+    s += "!"
+    print(s)
+
+def main():
+    var greeting = "Hello"
+    consume(greeting)   # Hello! (copied)
+    print(greeting)     # Hello
+
+    consume(greeting^)  # Hello! (moved)
+    # print(greeting)   # Error: uninitialized after move
+```
+
+### `out`
+
+An `out` argument is the function's return slot. Only one
+`out` argument is allowed. It replaces the `->` return type:
+
+```mojo
+def make_int(out result: Int):
+    result = 42
+
+def main():
+    var x = make_int()
+    print(x)  # 42
+```
+
+A function can't use both `out` and `-> Type`:
+
+```mojo
+# Error: function cannot have both an 'out' argument
+#        and an explicit result type
+def bad(out result: Int) -> Int:
+    result = 0
+```
+
+`out` arguments can't have defaults and can't be variadic.
+
+### `deinit`
+
+The function takes ownership and destroys the value. Required
+for `self` in `__del__` and the `existing` argument in move
+constructors:
+
+```mojo
+struct Resource:
+    var handle: Int
+
+    def __del__(deinit self):
+        _release(self.handle)
+```
+
+Destructors can't raise. Trivial types can't define a
+destructor.
+
+### `ref`
+
+Passes a reference with an explicit *origin* specifier. The
+origin tracks where the reference came from:
+
+```mojo
+def get_first[T: Copyable](
+    ref data: List[T],
+) -> ref [origin_of(data)]T:
+    return data[0]
+
+def main():
+    data = ["one", "two", "three"]
+    first = get_first(data)
+    print(first)  # one
+```
+
+### Default convention
+
+Without a convention, the argument is immutable and borrowed.
+The caller keeps ownership:
+
+```mojo
+def length[T: Copyable](s: List[T]) -> Int:
+    return len(s)
+```
+
+## Variadic arguments
+
+Variadic arguments accept a varying number of values ("indefinite
+arity"). This is seen in functions like `print` that can take any number of
+arguments.
+
+### Homogeneous variadics
+
+`*` before the argument name accepts any number of positional
+arguments of the same type (homogeneous arguments):
+
+```mojo
+def sum_all(*values: Int) -> Int:
+    var total = 0
+    for v in values:
+        total += v
+    return total
+```
+
+### Variadic packs
+
+`*` before both the name and the type annotation creates a
+*variadic pack* that accepts arguments of different types (heterogeneous
+arguments):
+
+```mojo
+def print_all[*Ts: Writable](*args: *Ts):
+    comptime for idx in range(args.__len__()):
+        print(args[idx], end=" ")
+    print()
+
+def main():
+    print_all("Hello", 42, 3.14) # Hello 42 3.14
+```
+
+### Variadic restrictions
+
+A function can have at most one `*args`. Variadic arguments
+can't have default values:
+
+```mojo
+# Error: variadic arguments may not have defaults
+def bad(*args: Int = 0):
+    pass
+```
+
+`out` arguments can't be variadic:
+
+```mojo
+# Error: 'out' convention may not be variadic
+def bad(out *results: Int):
+    pass
+```
+
+## Function effects
+
+Effects appear after the closing parenthesis and before `->`.
+
+### `raises` {#raises}
+
+Declares that the function can raise an error. An optional
+error type can follow `raises`:
+
+```mojo
+def parse(text: String) raises -> Int:
+    ...
+
+def parse_strict(text: String) raises ValueError -> Int:
+    ...
+```
+
+A function can specify at most one error type after `raises`.
+
+### `thin` {#thin}
+
+Declares that a function type does not capture values from its defining
+scope. A thin function is a function pointer and not a closure.
+
+```mojo
+def map[
+    T: Copyable, U: Copyable
+](f: def(T) thin -> U, input: List[T]) -> List[U]:
+    var result: List[U] = []
+    for item in input:
+        result.append(f(item))
+    return result^
+
+# `square` does not capture any values, so it is `thin`
+def square(x: Int) -> Int:
+    return x * x
+
+def main():
+    var nums: List[Int] = [1, 2, 3]
+    var squares = map(square, nums)
+    print(squares)  # Output: [1, 4, 9]
+```
+
+### `abi("C")` {#abi-c}
+
+Declares that a function uses the C calling convention. Because C has no
+closure mechanism, `abi("C")` always appears together with `thin`:
+
+```mojo
+from std.ffi import OwnedDLHandle
+
+def main() raises:
+    # On Linux. On macOS, use "libSystem.dylib", and so forth
+    var lib = OwnedDLHandle("libm.so")
+    var sqrt = lib.get_function[def(Float64) thin abi("C") -> Float64](
+        "sqrt"
+    )
+    print(sqrt(4.0))  # 2.0
+```
+
+### `register_passable` {#register-passable}
+
+Declares that a function value can be passed through registers rather
+than by reference. A register-passable function has no heap captures
+and no captures that require a stable memory address, making it
+suitable for high-performance contexts like parallel execution and
+GPU kernels.
+
+```mojo
+def apply[F: def(Int) register_passable -> Int](f: F, x: Int) -> Int:
+    return f(x)
+
+def double(x: Int) register_passable -> Int:
+    return x * 2
+
+def main():
+    print(apply(double, 21))  # 42
+```
+
+The type constraint
+`def(Int) register_passable -> Int` on `F` enforces that callers can only
+pass `register_passable` callables.
+
+## Return type
+
+`->` introduces the return type. It appears after any
+effects:
+
+```mojo
+def square(x: Int) -> Int:
+    return x * x
+```
+
+Without `->`, the function returns `None`.
+
+## Special methods
+
+Certain method names have enforced signatures. The compiler
+checks argument count, conventions, and return types.
+
+### `__init__`
+
+An initializer must have an `out self` result:
+
+```mojo
+struct Point:
+    var x: Int
+    var y: Int
+
+    def __init__(out self, x: Int, y: Int):
+        self.x = x
+        self.y = y
+```
+
+Without `out self`, the compiler rejects the method:
+
+```mojo
+# Error: __init__ method must return Self type
+#        with 'out' argument
+def __init__(self):
+    pass
+```
+
+### Copy constructor
+
+A copy constructor is an `__init__` with a single
+keyword-only argument named `copy`:
+
+```mojo
+def __init__(out self, *, copy: Self):
+    self.x = copy.x
+    self.y = copy.y
+```
+
+The `copy` argument must use the `read` convention (the
+default). Copy constructors can't raise. Trivial types can't
+define a copy constructor.
+
+### Move constructor
+
+A move constructor is an `__init__` with a single
+keyword-only argument named `take`:
+
+```mojo
+def __init__(out self, *, deinit take: Self):
+    self.x = take.x
+    self.y = take.y
+```
+
+The `take` argument must use the `deinit` convention. Move
+constructors can't raise.
+
+:::note
+`@register_passable` types can't define a move constructor.
+They're always movable by copying a register.
+:::
+
+### `__del__`
+
+The destructor takes `deinit self`:
+
+```mojo
+def __del__(deinit self):
+    _release(self.handle)
+```
+
+Destructors can't raise. Trivial types can't define a
+destructor.
+
+## Nested functions
+
+Functions can be defined inside other functions. Nested
+functions capture values from the enclosing scope:
+
+```mojo
+def outer(x: Int) -> Int:
+    def inner() unified {read} -> Int:
+        return x + 1
+    return inner()
+```
+
+The compiler resolves nested function bodies immediately so
+captures bind correctly.
+
+## Static methods
+
+`@staticmethod` makes a struct method callable without an
+instance. Static methods don't take `self`:
+
+```mojo
+struct MathUtils:
+    comptime pi: Float64 = 3.141592653589793
+
+    @staticmethod
+    def square(x: Int) -> Int:
+        return x * x
+
+def main():
+    print(MathUtils.square(5))  # 25
+    print(MathUtils.pi)         # 3.141592653589793
+```
+
+---
+
+## Mojo language reference
+
+Welcome to the Mojo language reference. This documentation provides a concise
+reference for Mojo's syntax—identifiers, keywords, literals, expressions,
+operators, statements, function declarations, and more. It's organized by
+grammar construct and designed for quick lookup when you need the exact
+rules, precedence, or form of a specific language element.
+
+<ListingCards>
+  <ListingCard title="Identifiers & keywords"
+    url="/docs/reference/keywords"
+    description="Naming rules, reserved words, escaped identifiers, and argument conventions" />
+  <ListingCard title="Literals"
+    url="/docs/reference/literals"
+    description="Integer, floating-point, string, t-string, boolean, None, and Self literals" />
+  <ListingCard title="Numeric types"
+    url="/docs/reference/numeric-types"
+    description="SIMD, DType, Scalar, Int, UInt, integers, floating-point, Byte, literals, and conversions" />
+  <ListingCard title="Operators"
+    url="/docs/reference/operators"
+    description="Operator precedence, associativity, and implementing operators for custom types" />
+  <ListingCard title="Expressions"
+    url="/docs/reference/expressions"
+    description="Tuples, collection displays, member access, calls, subscripts, ternary conditionals, and comprehensions" />
+  <ListingCard title="Simple statements"
+    url="/docs/reference/simple-statements"
+    description="Imports, assignments, return, raise, break, continue, and compile-time declarations" />
+  <ListingCard title="Compound statements"
+    url="/docs/reference/compound-statements"
+    description="If statements, loops, error handling with try/except, context managers, and compile-time control flow" />
+  <ListingCard title="Function declarations"
+    url="/docs/reference/function-declarations"
+    description="Signatures, parameters, arguments, default values, constraints, effects, and special methods" />
+  <ListingCard title="Struct declarations"
+    url="/docs/reference/struct-declarations"
+    description="Fields, methods, initializers, destructors, and trait conformance for structs" />
+  <ListingCard title="Trait declarations"
+    url="/docs/reference/trait-declarations"
+    description="Required and provided methods, associated types, trait inheritance, trait composition, and conformance" />
+  <ListingCard title="Inline MLIR"
+    url="/docs/reference/inline-mlir"
+    description="Inline MLIR built-ins can call operations that the language doesn't expose natively." />
+  <ListingCard title="Decorators"
+    url="/docs/reference/decorators/"
+    description="Modify or extend the behavior of a struct, function, or other declaration at compile time." />
+</ListingCards>
+
+---
+
+## Mojo inline MLIR reference
+
+<!-- VERIFIED:
+SharedState.cpp (addMagicMLIRDecl for __mlir_attr, __mlir_op, __mlir_type),
+ExprNodes.cpp (synthesizeMLIRAttrFromString, synthesizeMLIROpFromString,
+parseMLIRType, emitMLIROperatorCall, bindAttributesToMLIROperatorCall,
+substituteMLIRMagic), ParserStmts.cpp (parseMLIRRegionStmt,
+Token::kw___mlir_region), TokenKinds.def (__mlir_region keyword),
+IREmitter.cpp (EC_MLIRMagic, emitCondition, emitIndex), ASTType.cpp (MLIR
+types register-passable, copyable, movable), ExprConversions.cpp
+(checkMLIRTypeConformance), v24.3 changelog (_properties,
+__get_mvalue_as_litref)
+-->
+
+Mojo is built on [MLIR](https://mlir.llvm.org/) and exposes it directly to
+developers. When you need an operation that Mojo doesn't surface, such as
+hardware intrinsics, atomic memory orderings, or custom dialect operations,
+you can write the MLIR operation yourself instead of waiting for a language
+feature.
+
+MLIR (Multi-Level Intermediate Representation) is a compiler framework in
+the LLVM project. It models programs with custom, layered dialects that
+represent data flow, loops, and hardware-specific operations. These
+dialects are translated step by step into LLVM IR and then into machine
+code.
+
+## Hello MLIR
+
+This example shows a minimal Mojo-MLIR program at the level of a "Hello
+World" implementation. It creates two MLIR index constants, adds them, and
+converts the result back to Mojo's `Int`:
+
+```mojo
+def main():
+    var a: __mlir_type.index = __mlir_attr.`42 : index`
+    var b: __mlir_type.index = __mlir_attr.`8 : index`
+    var c = __mlir_op.`index.add`(a, b)
+    print(Int(mlir_value=c))  # 50
+```
+
+These built-ins work together:
+
+- `__mlir_type` sets the variable's MLIR type.
+- `__mlir_attr` provides a compile-time constant.
+- `__mlir_op` runs an MLIR operation.
+
+`Int(mlir_value=...)` converts the raw MLIR value back into
+Mojo.
+
+You could write `42 + 8` in plain Mojo. Inline MLIR gives
+you direct access to operations that Mojo doesn't expose
+yet, such as NVVM barriers, AMD matrix multiplies, and
+target-specific address spaces.
+
+## The four built-in identifiers
+
+<!-- VERIFIED: SharedState.cpp addMagicMLIRDecl registrations -->
+
+Mojo provides four built-in identifiers to reference MLIR
+from source code. Each corresponds to a common MLIR
+building block:
+
+<!-- markdownlint-disable MD013 -->
+
+| Built-in            | Purpose                      | Produces                |
+|---------------------|------------------------------|-------------------------|
+| `__mlir_type`       | Reference an MLIR type       | A type                  |
+| `__mlir_attr`       | Reference an MLIR attribute  | Compile-time value      |
+| `__mlir_op`         | Invoke an MLIR operation     | Runtime value or `None` |
+| `__mlir_region`     | Define a single-block region | Statement (no value)    |
+
+<!-- markdownlint-enable MD013 -->
+
+You don't need to be an expert in MLIR basics to work through this page,
+but it helps to recognize a few core ideas: dialects, operations,
+attributes, types, and regions. This content focuses on how Mojo maps to
+those concepts.
+
+Types and attributes support two forms: dot/backtick syntax
+for simple names and bracket syntax for parameterized
+construction.
+
+## `__mlir_type`
+
+The `__mlir_type` built-in lets you define MLIR types directly
+in Mojo. You can use these types in variable declarations,
+parameter lists, and `comptime` aliases, just as you'd use
+built-in types like `Float64` or `UnsafePointer[Int]`.
+
+<!-- markdownlint-disable MD024 -->
+### Dot and backtick syntax
+<!-- markdownlint-enable MD024 -->
+
+For simple type names that are valid identifiers, use dot syntax. Use
+backticks when the name includes special characters like `!`, `<`, or `>`:
+
+```mojo
+var x: __mlir_type.i1                  # 1-bit integer
+var y: __mlir_type.index               # Machine-width index
+var z: __mlir_type.f64                 # 64-bit float
+var a: __mlir_type.`!kgen.none`        # Dialect type with ! prefix
+var b: __mlir_type.`!pop.scalar<f64>`  # Pop dialect scalar
+var c: __mlir_type.`!kgen.pointer<!kgen.pointer<f32>>`
+    # Nested pointer
+```
+
+MLIR uses short names for primitive types. Here's what you'll see
+most often:
+
+| MLIR name | Meaning                                     |
+|-----------|---------------------------------------------|
+| `i1`      | 1-bit integer (boolean)                     |
+| `i8`      | 8-bit signless integer                      |
+| `i32`     | 32-bit signless integer                     |
+| `i64`     | 64-bit signless integer                     |
+| `si32`    | 32-bit signed integer                       |
+| `si64`    | 64-bit signed integer                       |
+| `ui32`    | 32-bit unsigned integer                     |
+| `f16`     | 16-bit float (IEEE half)                    |
+| `bf16`    | 16-bit bfloat                               |
+| `f32`     | 32-bit float                                |
+| `f64`     | 64-bit float                                |
+| `index`   | Machine-width integer for sizes and offsets |
+
+"Signless" means the type itself doesn't specify signed or unsigned.
+The operation using the value decides how to interpret it. The `s`
+and `u` prefixed variants (`si32`, `ui64`) carry signedness in the
+type. For a full list, see
+[MLIR's Builtin Types
+documentation](https://mlir.llvm.org/docs/Dialects/Builtin/#types).
+
+Dialect-defined MLIR types use the `!` prefix. For example:
+
+```text
+dialect types must include a `!` prefix. '__mlir_type.`kgen.dtype`' is
+invalid; use '__mlir_type.`!kgen.dtype`' instead
+```
+
+Here's a runnable example that declares MLIR-typed variables,
+assigns values with `__mlir_attr`, and converts them back to
+Mojo for printing:
+
+```mojo
+def mlir_types_in_action():
+    var flag: __mlir_type.i1 = __mlir_attr.true
+    var count: __mlir_type.index = __mlir_attr.`0 : index`
+
+    # Convert back to Mojo types to print
+    print(Bool(flag))              # True
+    print(Int(mlir_value=count))   # 0
+```
+
+<!-- markdownlint-disable MD024 -->
+### Bracket syntax
+<!-- markdownlint-enable MD024 -->
+
+Use bracket syntax when you need to build a type from values
+known at compile time. The compiler splices Mojo expressions
+into an MLIR type string.
+
+The following list builds a single MLIR type string. It
+alternates between backtick literals (copied as-is) and Mojo
+expressions (inserted as MLIR text):
+
+```mojo
+# From SIMD: build storage type from dtype and size parameters.
+# For SIMD[DType.float32, 4], produces: !pop.simd<4, f32>
+comptime _mlir_type = __mlir_type[
+    `!pop.simd<`, Self.size._mlir_value, `, `,
+    Self.dtype._mlir_value, `>`
+]
+
+# From UnsafePointer: produces, for example, !kgen.pointer<MyStruct>
+comptime _mlir_type = __mlir_type[`!kgen.pointer<`, Self.T, `>`]
+
+# From Optional: produces, for example, !kgen.variant<MyStruct, i1>
+comptime _mlir_type = __mlir_type[
+    `!kgen.variant<`, Self.T, `, i1>`
+]
+
+# Nested substitution: produces complex<i32>
+var complexInt: __mlir_type[
+    `complex<`, __mlir_type.i32, `>`
+]
+```
+
+Bracket lists only accept positional operands. Using keyword
+operands produces a compile-time error.
+
+### MLIR types in parameter lists
+
+You can use MLIR types as compile-time parameters for
+structs and functions. Dialect types like `!kgen.string`
+and `!kgen.dtype` appear here alongside builtin types.
+
+```mojo
+# Parameter is a compile-time MLIR string (for example, "hello")
+struct StringLiteral[value: __mlir_type.`!kgen.string`]:
+    ...
+
+# Parameter is a compile-time dtype (for example, f32 or si64)
+def example[dtype: __mlir_type.`!kgen.dtype`]():
+    # For dtype=f32, produces: !pop.scalar<f32>
+    var a: __mlir_type[`!pop.scalar<`, dtype, `>`]
+    ...
+```
+
+### Properties of raw MLIR types
+
+Raw MLIR types (not wrapped in a struct) are register-passable,
+trivially copyable, and trivially movable. They don't have
+methods or attributes and accessing `.field` on the type
+produces an error.
+
+## `__mlir_attr`
+
+Use `__mlir_attr` to define MLIR attributes in Mojo. An MLIR
+attribute is a compile-time constant embedded in the IR.
+
+<!-- markdownlint-disable MD024 -->
+### Dot and backtick syntax
+<!-- markdownlint-enable MD024 -->
+
+Use dot syntax for simple attribute names. Use backticks when
+you need full MLIR literal syntax:
+
+```mojo
+# Boolean attributes
+__mlir_attr.true
+__mlir_attr.false
+
+# Built-in type shorthands used in return positions
+__mlir_attr.i1
+__mlir_attr.index
+__mlir_attr.f16
+__mlir_attr.f32
+__mlir_attr.si32
+
+# Typed constants (with backtick syntax)
+__mlir_attr.`0 : index`
+__mlir_attr.`42 : i17`
+__mlir_attr.`1 : si32`
+```
+
+MLIR attribute constants use MLIR literal syntax, not Mojo's.
+Binary (`0b1010`), octal (`0o17`), and hex (`0xFF`) prefixes
+aren't supported. Use decimal values instead.
+
+```mojo
+# Dialect-specific attributes
+__mlir_attr.`#kgen.dtype.constant<f32> : !kgen.dtype`
+    # DType constant for float32
+__mlir_attr.`#index<cmp_predicate slt>`
+    # Signed less-than predicate
+__mlir_attr.`#pop<atomic_ordering seq_cst>`
+    # Sequential consistency ordering
+__mlir_attr.`#pop.simd<"nan"> : !pop.scalar<f32>`
+    # Float32 NaN constant
+```
+
+Here's a runnable example that uses MLIR attributes as
+constants in a computation. This computes an approximate
+circle area using integer arithmetic:
+
+```mojo
+def circle_area_approx(radius: Int) -> Int:
+    """Approximate area using integer math: pi ≈ 3."""
+    var r = radius._mlir_value
+    var r_squared = __mlir_op.`index.mul`(r, r)
+    var pi: __mlir_type.index = __mlir_attr.`3 : index`
+    var area = __mlir_op.`index.mul`(pi, r_squared)
+    return Int(mlir_value=area)
+
+def main():
+    print(circle_area_approx(5))   # 75
+    print(circle_area_approx(10))  # 300
+```
+
+<!-- markdownlint-disable MD024 -->
+### Bracket syntax
+<!-- markdownlint-enable MD024 -->
+
+Use bracket syntax when you need to build an attribute from
+compile-time values. This follows the same rules as
+`__mlir_type`.
+
+The following list builds a single MLIR attribute string. It
+alternates between backtick literals (copied as-is) and Mojo
+expressions (inserted as MLIR text):
+
+```mojo
+# String concatenation at compile time.
+# For "Hello" + "World", produces:
+#   #pop.string_concat<"Hello","World"> : !kgen.string
+__mlir_attr[
+    `#pop.string_concat<`, self.value, `,`, rhs.value,
+    `> : !kgen.string`,
+]
+
+# Null pointer constant for a parameterized type.
+# For UnsafePointer[Int], produces:
+#   #interp.pointer<0> : !kgen.pointer<Int>
+__mlir_attr[`#interp.pointer<0> : `, Self._mlir_type]
+
+# Compile-time parameter expression.
+# For a=5, produces: #kgen.param.expr<max, 5, 42> : index
+comptime new_lower = __mlir_attr[
+    `#kgen.param.expr<max, `, a, `, `,
+    Int(42)._mlir_value, `> : index`
+]
+```
+
+## `__mlir_op`
+
+Use `__mlir_op` to call MLIR operations directly from Mojo.
+This lets you use operations that Mojo doesn't expose yet,
+like hardware intrinsics and dialect-specific operations.
+
+### Syntax
+
+Place compile-time parameters (attributes) in square brackets
+and runtime values (operands) in parentheses. Put the
+operation name in backticks:
+
+```mojo
+__mlir_op.`dialect.operation`(operands)
+__mlir_op.`dialect.operation`[attributes](operands)
+```
+
+### Operations with no attributes
+
+When an operation only needs operands (runtime values), call
+the operation directly:
+
+```mojo
+# Boolean XOR
+__mlir_op.`pop.xor`(self._mlir_value, rhs._mlir_value)
+
+# Index addition
+__mlir_op.`index.add`(self._mlir_value, rhs._mlir_value)
+
+# Trap (no operands, no result)
+__mlir_op.`llvm.intr.trap`()
+```
+
+### Operations with attributes
+
+An operation may need to pass attributes, the key-value pairs
+in square brackets before the operands (that is, the runtime values):
+
+```mojo
+# Cast a pop scalar to a builtin i1
+#   (for example, !pop.scalar<bool> → i1)
+__mlir_op.`pop.cast_to_builtin`[
+    _type=__mlir_type.i1
+](mlir_value)
+
+# Signed less-than comparison on two index values. Returns i1.
+__mlir_op.`index.cmp`[
+    pred=__mlir_attr.`#index<cmp_predicate slt>`
+](self._mlir_value, rhs._mlir_value)
+
+# Load a value from a pointer with atomic ordering.
+# Returns a value of the pointer's element type.
+__mlir_op.`pop.load`[
+    ordering=ordering.__mlir_attr(),
+    _type=Self._mlir_type,
+](ptr.address)
+```
+
+Here's a runnable example that combines comparisons with
+`pop.select` to clamp a value into a range:
+
+```mojo
+def clamp(val: Int, low: Int, high: Int) -> Int:
+    """Clamp val to [low, high] using MLIR comparisons and select."""
+    var v = val._mlir_value
+    var lo = low._mlir_value
+    var hi = high._mlir_value
+
+    # If val < low, use low
+    var too_low = __mlir_op.`index.cmp`[
+        pred=__mlir_attr.`#index<cmp_predicate slt>`
+    ](v, lo)
+    var result = __mlir_op.`pop.select`(too_low, lo, v)
+
+    # If result > high, use high
+    var too_high = __mlir_op.`index.cmp`[
+        pred=__mlir_attr.`#index<cmp_predicate sgt>`
+    ](result, hi)
+    result = __mlir_op.`pop.select`(too_high, hi, result)
+
+    return Int(mlir_value=result)
+
+def main():
+    print(clamp(15, 0, 10))  # 10
+    print(clamp(-5, 0, 10))  # 0
+    print(clamp(7, 0, 10))   # 7
+```
+
+### Special attributes
+
+Four attributes have special meaning to the compiler:
+
+<!-- markdownlint-disable MD013 -->
+
+| Attribute     | Purpose                                                         |
+|---------------|-----------------------------------------------------------------|
+| `_type`       | Sets the result type when the compiler can't infer it           |
+| `_properties` | Passes MLIR operation properties as a `DictionaryAttr`          |
+| `_region`     | References a named `__mlir_region` as a region argument         |
+| `_type=None`  | Marks an operation that produces no result                      |
+
+<!-- markdownlint-enable MD013 -->
+
+### `_type`
+
+Most operations require an explicit result type:
+
+```mojo
+# Single result type
+var i1Cast = __mlir_op.`index.castu`[
+    _type=__mlir_type.i1
+](idxConstant)
+```
+
+When an operation returns multiple values, assign them to a typed tuple:
+
+```mojo
+# Returns the current source location as (line, column, filename).
+# _properties passes inline depth to the code generator.
+_ = __mlir_op.`kgen.source_loc`[
+    _type = (
+        __mlir_type.index,
+        __mlir_type.index,
+        __mlir_type.`!kgen.string`
+    ),
+]()
+```
+
+Operations that produce no result take `_type=None`:
+
+```mojo
+# Fence after mbarrier initialization. Guarantees the barrier
+# object is fully constructed before any thread uses it.
+__mlir_op.`nvvm.fence.mbarrier.init`[_type=None]()
+```
+
+If the compiler can't infer the result type and you don't
+provide `_type`, you'll receive an error:
+`unable to infer result type from MLIR operation 'name'`.
+
+### `_properties`
+
+<!-- VERIFIED: v24.3 changelog -->
+
+Some MLIR operations store configuration in properties instead
+of attributes. Attributes are compile-time constants in Mojo.
+Properties store typed, mutable data on the operation. Pass
+them as a `DictionaryAttr`:
+
+```mojo
+# Returns current source location as (line, column, filename).
+# _properties passes inline depth to the code generator.
+_ = __mlir_op.`kgen.source_loc`[
+    _type = (
+        __mlir_type.index,
+        __mlir_type.index,
+        __mlir_type.`!kgen.string`
+    ),
+    _properties = __mlir_attr.`{inlineCount = 1 : i64}`,
+]()
+```
+
+Operations can mix attributes and properties in the same
+bracket list:
+
+```mojo
+# 64-bit integer addition with "no signed wrap" overflow checking.
+# nsw means undefined behavior on signed overflow, enabling
+# optimizations.
+__mlir_op.`llvm.add`[
+    _type=__mlir_type.i64,
+    _properties=__mlir_attr.`{
+        overflowFlags = #llvm.overflow<nsw>
+    }`,
+](arg0, arg1)
+```
+
+As an example, NVVM operations often use the `operandSegmentSizes` property
+to describe which optional operands are present:
+
+```mojo
+# Async bulk copy from global to shared cluster memory.
+# operandSegmentSizes: dst(1), src(1), size(1), mbar(1),
+#   cache_hint(0), predicate(1).
+__mlir_op.`nvvm.cp.async.bulk.shared.cluster.global`[
+    _properties=__mlir_attr.`{
+        operandSegmentSizes = array<i32: 1,1,1,1,0,1>
+    }`,
+    _type=None,
+](dst, src, size, mbar, predicate)
+```
+
+In Mojo, you can only call registered MLIR operations. If you try to call
+one that isn't registered, the compiler will error with:
+`use of unregistered MLIR operation 'name'`.
+
+## `__mlir_region`
+
+<!-- VERIFIED: ParserStmts.cpp parseMLIRRegionStmt,
+     TokenKinds.def kw___mlir_region -->
+
+Use `__mlir_region` to define a block of MLIR code for an
+operation to run. A region is a block of code that an MLIR
+operation runs, similar to a loop body or callback. Unlike a
+closure, it doesn't implicitly capture variables.
+
+Some MLIR operations take a region as input. You define the
+block with `__mlir_region` and pass it to the operation
+using the `_region` attribute.
+
+A region is written as a named block with arguments and an
+indented body:
+
+```mojo
+__mlir_region name(arg: type, ...):
+    body
+```
+
+### Basic usage
+
+Some MLIR operations accept a region argument — a block of code that
+the operation controls. You define the region with `__mlir_region` and
+connect it to the operation with the `_region` attribute.
+
+The following example uses `hlcf.loop`, an MLIR loop operation. It
+repeatedly runs the region body, passing the current iteration value
+as an argument. The region calls `hlcf.continue` with the next value:
+
+```mojo
+comptime one = __mlir_attr.`1 : index`
+
+def structured_for_loop() -> __mlir_type.index:
+    # Define the loop body as a region. The operation passes
+    # the current iteration value as `i`.
+    __mlir_region loop_body(i: __mlir_type.index):
+        # Yield the next iteration value: i + 1
+        __mlir_op.`hlcf.continue`(
+            __mlir_op.`index.add`(i, one)
+        )
+
+    # Start at 0, run loop_body repeatedly,
+    # return the final value.
+    return __mlir_op.`hlcf.loop`[
+        _type=__mlir_type.index,
+        _region=__mlir_attr.`"loop_body"`,
+    ](__mlir_attr.`0 : index`)
+```
+
+The region arguments (`i` in this example) come from the
+operation that uses the region. Here, `hlcf.loop` passes the
+current loop value as `i`. The `_region` attribute takes the
+region name as a string.
+
+This loop runs indefinitely. The `hlcf` dialect's conditional
+exit (`hlcf.break`) requires nested regions that can't be
+expressed with `__mlir_region`. In practice, it's simpler to
+use Mojo's `for` and `while` loops for control flow.
+
+The following example uses a Mojo `while` loop for control
+flow and MLIR operations for the computation inside. The
+loop condition uses an MLIR comparison, and the body uses
+MLIR arithmetic to update the accumulator and counter:
+
+```mojo
+def sum_to(end: Int) -> Int:
+    """Mojo while loop with MLIR arithmetic and comparison."""
+    var acc: __mlir_type.index = __mlir_attr.`0 : index`
+    var i: __mlir_type.index = __mlir_attr.`0 : index`
+    var one: __mlir_type.index = __mlir_attr.`1 : index`
+
+    # end._mlir_value unwraps Mojo Int to raw __mlir_type.index
+    while Bool(__mlir_op.`index.cmp`[
+        pred=__mlir_attr.`#index<cmp_predicate slt>`
+    ](i, end._mlir_value)):
+        acc = __mlir_op.`index.add`(acc, i)
+        i = __mlir_op.`index.add`(i, one)
+
+    return Int(mlir_value=acc)
+
+def main():
+    print(sum_to(10))  # 45
+    print(sum_to(0))   # 0
+    print(sum_to(1))   # 0
+    print(sum_to(5))   # 10
+```
+
+### Multiple regions in one scope
+
+A function can define multiple regions, each with its own
+name. This example defines a region and passes it to
+`co.suspend`, an MLIR coroutine operation that suspends
+execution and later resumes by running the provided region:
+
+```mojo
+@always_inline
+def _suspend_async[
+    body: def(AnyCoroutine) capturing -> None
+]():
+    # Runs when the coroutine resumes.
+    # The operation passes the coroutine handle as `hdl`.
+    __mlir_region await_body(
+        hdl: __mlir_type.`!co.routine`
+    ):
+        body(hdl)
+        # Signal that the await body is done
+        __mlir_op.`co.suspend.end`()
+
+    # Suspend the current coroutine, registering await_body
+    # as the code to run when it resumes.
+    __mlir_op.`co.suspend`[_region="await_body".value]()
+```
+
+Operations that accept multiple regions reference them by
+name. Each `__mlir_region` defines a single block.
+
+### Region arguments
+
+Region arguments look like function arguments, but they don't
+support Mojo argument conventions like `borrowed`, `owned`,
+`ref`, `out`, or `mut`. The operation provides the argument
+values directly as raw MLIR values:
+
+```mojo
+# Region arguments receive raw MLIR values from the enclosing
+# operation. No Mojo argument conventions apply.
+__mlir_region my_region(
+    x: __mlir_type.index,              # Raw index from the operation
+    y: __mlir_type.`!pop.scalar<f32>`, # Raw f32 scalar
+):
+    # x and y are raw MLIR values, not Mojo types.
+    # Wrap them (for example, Int(mlir_value=x)) to use
+    # Mojo operations on them.
+    ...
+```
+
+## Common dialects
+
+These dialect prefixes appear frequently in the stdlib and
+kernel code:
+
+<!-- markdownlint-disable MD013 -->
+
+| Prefix    | Covers                                                    |
+|-----------|-----------------------------------------------------------|
+| `pop.*`   | Mojo portable ops: arithmetic, casts, SIMD, pointers      |
+| `index.*` | Index-typed arithmetic and comparisons                    |
+| `kgen.*`  | Codegen primitives: structs, variants, parameters         |
+| `lit.*`   | Language-level ops: ownership, references, closures       |
+| `llvm.*`  | LLVM dialect: traps, inline assembly, pointer ops         |
+| `nvvm.*`  | NVIDIA GPU intrinsics: barriers, async copies, tensor ops |
+| `co.*`    | Coroutine ops: suspend, resume, destroy, await            |
+
+<!-- markdownlint-enable MD013 -->
+
+The `pop`, `kgen`, `co` and `lit` dialects are internal implementation
+details of the compiler and may change without notice.
+
+Built-in dialects, like `index`, are also available.
+
+## Stdlib patterns
+
+The standard library uses inline MLIR in consistent patterns
+that show up across the codebase. These patterns will help
+you understand how to use the built-ins in your own code.
+They serve as a reference for common use cases.
+
+### Wrapper structs
+
+<!-- VERIFIED: builtin/bool.mojo, builtin/int.mojo,
+     builtin/simd.mojo -->
+
+The most common pattern: a Mojo struct wraps a raw MLIR type in
+a field called `_mlir_value`. The struct provides a Mojo-friendly
+interface; the field holds the actual MLIR representation.
+
+`Bool` wraps a single bit:
+
+```mojo
+# Bool wraps a single MLIR bit. The struct provides Mojo-level
+# operators; the i1 field holds the actual hardware value.
+struct Bool:
+    var _mlir_value: __mlir_type.i1  # 1-bit integer: true or false
+
+    def __init__(out self, value: __mlir_type.i1):
+        self._mlir_value = value     # Store the raw bit directly
+```
+
+`Int` wraps the machine-width index type:
+
+```mojo
+# Int wraps the machine-width index type. Two constructors:
+# default (zero) and from a raw MLIR value.
+struct Int:
+    var _mlir_value: __mlir_type.index  # Machine-width signed integer
+
+    def __init__(out self):
+        self._mlir_value = __mlir_attr.`0 : index`  # Default to zero
+
+    def __init__(out self, *, mlir_value: __mlir_type.index):
+        self._mlir_value = mlir_value  # Wrap an existing MLIR value
+```
+
+When the storage type depends on struct parameters, define it
+as a `comptime` alias. For example, `SIMD` builds its type
+from `dtype` and `size`:
+
+```mojo
+# SIMD builds its storage type at compile time from its parameters.
+# For SIMD[DType.float32, 4], _mlir_type produces: !pop.simd<4, f32>
+struct SIMD[dtype: DType, size: Int]:
+    comptime _mlir_type = __mlir_type[
+        `!pop.simd<`, Self.size._mlir_value, `, `,
+        Self.dtype._mlir_value, `>`
+    ]
+    var _mlir_value: Self._mlir_type  # Parameterized SIMD vector
+```
+
+This pattern appears in `SIMD`, `UnsafePointer`, `Tuple`,
+`Variant`, and `Optional`'s internal storage.
+
+Here's a complete, runnable wrapper struct. `Counter` wraps
+an MLIR index, exposes `increment` and `value` methods, and
+converts back to Mojo for printing:
+
+```mojo
+struct Counter:
+    """A simple counter backed by a raw MLIR index."""
+    var _mlir_value: __mlir_type.index
+
+    def __init__(out self):
+        self._mlir_value = __mlir_attr.`0 : index`
+
+    def increment(mut self):
+        var one: __mlir_type.index = __mlir_attr.`1 : index`
+        self._mlir_value = __mlir_op.`index.add`(
+            self._mlir_value, one
+        )
+
+    def value(self) -> Int:
+        return Int(mlir_value=self._mlir_value)
+
+def main():
+    var c = Counter()
+    c.increment()
+    c.increment()
+    c.increment()
+    print(c.value())  # 3
+```
+
+### Operations as methods
+
+Once a struct wraps an MLIR type, its methods delegate to MLIR
+operations. The `_mlir_value` field goes in, the result comes back,
+and the struct re-wraps it:
+
+```mojo
+# From Bool: operators delegate to pop operations on the raw i1.
+# XOR with true flips the bit: ~False → True, ~True → False
+def __invert__(self) -> Bool:
+    return __mlir_op.`pop.xor`(
+        self._mlir_value, __mlir_attr.true
+    )
+
+# Bitwise AND on the two underlying i1 values
+def __and__(self, rhs: Bool) -> Bool:
+    return __mlir_op.`pop.and`(
+        self._mlir_value, rhs._mlir_value
+    )
+```
+
+For `Int`, the `index` dialect operations produce raw index values.
+`Int(mlir_value=...)` wraps them back:
+
+```mojo
+# From Int: add two raw index values, wrap the result back into Int
+def __add__(self, rhs: Int) -> Int:
+    return Int(
+        mlir_value=__mlir_op.`index.add`(
+            self._mlir_value, rhs._mlir_value
+        )
+    )
+
+# Signed less-than comparison, returns i1 (auto-wraps to Bool)
+def __lt__(self, rhs: Int) -> Bool:
+    return __mlir_op.`index.cmp`[
+        pred=__mlir_attr.`#index<cmp_predicate slt>`
+    ](self._mlir_value, rhs._mlir_value)
+```
+
+Here's the `Counter` struct from the previous example extended
+with an `__add__` operator, showing how the pattern applies to
+custom types:
+
+```mojo
+struct Counter:
+    """A counter with addition, backed by a raw MLIR index."""
+    var _mlir_value: __mlir_type.index
+
+    def __init__(out self):
+        self._mlir_value = __mlir_attr.`0 : index`
+
+    def __init__(out self, *, mlir_value: __mlir_type.index):
+        self._mlir_value = mlir_value
+
+    def increment(mut self):
+        var one: __mlir_type.index = __mlir_attr.`1 : index`
+        self._mlir_value = __mlir_op.`index.add`(
+            self._mlir_value, one
+        )
+
+    def __add__(self, rhs: Counter) -> Counter:
+        return Counter(
+            mlir_value=__mlir_op.`index.add`(
+                self._mlir_value, rhs._mlir_value
+            )
+        )
+
+    def value(self) -> Int:
+        return Int(mlir_value=self._mlir_value)
+
+def main():
+    var a = Counter()
+    a.increment()  # 1
+    a.increment()  # 2
+
+    var b = Counter()
+    b.increment()  # 1
+
+    var c = a + b
+    print(c.value())  # 3
+```
+
+---
+
+## Mojo identifiers, keywords, and conventions reference
+
+<!-- VERIFIED: TokenKinds.def, Lexer.cpp, Signatures.h, Signatures.cpp,
+     ExprNode.h, ParserExprs.cpp, ParserStmts.cpp, ParserBase.h -->
+
+Every Mojo source file is built from tokens. This page covers the tokens
+you choose (identifiers), the tokens the language reserves (keywords), and
+the context-sensitive tokens that control how values are passed and bound
+(conventions).
+
+## Identifiers
+
+Every time you declare a variable, define a function, or create a struct,
+you give it a name. That name is an *identifier*. Identifiers are how you
+refer to things in your code: `count` in `var count = 0`, `Point` in
+`struct Point`, `greet` in `def greet()`.
+
+This section covers what makes a valid identifier.
+
+### Regular identifiers
+
+A regular identifier starts with a letter or underscore, followed by any
+combination of letters, digits, and underscores:
+
+```text
+identifier → [a-zA-Z_][a-zA-Z0-9_]*
+```
+
+Such as:
+
+```mojo
+foo
+_private
+MyStruct
+basic_value
+```
+
+Identifiers are case-sensitive. `MyStruct` and `mystruct` are different
+names.
+
+### Escaped identifiers
+
+An *escaped identifier* is enclosed in backticks. Backticks allow any
+characters except vertical whitespace and backticks themselves:
+
+```mojo
+`struct`        # Use a keyword as a name
+`日本語の変数`    # Non-ASCII identifier
+`my value`      # Spaces in a name
+```
+
+Escaped identifiers are useful when calling into external code that uses a
+Mojo keyword as a name, or when writing identifiers in natural language.
+Empty backtick identifiers are not allowed.
+
+## Keywords
+
+*Keywords* are reserved words with fixed meaning. They cannot be used as
+ordinary identifiers (use an escaped identifier if you need to).
+
+### Control flow
+
+These keywords control which code runs and in what order.
+
+| Keyword    | Purpose                                 |
+|------------|-----------------------------------------|
+| `if`       | Conditional execution                   |
+| `elif`     | Additional condition in an `if` chain   |
+| `else`     | Default branch in conditionals or loops |
+| `for`      | Iteration loop                          |
+| `while`    | Conditional loop                        |
+| `break`    | Exits the innermost loop                |
+| `continue` | Skips to the next loop iteration        |
+| `pass`     | No-op placeholder statement             |
+| `return`   | Returns from a function                 |
+| `with`     | Context manager statement               |
+
+### Error handling
+
+These keywords structure error propagation and recovery.
+
+| Keyword   | Purpose                                 |
+|-----------|-----------------------------------------|
+| `try`     | Begins an error-handling block          |
+| `except`  | Error handler clause                    |
+| `finally` | Always-execute clause in a `try` block  |
+| `raise`   | Raises an error                         |
+| `assert`  | Raises an error if a condition is false |
+
+### Declarations
+
+These keywords introduce new named entities.
+
+| Keyword  | Purpose                  |
+|----------|--------------------------|
+| `def`    | Function declaration     |
+| `struct` | Struct type declaration  |
+| `trait`  | Trait declaration        |
+| `var`    | Scoped variable binding  |
+| `ref`    | Scoped reference binding |
+
+### Keyword operators
+
+Five operators are spelled as words rather than symbols. Symbolic operators
+(`+`, `-`, `*`, `^`, `//`, etc.) are punctuation, not keywords.
+
+| Keyword | Purpose       | Keyword | Purpose         |
+|---------|---------------|---------|-----------------|
+| `and`   | Logical AND   | `or`    | Logical OR      |
+| `not`   | Logical NOT   | `in`    | Membership test |
+| `is`    | Identity test |         |                 |
+
+### Imports
+
+These keywords control module imports.
+
+| Keyword  | Purpose                                  |
+|----------|------------------------------------------|
+| `import` | Imports a module                         |
+| `from`   | Selective import from a module           |
+| `as`     | Aliasing in imports and `except` clauses |
+
+### Compile-time
+
+| Keyword    | Purpose                        |
+|------------|--------------------------------|
+| `comptime` | Forces compile-time evaluation |
+
+### Literal keywords
+
+These keywords are also literals. They produce a value directly.
+
+| Keyword | Value                           | Keyword | Value              |
+|---------|---------------------------------|---------|--------------------|
+| `True`  | boolean true                    | `False` | boolean false      |
+| `None`  | Absence of a value (`NoneType`) | `Self`  | The enclosing type |
+
+### Case sensitivity
+
+All keywords are case-sensitive:
+
+- `True` is a keyword; `true` is not.
+- `None` is a keyword; `none` is not.
+- `Self` is a keyword; `self` is a conventional argument name, not a keyword.
+
+## Conventions
+
+*Conventions* tell the compiler how values are passed and how bindings are
+created. They are not reserved, so existing Python code that uses these names
+won't break, but in Mojo signatures they have fixed meaning.
+
+Argument conventions appear before argument names in function signatures.
+They control ownership and mutability:
+
+<!-- markdownlint-disable MD013 -->
+
+| Convention | Role                 | Meaning                                            |
+|------------|----------------------|----------------------------------------------------|
+| `mut`      | Argument             | Mutable reference to an existing value             |
+| `out`      | Argument             | Returns a value without a return arrow             |
+| `deinit`   | Argument             | Destructive transfer at end of a value's lifecycle |
+| `var`      | Argument or variable | Independent mutable owned copy of the value        |
+| `ref`      | Argument or variable | Reference that doesn't own the value               |
+
+<!-- markdownlint-enable MD013 -->
+
+`var` and `ref` also appear in variable declarations, where `var` creates a
+scoped mutable variable and `ref` creates a scoped reference binding:
+
+```mojo
+struct CountingTool:
+    var value: Int
+
+    def __init__(out self):       # out: self is the return value
+        self.value = 0
+
+    def increment(mut self):      # mut: modifies self in place
+        self.value += 1
+
+var count = 0          # var creates a scoped mutable variable
+ref alias = some_list  # ref binds a reference, no copying
+```
+
+A `self` argument without a convention is immutable. Modifying it requires
+`mut`:
+
+```mojo
+struct CountingTool:
+    var value: Int
+
+    def increment(mut self):
+        self.value += 1      # OK: mut self allows modification
+
+    def get(self) -> Int:
+        self.value += 1      # Error: self is immutable
+        return self.value
+```
+
+`out` declares the return value by name. It can't be combined with `->`:
+
+```mojo
+def make_point(out result: Point):        # OK
+    result = Point(0, 0)
+
+def make_point(out result: Point) -> Point:  # Error: function cannot have
+    result = Point(0, 0)                     # both an 'out' argument and
+                                             # an explicit result type
+```
+
+`raises` and `where` also have fixed meaning in signatures. `raises`
+declares that a function can raise errors. `where` introduces a constraint
+clause at the end of a declaration:
+
+```mojo
+def validate(value: Int) raises:
+    if value < 0:
+        raise Error("must be non-negative")
+```
+
+---
+
+## Mojo literals reference
+
+<!-- VERIFIED: Lexer.cpp lexInteger(), lexFloat(), lexString(), lexTString(),
+     processEscapeSequences(), ExprNode.h, TokenKinds.def -->
+
+A *literal* is a value written directly in source code: `42`, `"hello"`,
+`True`. Literals produce values without reading variables or calling
+functions. Each section below covers one literal type, its syntax, and
+any rules the lexer enforces.
+
+## Integer literals
+
+*Integer literals* represent whole numbers in four bases:
+
+```mojo
+42        # Decimal
+0xFF      # Hexadecimal (0x or 0X prefix)
+0o52      # Octal (0o or 0O prefix)
+0b101010  # Binary (0b or 0B prefix)
+```
+
+Integer literals follow these lexical rules:
+
+```text
+integer     → decinteger | bininteger | octinteger | hexinteger
+decinteger  → nonzerodigit ("_" | digit)* | "0"+ ("_" | "0")*
+bininteger  → "0" ("b" | "B") ("_" | bindigit)+
+octinteger  → "0" ("o" | "O") ("_" | octdigit)+
+hexinteger  → "0" ("x" | "X") ("_" | hexdigit)+
+```
+
+Integer literals are always non-negative. `-1024` is the unary negation
+operator `-` applied to the literal `1024`.
+
+Underscores can appear between digits for readability. Mojo is more
+permissive than Python here. Consecutive and trailing underscores are
+allowed:
+
+```mojo
+1_000_000  # Readable grouping
+1__000_    # Also valid (consecutive and trailing underscores OK)
+```
+
+Leading zeros in decimal literals are not allowed. Use the `0o` prefix for
+octal:
+
+```mojo
+0123   # Error: leading zeros in decimal integer literals are not permitted
+0o123  # OK: octal
+```
+
+A base prefix must be followed by at least one digit:
+
+```mojo
+0x  # Error: no digits specified for hex literal
+0b  # Error: no digits specified for binary literal
+0o  # Error: no digits specified for octal literal
+```
+
+## Floating-point literals
+
+*Floating-point literals* represent numbers with a fractional or exponent
+part:
+
+```mojo
+1.0
+3.14159
+.5       # Fraction only (no integer part)
+2.       # Integer part with decimal point
+2.5e-3   # With exponent
+1E10     # Capital E works too
+```
+
+Floating-point literals follow these lexical rules:
+
+```text
+floatnumber   → pointfloat | exponentfloat
+pointfloat    → digitpart? fraction | digitpart "."
+exponentfloat → (digitpart | pointfloat) exponent
+fraction      → "." digitpart
+exponent      → ("e" | "E") ("+" | "-")? digitpart
+digitpart     → digit ("_" | digit)*
+```
+
+Floating-point literals are always non-negative. `-3.14` is the unary
+negation operator `-` applied to the literal `3.14`.
+
+When included, an exponent marker (`e` or `E`) must be followed by at least
+one digit:
+
+```mojo
+2.5e    # Error: expecting a digit after the exponent
+2.5e-   # Error: expecting a digit after the exponent
+2.5e-3  # OK
+```
+
+Underscores in floating-point literals work as they do in integers. Place
+them anywhere that enhances readability:
+
+```mojo
+1_000.000_5
+```
+
+## String literals
+
+*String literals* represent text values. Mojo supports single and double
+quotes, and a triple-quote form for multi-line strings:
+
+```mojo
+"Hello"
+'world'
+"""Multi-line
+string"""
+'''Also
+multi-line'''
+```
+
+String literals on adjacent lines are joined into a single string. This
+works on one line or across lines when the continuation is indented:
+
+```mojo
+"Hello, " "World"        # "Hello, World"
+
+x = "line one "
+    "line two"           # "line one line two" (indented continuation)
+```
+
+Prefix with `r` or `R` to create a *raw string* that disables escape
+processing:
+
+```mojo
+r"C:\path\to\file"  # Backslashes treated literally
+```
+
+### Escape sequences
+
+Mojo recognizes these escape sequences in non-raw string literals:
+
+| Sequence | Meaning         | Sequence    | Meaning                          |
+|----------|-----------------|-------------|----------------------------------|
+| `\\`     | Backslash       | `\a`        | Bell                             |
+| `\"`     | Double quote    | `\b`        | Backspace                        |
+| `\'`     | Single quote    | `\f`        | Form feed                        |
+| `\n`     | Newline         | `\v`        | Vertical tab                     |
+| `\r`     | Carriage return | `\xHH`      | Hex value (exactly 2 hex digits) |
+| `\t`     | Tab             | `\0`–`\377` | Octal value (1–3 octal digits)   |
+
+A backslash at the end of a line inside a triple-quoted string suppresses the
+newline, joining the next line directly:
+
+```mojo
+x = """\
+    This string has no leading newline.\
+    """
+```
+
+## T-string literals
+
+*T-string literals* support expression interpolation using `{}`:
+
+```mojo
+name = "World"
+t"Hello, {name}!"   # "Hello, World!"
+t"1 + 1 = {1 + 1}"  # "1 + 1 = 2"
+```
+
+Expressions inside `{}` are evaluated at runtime. Adjacent t-string literals
+are joined, just like regular string literals.
+
+T-strings can be triple-quoted and combined with the raw prefix (`rt`, `tr`,
+`rT`, `tR`):
+
+```mojo
+t"""
+Hello, {name}!
+"""
+
+rt"Path: {base}\subdir"  # Raw t-string: backslashes are literal
+```
+
+Use `{{` and `}}` to include literal braces in a t-string:
+
+```mojo
+t"Use {{braces}} in t-strings"  # "Use {braces} in t-strings"
+```
+
+T-strings can be nested. An interpolation expression can itself contain
+t-strings, up to 20 levels deep.
+
+```mojo
+var name = "world"
+var greeting = t"Hello, {t"dear {name}"}!"
+print(greeting) # "Hello, dear world!"
+```
+
+## Boolean literals
+
+`True` and `False` represent boolean truth values.
+
+```mojo
+x = True
+y = False
+```
+
+## None literal
+
+`None` represents the absence of a value. It is the only value of type
+`NoneType`.
+
+```mojo
+x: NoneType = None
+```
+
+A function without an explicit return type returns `None`. These two
+declarations are equivalent:
+
+```mojo
+def greet():
+    print("hello")
+
+def greet() -> None:
+    print("hello")
+```
+
+## Self literal
+
+`Self` refers to the enclosing type inside a struct or trait definition:
+
+```mojo
+struct Point:
+    var x: Float64
+    var y: Float64
+
+    def create() -> Self:          # Self refers to Point
+        return Self(0.0, 0.0)
+
+    def distance(self) -> Float64: # self is an argument name, not Self
+        return (self.x ** 2 + self.y ** 2).sqrt()
+```
+
+`Self` (capital S) is a keyword that refers to the type. `self` (lowercase)
+is a conventional argument name for the instance.
+
+## Discard pattern
+
+The underscore `_` discards a value in an assignment:
+
+```mojo
+_, y = get_pair()  # Ignore the first element
+```
+
+## Ellipsis literal
+
+`...` marks a trait method as required. Conforming types must provide their
+own implementation. It is only valid inside trait definitions:
+
+```mojo
+trait Drawable:
+    def draw(self) -> None: ...   # Required: conforming types must implement
+```
+
+`...` and `pass` are not interchangeable. `pass` is a no-op statement that
+provides an empty body. `...` is a requirement marker that means "you must
+implement this."
+
+---
+
+## Mojo numeric types reference
+
+<!--
+VERIFIED: builtin/simd.mojo (SIMD, Scalar, UInt, Byte, sized
+type aliases, MAX/MIN/MAX_FINITE/MIN_FINITE),
+builtin/int.mojo (Int, Indexer, BITWIDTH),
+builtin/dtype.mojo (DType enum), builtin/int_literal.mojo
+(IntLiteral, arbitrary precision, materializes to Int),
+builtin/float_literal.mojo (FloatLiteral, materializes to
+Float64, nan/infinity/negative_infinity/negative_zero),
+builtin/type_aliases.mojo, ExprNode.h (kIntLiteral,
+kFloatLiteral), ASTType.h (register passability),
+prelude __init__.mojo,
+DType support matrix (compiler team, Notion),
+BFloat16 Apple Silicon status (DevRel)
+-->
+
+Mojo represents numbers in two ways. `Int` is a general-purpose integer
+that matches the hardware's native word size. Other numeric types are built
+on `SIMD`: `Float32`, `Int64`, `UInt8`, and even `UInt`.
+
+:::note
+This page doesn't require imports. Every type, alias, and
+function is built into the language or included in the
+Standard Library prelude, which is automatically available.
+:::
+
+## `SIMD` {#simd}
+
+`SIMD` stands for "Single Instruction, Multiple Data". It
+lets the CPU operate on multiple values at once using a single
+instruction.
+
+A `SIMD` value stores one or more values of the same type in a
+fixed-size vector. The number of values is called the *width*,
+and it must be a power of two.
+
+The width is part of the type. For example,
+`SIMD[DType.float32, 4]` is a vector of four 32-bit floats.
+`SIMD[DType.int8, 16]` is a vector of sixteen 8-bit integers.
+
+When a `SIMD` value holds one value, it behaves like a scalar.
+When it holds several, operations apply to all values at once:
+
+```mojo
+var v = SIMD[DType.float32, 4](1.0, 2.0, 3.0, 4.0)
+var doubled = v * 2.0   # All four elements doubled
+print(doubled) # [2.0, 4.0, 6.0, 8.0]
+```
+
+Modern CPUs can process 4, 8, 16, or more values in parallel
+with SIMD, which can significantly improve performance over
+scalar operations.
+
+:::note
+`SIMD` has a hard limit of 2^15 (32768) elements. This is a
+compile-time limit, not a runtime one.
+
+In practice, the usable width is much smaller and depends on
+the hardware. For example, `SIMD[DType.float32, 4]` fits in a
+128-bit register, while `SIMD[DType.float32, 16]` requires
+512 bits, which matches or exceeds the width of most SIMD registers.
+
+Always benchmark to find the optimal width for your workload
+and target hardware.
+:::
+
+### Element access
+
+Read and write individual elements by index ("*lane*"):
+
+```mojo
+v[0]       # Read element 0 → Scalar[DType.float32]
+v[0] = 5.0 # Write element 0
+```
+
+### Operations
+
+Arithmetic, comparison, and bitwise operations apply to all
+elements at once:
+
+```mojo
+var a = SIMD[DType.float32, 4](1.0, 2.0, 3.0, 4.0)
+var b = SIMD[DType.float32, 4](5.0, 6.0, 7.0, 8.0)
+
+var sum = a + b        # [6.0, 8.0, 10.0, 12.0]
+var prod = a * b       # [5.0, 12.0, 21.0, 32.0]
+```
+
+Reductions combine all elements into a single value:
+
+```mojo
+a.reduce_add()         # 10.0
+a.reduce_max()         # 4.0
+a.reduce_min()         # 1.0
+```
+
+Casting converts each element to a different numeric type.
+The number of elements stays the same, even when the target
+type is wider or narrower:
+
+```mojo
+var a = SIMD[DType.float32, 4](1.0, 2.0, 3.0, 4.0)
+var ints = a.cast[DType.int32]()    # [1, 2, 3, 4]
+var wide = a.cast[DType.float64]()  # 4 × Float64
+var tiny = a.cast[DType.float16]()  # 4 × Float16
+```
+
+Clamping restricts elements to a range. Both bounds are
+inclusive, so the result can equal the bounds:
+
+```mojo
+# max(min(self, upper_bound), lower_bound)
+a.clamp(1.5, 3.5)     # [1.5, 2.0, 3.0, 3.5]
+```
+
+`min()` and `max()` are free functions, not methods:
+
+```mojo
+min(a, b)              # Element-wise minimum
+max(a, b)              # Element-wise maximum
+```
+
+## `Scalar` {#scalar}
+
+A `SIMD` with one element is called a `Scalar`. Every fixed-width numeric name
+in Mojo is a `Scalar` alias:
+
+```mojo
+# These are all the same type
+var a: Scalar[DType.float32] = 3.14
+var b: Float32 = 3.14
+var c: SIMD[DType.float32, 1] = 3.14
+```
+
+When you write `Float32`, you're writing `Scalar[DType.float32]`, which is
+`SIMD[DType.float32, 1]`.
+
+## `DType` specifications {#dtype}
+
+`DType` names the kind of values stored in a `SIMD` vector, such as
+`float32`, `int64`, or `uint8`. A `DType` doesn't store data. It tells
+`SIMD` how to interpret each element and which operations to use:
+
+```mojo
+# DType selects a number kind, such as 32-bit float or 8-bit integer
+var x: SIMD[DType.float32, 4] = ...  # four 32-bit floats
+var y: SIMD[DType.int8, 16] = ...    # sixteen 8-bit ints
+```
+
+Use `DType` to write functions that work across numeric kinds:
+
+```mojo
+# Double a value. The cast is required because the generic type
+# parameter can't be used directly with the literal `2`.
+def double[T: DType](x: Scalar[T]) -> Scalar[T]:
+    return x * UInt8(2).cast[T]()
+```
+
+### Integer DType specifications
+
+| Signed         | Width   | Unsigned        | Width   |
+|----------------|---------|-----------------|---------|
+| `DType.int8`   | 8-bit   | `DType.uint8`   | 8-bit   |
+| `DType.int16`  | 16-bit  | `DType.uint16`  | 16-bit  |
+| `DType.int32`  | 32-bit  | `DType.uint32`  | 32-bit  |
+| `DType.int64`  | 64-bit  | `DType.uint64`  | 64-bit  |
+| `DType.int128` | 128-bit | `DType.uint128` | 128-bit |
+| `DType.int256` | 256-bit | `DType.uint256` | 256-bit |
+| `DType.index`  | Machine | `DType.uint`    | Machine |
+
+### Floating-point DType specifications
+
+| Value                   | Selects                    |
+|-------------------------|----------------------------|
+| `DType.float16`         | 16-bit IEEE half           |
+| `DType.bfloat16`        | 16-bit brain float         |
+| `DType.float32`         | 32-bit IEEE single         |
+| `DType.float64`         | 64-bit IEEE double         |
+| `DType.float8_e4m3fn`   | 8-bit (4-exp, 3-mantissa)  |
+| `DType.float8_e4m3fnuz` | 8-bit, unsigned zero       |
+| `DType.float8_e5m2`     | 8-bit (5-exp, 2-mantissa)  |
+| `DType.float8_e5m2fnuz` | 8-bit, unsigned zero       |
+| `DType.float8_e8m0fnu`  | 8-bit (8-exp, no mantissa) |
+| `DType.float4_e2m1fn`   | 4-bit (2-exp, 1-mantissa)  |
+
+### Other DType specifications
+
+| Value           | Selects                     |
+|-----------------|-----------------------------|
+| `DType.bool`    | Boolean (1-bit)             |
+| `DType.invalid` | no valid DType has been set |
+
+## Integers
+
+### The unsized `Int` type {#int}
+
+`Int` is Mojo's default integer. When you write `var x = 42`,
+you assign an `Int`. It's the type behind loop counters, collection
+indices, and `len()` results:
+
+```mojo
+from std.reflection import reflect
+
+def main():
+    var a: Int = 42
+
+    comptime a_type = reflect[type_of(a)]().name()
+
+    print("a:", a_type) # a: Int
+```
+
+`Int` matches the hardware's native word size. It isn't built on `SIMD`.
+Under the hood it wraps the machine's index register directly, which is why
+it's the natural choice for counting and addressing.
+
+`Int` is 64-bit on most platforms today, but that isn't guaranteed. Code
+that depends on a specific width should use a sized type.
+
+`Int` conforms to
+`Intable`, `Writable`, `Hashable`, `Comparable`, and
+`TrivialRegisterPassable`.
+
+### Integer-type bounds and bit width
+
+`Int` exposes its bounds and bit width as compile-time constants:
+
+| Constant       | Value                           |
+|----------------|---------------------------------|
+| `Int.BITWIDTH` | System word size (typically 64) |
+| `Int.MAX`      | Maximum representable value     |
+| `Int.MIN`      | Minimum representable value     |
+
+```mojo
+print(Int.BITWIDTH)   # 64 on most platforms
+print(Int.MIN)        # -9223372036854775808
+print(Int.MAX)        # 9223372036854775807
+```
+
+All integer types offer `MAX` and `MIN` as well:
+
+| Constant             | Value                       |
+|----------------------|-----------------------------|
+| `<Integer-Type>.MAX` | Maximum representable value |
+| `<Integer-Type>.MIN` | Minimum representable value |
+
+For example:
+
+```mojo
+print(UInt.MIN)       # 0
+print(UInt.MAX)       # 18446744073709551615
+
+print(UInt8.MAX)      # 255
+print(Int8.MIN)       # -128
+print(UInt32.MAX)     # 4294967295
+print(Int32.MIN)     # -2147483648
+
+print(SIMD[DType.int16, 1].MIN)  # -32768
+```
+
+### `UInt` {#uint}
+
+`UInt` is a machine-width unsigned integer. Unlike `Int`, it's built on
+`SIMD`:
+
+```mojo
+from std.reflection import reflect
+
+def main():
+    var b: UInt = 42
+
+    comptime b_type = reflect[type_of(b)]().name()
+
+    print("b:", b_type) # b: SIMD[DType.uint, 1]
+```
+
+### Sized integer types
+
+Sized integer types have a declared width that stays the same on every
+platform.
+
+| Signed   | Width   | Unsigned  | Width   |
+|----------|---------|-----------|---------|
+| `Int8`   | 8-bit   | `UInt8`   | 8-bit   |
+| `Int16`  | 16-bit  | `UInt16`  | 16-bit  |
+| `Int32`  | 32-bit  | `UInt32`  | 32-bit  |
+| `Int64`  | 64-bit  | `UInt64`  | 64-bit  |
+| `Int128` | 128-bit | `UInt128` | 128-bit |
+| `Int256` | 256-bit | `UInt256` | 256-bit |
+
+Each is an alias for a one-element `SIMD`. For example,
+`Int32` is `Scalar[DType.int32]`, which is
+`SIMD[DType.int32, 1]`. The unsigned types follow the same
+pattern.
+
+Because these are built on `SIMD`, they share its traits:
+`TrivialRegisterPassable`, `Hashable`, `Comparable`,
+`Writable`.
+
+**Using sized vs unsized integers**:
+
+- Use `Int` and `UInt` for counts, indices, loop bounds, and
+  general-purpose math. It's what the standard library expects and returns.
+
+- Use sized integers when width matters: file layouts, pixel data, hardware
+registers, or any context where the number of bits is part of the contract.
+
+- Use named types for scalar work and `SIMD` when you need vectors.
+
+```mojo
+var general = 42                         # Int (machine width)
+var small: UInt8 = 255
+var large: Int64 = -9_000_000_000
+var pair = SIMD[DType.uint32, 2](10, 20)  # a 2-element vector
+```
+
+### `Byte` {#byte}
+
+`Byte` is another name for `UInt8`:
+
+```mojo
+var buf: List[Byte] = [0x48, 0x65, 0x6C, 0x6C, 0x6F]
+```
+
+Use `Byte` when the data represents raw bytes rather than
+small numbers. It's the element type used in many I/O and
+memory interfaces.
+
+## Floating point types
+
+Mojo does not provide a `Float` type analogous to `Int`. Instead it
+provides numerous fixed-width floating-point types. Each is an alias for a
+one-element `SIMD`:
+
+<!-- markdownlint-disable MD013 -->
+
+| Type              | Bits      | Standard          | What it is                                    |
+|-------------------|-----------|-------------------|-----------------------------------------------|
+| `Float16`         | 16        | IEEE 754 binary16 | `Scalar[DType.float16]`                       |
+| `Float32`         | 32        | IEEE 754 binary32 | `Scalar[DType.float32]`                       |
+| `Float64`         | 64        | IEEE 754 binary64 | `Scalar[DType.float64]`                       |
+| `BFloat16`        | 16        | Brain float       | `Scalar[DType.bfloat16]`                      |
+| `Float4_e2m1fn`   | 4         | OCP MX            | `Scalar[DType.float4_e2m1fn]`                 |
+| `Float8_e3m4`     | 8         | --                | `Scalar[DType.float8_e3m4]`                   |
+| `Float8_e4m3fn`   | 8         | OFP8              | `Scalar[DType.float8_e4m3fn]`                 |
+| `Float8_e4m3fnuz` | 8         | --                | `Scalar[DType.float8_e4m3fnuz]`               |
+| `Float8_e5m2`     | 8         | OFP8              | `Scalar[DType.float8_e5m2]`                   |
+| `Float8_e5m2fnuz` | 8         | --                | `Scalar[DType.float8_e5m2fnuz]`               |
+| `Float8_e8m0fnu`  | 8         | OFP8 §5.4         | `Scalar[DType.float8_e8m0fnu]`                |
+| `FloatLiteral`    | arbitrary | --                | Compile-time only. Materializes to `Float64`. |
+
+<!-- markdownlint-enable MD013 -->
+
+:::note
+
+- IEEE-754 is the IEEE Standard for Floating-Point Arithmetic.
+- OFP8 is an 8-bit Floating Point Specification, which creates
+  a standard for representing floating-point numbers in a
+  compact format.
+:::
+
+### `Float16` {#float16}
+
+16-bit IEEE 754 half-precision. The motivation is throughput and
+memory bandwidth: half the storage of `Float32` means twice the
+values fit in registers and cache, and GPU tensor cores process it
+at higher throughput. 1 sign bit, 5 exponent bits, 10 mantissa bits.
+
+The narrower exponent range limits dynamic range to roughly ±65504.
+Values beyond that overflow to infinity; very small values underflow
+to zero. This makes `Float16` workable for inference but less ideal
+for training, where gradients can span many orders of magnitude. Use
+`BFloat16` for training instead.
+
+`Float16` is natively accelerated on GPUs. On CPU, it requires ARM FP16
+extension or Intel AVX-512 FP16. Other CPUs fall back to software emulation.
+
+### `Float32` {#float32}
+
+32-bit IEEE 754 single-precision. 23 mantissa bits give roughly 7
+significant decimal digits; 8 exponent bits cover a range from
+roughly 1e-38 to 3.4e38. 1 sign bit, 8 exponent bits, 23 mantissa
+bits.
+
+`Float32` is natively accelerated on all GPU and CPU architectures. Use for
+general numeric work and GPU computation.
+
+### `Float64` {#float64}
+
+64-bit IEEE 754 double-precision. Use when 7 significant decimal
+digits aren't enough: scientific simulations, financial calculations,
+or accumulated sums where rounding errors compound. 52 mantissa bits
+give roughly 15-16 significant decimal digits. 1 sign bit, 11
+exponent bits, 52 mantissa bits.
+
+### `BFloat16` {#bfloat16}
+
+16-bit brain floating-point developed by Google Brain for deep
+learning. 1 sign bit, 8 exponent bits, 7 mantissa bits.
+
+Google Brain designed it to solve a specific problem with `Float16`
+in training: `Float16`'s 5 exponent bits create a dynamic range too
+narrow for neural networks. Gradients overflow and underflow.
+`BFloat16` matches `Float32`'s 8 exponent bits exactly, so values
+stay in range throughout forward and backward passes.
+
+The matching exponent range also makes `Float32`/`BFloat16`
+conversion cheap: just truncate or extend the mantissa, no remapping.
+This makes mixed-precision training feasible: compute in `BFloat16`
+for speed and memory savings, keep optimizer state in `Float32` for
+precision. That combination drove its wide adoption as a training
+format.
+
+Use it for ML training and inference on supported hardware. The
+7-bit mantissa is too imprecise for scientific or financial work.
+
+`BFloat16` is not supported on all platforms. It's currently unavailable on
+Apple Silicon. Natively accelerated on NVIDIA Ampere (A100) and later,
+AMD MI300X and later, and Intel CPUs with AMX or AVX-512 BF16
+(Sapphire Rapids and later).
+
+### Low-precision types
+
+Fewer bits per value means more values per register, less memory
+bandwidth, and higher throughput on specialized hardware. You trade
+mantissa precision for the ability to fit larger models or larger
+batches on the same silicon. These formats follow the OCP
+Microscaling Formats (MX) and OFP8 specifications.
+
+There is no single `Float8` type in Mojo. It's a colloquial umbrella for
+the six 8-bit floating-point variants: `Float8_e3m4`, `Float8_e4m3fn`,
+`Float8_e4m3fnuz`, `Float8_e5m2`, `Float8_e5m2fnuz`, and `Float8_e8m0fnu`.
+Each is a distinct `Scalar` alias with its own exponent/mantissa layout and
+set of supported operations.
+
+`Float8` formats are used in machine learning workloads where memory
+bandwidth matters more than precision. These types require GPU hardware for
+efficient execution.
+
+`Float8` types can't convert to or from any integer type on any
+platform, including `Bool`. They only convert between floating-point
+types: `Float16`, `Float32`, `Float64`, `BFloat16`, and other
+supported `Float8` variants.
+
+### Floating point naming conventions
+
+The suffixes encode special properties of each format:
+
+- **`fn`**: finite -- no infinity or negative infinity encodings
+- **`uz`**: unsigned zero -- no negative zero encoding
+- **`fnu`**: finite, no sign, unsigned zero
+
+The name encodes the layout: `e4m3` means 4 exponent bits and
+3 mantissa bits. `fn` means no infinities, and `uz` means
+unsigned zero.
+
+For example, `Float4_e2m1fn` is a 4-bit format with 2 exponent
+bits and 1 mantissa bit, defined by the Open Compute MX
+specification.
+
+:::note Vendor naming
+`Float8_e4m3fn` is the same format across vendors, but named
+differently: Mojo, PyTorch, JAX, and LLVM call it `e4m3fn`, while
+OCP, NVIDIA CUDA, and AMD ROCm call it `e4m3`.
+:::
+
+### Hardware requirements
+
+Support varies significantly by type and operation. None of these
+types support arithmetic at runtime on CPU.
+
+**Arithmetic support** (tested on ARM CPU, NVPTX sm_90a, AMDGCN gfx942):
+
+| Type              | Comptime | CPU | NVPTX | AMDGCN |
+|-------------------|----------|-----|-------|--------|
+| `Float8_e4m3fn`   | ✅       | ❌  | ✅    | ❌     |
+| `Float8_e4m3fnuz` | ✅       | ❌  | ❌    | ❌     |
+| `Float8_e5m2`     | ✅       | ❌  | ✅    | ❌     |
+| `Float8_e5m2fnuz` | ✅       | ❌  | ❌    | ❌     |
+| `Float8_e3m4`     | ❌       | ❌  | ❌    | ❌     |
+
+NVPTX support for `Float8_e4m3fn` and `Float8_e5m2` is emulated by
+the compiler: operands are upconverted to a wider type, the operation
+runs in that wider type, and the result is downconverted back. There
+are no native fp8 arithmetic instructions.
+
+- `Float8_e3m4` has no arithmetic support at any stage, including
+  comptime. Most of its conversions work only at comptime.
+
+- `Float4_e2m1fn` requires NVIDIA Blackwell (B200) or later.
+
+- `Float32` and `Float64` are the portable alternatives for CPU and
+  cross-platform code.
+
+### IEEE 754 special values
+
+IEEE 754 floating-point types support special values:
+
+| Value  | Meaning           |
+|--------|-------------------|
+| `inf`  | Positive infinity |
+| `-inf` | Negative infinity |
+| `nan`  | Not a number      |
+| `-0.0` | Negative zero     |
+
+Access these via `SIMD` constants:
+
+```mojo
+var x = Float32.MAX           # largest value
+var y = Float32.MIN           # smallest value
+var z = Float32.MAX_FINITE    # largest finite value
+var w = Float32.MIN_FINITE    # smallest (most negative) finite value
+```
+
+`MAX` and `MIN` may be infinite for floating-point types.
+`MAX_FINITE` and `MIN_FINITE` give the largest and smallest
+representable finite values.
+
+Low-precision formats marked `fn` (finite) don't have infinity
+encodings. Formats marked `uz` (unsigned zero) don't have negative
+zero.
+
+### Floating point precision
+
+Floating-point arithmetic introduces rounding errors. Two values
+that look equal after computation may differ by a tiny amount.
+Comparing with `==` can give unexpected results:
+
+```mojo
+# Compile-time: exact result
+comptime exact = 3.0 * (4.0 / 3.0 - 1.0)
+
+# Force runtime: rounding error appears
+var three = 3.0
+var finite = three * (4.0 / three - 1.0)
+
+print(exact, finite)
+# 1.0 0.99999999999999978
+print(exact == finite) # False
+```
+
+For approximate comparisons, check whether the difference is within
+an acceptable tolerance with `std.math`'s `is_close()`.
+
+## Numeric literals
+
+Mojo has two compile-time literal types: `IntLiteral` and
+`FloatLiteral`. They support arbitrary precision and exist
+only during compilation.
+
+### IntLiteral
+
+When you write a bare integer like `42`, its type is
+`IntLiteral`. It doesn't become a concrete type until it's
+used in a context that requires one:
+
+```mojo
+var a: Int = 42            # Becomes Int
+var b: Int8 = 42           # Becomes Int8
+var c: Float32 = 42        # Becomes Float32
+var d: UInt64 = 1_000_000  # Becomes UInt64
+```
+
+`IntLiteral` is arbitrary-precision at compile time. It has no fixed bit
+width, so compile-time calculations won't overflow or lose precision. At
+runtime, `IntLiteral` values materialize to `Int`:
+
+```mojo
+# Compile-time: arbitrary precision, no overflow
+comptime big = 2 ** 200
+
+# Runtime: materializes to Int (word-sized)
+var x = 42  # IntLiteral 42 materializes to Int
+```
+
+`IntLiteral` supports all arithmetic and comparison operators at
+compile time.
+
+### FloatLiteral
+
+When you write a decimal constant like `3.14`, its type is
+`FloatLiteral`. It doesn't become a concrete type until it's
+used in a context that requires one:
+
+```mojo
+var x: Float32 = 3.14     # Becomes Float32
+var y: Float64 = 3.14     # Becomes Float64
+var z: BFloat16 = 0.5     # Becomes BFloat16
+```
+
+`FloatLiteral` provides compile-time constants for special values:
+
+| Constant                         | Value             |
+|----------------------------------|-------------------|
+| `FloatLiteral.nan`               | Not a number      |
+| `FloatLiteral.infinity`          | Positive infinity |
+| `FloatLiteral.negative_infinity` | Negative infinity |
+| `FloatLiteral.negative_zero`     | Negative zero     |
+
+Use `is_nan()` and `is_neg_zero()` to test for these values, since
+`nan == nan` is `False` and `negative_zero == 0.0` is `True`.
+
+### Literals in expressions
+
+Literals adapt to the types around them. When a literal appears
+next to a typed value, it takes on that value's type:
+
+```mojo
+var x = Float32(1.0)
+var y = x * 0.5           # 0.5 becomes Float32
+var z = x + 2             # 2 becomes Float32
+```
+
+This isn't implicit conversion. The literal doesn't have a
+runtime type yet. It becomes whatever type the context
+requires.
+
+Variables have a fixed type and never convert implicitly.
+
+## Explicit conversions
+
+Converting between numeric types always requires an explicit
+constructor or cast. Mojo does not perform implicit numeric
+conversions between variables:
+
+```mojo
+var i = 42                        # Int
+var f = Float32(i)                # Int → Float32
+var u = UInt64(i)                 # Int → UInt64
+var narrow = Int8(i)              # Int → Int8
+```
+
+Between `SIMD`-based types, use `.cast[]`:
+
+```mojo
+var a = Float32(3.14)
+var b = a.cast[DType.int32]()     # Float32 → Int32
+var c = a.cast[DType.float64]()   # Float32 → Float64
+```
+
+Between `Int` and `SIMD`-based types, use constructors:
+
+```mojo
+var i = 42                        # Int
+var s = Int64(i)                  # Int → Int64
+var back = Int(s)                 # Int64 → Int
+```
+
+### Why conversions are explicit
+
+Implicit numeric conversions can hide precision loss and sign
+changes. For example, `Int64(-1)` becoming
+`UInt64(18446744073709551615)` is a bug, not a convenience.
+Mojo requires an explicit conversion so the intent is clear.
+
+Literals are the exception. A literal like `42` can become
+`Float32(42.0)` because the compiler performs the conversion
+at compile time and can guarantee it is exact.
+
+Variables are different. A value like `x: Int = 300` becoming
+an `Int8` would silently lose data, so Mojo requires you to
+write the conversion explicitly.
+
+## Sharp edges
+
+### `Int` width is platform-dependent
+
+`Int` is 64-bit on most platforms today, but it's defined as
+machine width. Code that assumes 64-bit `Int` will break on
+32-bit targets. Use `Int64` when you need a fixed width.
+
+### Integer arithmetic wraps on overflow
+
+Integer arithmetic wraps on overflow using two's complement:
+
+- Signed overflow wraps into the negative range. Adding `1` to
+  `Int8` value `127` produces `-128`.
+- Unsigned overflow wraps to zero. Adding `1` to `UInt8` value
+  `255` produces `0`.
+
+Mojo doesn't trap on overflow. If you need overflow detection,
+check the operands before the operation.
+
+```mojo
+var x = Int8(127)
+var y = x + Int8(1)    # -128 (wraps)
+```
+
+### Float-to-int truncates toward zero
+
+```mojo
+var x = Int(Float32(3.9))    # 3, not 4
+var y = Int(Float32(-3.9))   # -3, not -4
+```
+
+### NaN comparisons always return `False`
+
+This includes `NaN == NaN`. It affects SIMD masks and
+conditional selection:
+
+```mojo
+var x = Float32.MAX * 2.0    # inf
+var nan = x - x              # NaN
+print(nan == nan)            # False
+```
+
+### 128-bit and 256-bit integers are software-emulated
+
+`Int128`, `Int256`, `UInt128`, and `UInt256` exist but have
+limited hardware support on most platforms. Avoid them in
+performance-critical code without benchmarking.
+
+### Float8 types require GPU hardware
+
+The `Float8` variants are designed for ML workloads on GPUs
+with native support. On CPUs, operations on these types may
+be emulated or unavailable.
+
+---
+
+## Mojo operator reference
+
+## Precedence table
+
+<!-- Source: ParserBase.h Precedence enum and -->
+<!-- ParserExprs.cpp InfixInfo::get -->
+
+Operator precedence and associativity. Higher-precedence operators bind
+tighter. Unless noted, operators associate left to right.
+
+### From highest to lowest precedence
+
+| Precedence | Operators                   | Notes                             |
+|------------|-----------------------------|-----------------------------------|
+| 1          | `()` `[]` `.`               | Call, subscript, attribute        |
+| 2          | `**`                        | Exponentiation, right-associative |
+| 3          | `+x` `-x` `~x`              | Unary prefix                      |
+| 4          | `*` `@` `/` `//` `%`        | Multiplicative                    |
+| 5          | `+` `-`                     | Additive (addition, subtraction)  |
+| 6          | `<<` `>>`                   | Bitwise shift (left, right)       |
+| 7          | `&`                         | Bitwise AND                       |
+| 8          | `^`                         | Bitwise XOR (not transfers)       |
+| 9          | `\|`                        | Bitwise OR                        |
+| 10         | `==` `!=` `<` `<=` `>` `>=` | Comparisons, chainable            |
+| 10         | `in` `not in`               | Membership, chainable             |
+| 10         | `is` `is not`               | Identity, chainable               |
+| 11         | `not`                       | Boolean NOT, prefix               |
+| 12         | `and`                       | Boolean AND, short-circuits       |
+| 13         | `or`                        | Boolean OR, short-circuits        |
+| 14         | `if`-`else`                 | Ternary, right-associative        |
+| 15         | `:=`                        | Walrus operator                   |
+
+_Prefix operators_: positive (`+x`), negative (`-x`), bitwise NOT
+complement (`~x`)
+
+_Multiplicative operators_: times (`*`), matrix multiplication (`@`),
+divide (`/`, integer types round towards zero), truncating divide (`//`,
+integer types round towards negative infinity), modulo (`%`).
+
+_Comparison operators_: equality (`==`), inequality (`!=`), less-than (`<`),
+less-than-or-equal (`<=`), greater-than (`>`), greater-than-or-equal (`>=`)
+
+:::note
+Assignment operators (`=` `+=` `-=` `*=` `/=` `//=` `%=`
+`**=` `@=` `&=` `\|=` `^=` `<<=` `>>=`) are statements,
+not expressions. They are not part of expression precedence.
+:::
+
+## Right-associative operators
+
+Most operators are left-associative. For example, `a - b + c` groups as
+`(a - b) + c`. Two infix operators are right-associative: exponentiation
+(`a ** b`) and Mojo's ternary `if`-`else`.
+
+### Exponentiation (`**`)
+
+```mojo
+2 ** 3 ** 4
+```
+
+groups as
+
+```mojo
+2 ** (3 ** 4)
+```
+
+Equivalent to `pow(2, 81)`. In Mojo `pow(a, b)` and `a ** b` are
+interchangeable.
+
+### Ternary (`if`-`else`)
+
+```mojo
+"low" if value < 10 else "high" if value > 100 else "mid"
+```
+
+groups as
+
+```mojo
+"low" if value < 10 else ("high" if value > 100 else "mid")
+```
+
+## Chaining operations
+
+All comparison operators can be chained:
+
+```mojo
+a < b < c        # equivalent to: (a < b) and (b < c)
+a == b == c      # equivalent to: (a == b) and (b == c)
+a < b == c       # equivalent to: (a < b) and (b == c)
+a < b <= c != d  # equivalent to: (a < b) and (b <= c) and (c != d)
+```
+
+Each intermediate value is evaluated once.
+
+- Chaining only applies between operators at the same precedence. `2 ** 3
+  == 8` isn't a chain. It evaluates as `(2 ** 3) == 8` since
+  exponentiation binds tighter than comparison.
+
+- Comparison, membership, and identity operators share the same
+  precedence and chain together. `5 != a < b in c` is valid and evaluates
+  as `(5 != a) and (a < b) and (b in c)`.
+
+## Implementing operators for custom types
+
+Mojo doesn't limit operators use to built-in types. Each operator has
+a set of dunder methods your custom types can implement. Once added,
+you can use operators in code instead of calling methods.
+
+### Infix operator method types
+
+Each infix operator has up to three forms that decide which operand's
+method will run. For `a op b`:
+
+- _Forward_: Mojo tries the forward method first. `a + b` calls
+  `a.__add__(b)`.
+- _Reversed_: If the forward method doesn't exist or can't handle `b`'s
+  type, Mojo falls back to the reversed method on `b`. `a + b` calls
+  `b.__radd__(a)`.
+- _In-place_: Called for compound assignment. `a += b` calls
+  `a.__iadd__(b)`.
+
+For example, if `a` uses a `CustomVector` type:
+
+- `a + 5`: calls the forward method `a.__add__(5)`
+- `5 + a`: Int doesn't know custom types. Falls back to the reversed
+  method, `a.__radd__(5)`
+- `a += 5`: calls the in-place `a.__iadd__(5)` method
+
+### Arithmetic
+
+Implement the methods directly on your struct to use `instance OP
+instance`, `instance OP= instance`.
+
+| Operator | Forward        | Reversed          | In-place          |
+|----------|----------------|-------------------|-------------------|
+| `+`      | `__add__()`    | `__radd__()`      | `__iadd__()`      |
+| `-`      | `__sub__()`    | `__rsub__()`      | `__isub__()`      |
+| `*`      | `__mul__()`    | `__rmul__()`      | `__imul__()`      |
+| `/`      | `__truediv__`  | `__rtruediv__()`  | `__itruediv__()`  |
+| `//`     | `__floordiv__` | `__rfloordiv__()` | `__ifloordiv__()` |
+| `%`      | `__mod__()`    | `__rmod__()`      | `__imod__()`      |
+| `**`     | `__pow__()`    | `__rpow__()`      | `__ipow__()`      |
+| `@`      | `__matmul__()` | `__rmatmul__()`   | `__imatmul__()`   |
+
+`__pow__()` and `__ipow__()` accept an optional third argument
+  (modulus).
+
+In-place operators are syntactic sugar for the operator applied to the
+variable with assignment:
+
+```mojo
+x += y     # x = x + y
+x -= y     # x = x - y
+x *= y     # x = x * y
+x /= y     # x = x / y
+x //= y    # x = x // y
+x %= y     # x = x % y
+x **= y    # x = x ** y
+x @= y     # x = x @ y
+```
+
+**Traits:**
+
+[`Powable`](/docs/std/math/math/Powable/) requires `__pow__()`, doesn't
+provide a default.
+
+### Bitwise
+
+Implement the methods directly on your struct to use `a OP
+b`, `a OP= b`.
+
+| Operator | Forward        | Reversed        | In-place        |
+|----------|----------------|-----------------|-----------------|
+| `&`      | `__and__()`    | `__rand__()`    | `__iand__()`    |
+| `\|`     | `__or__()`     | `__ror__()`     | `__ior__()`     |
+| `^`      | `__xor__()`    | `__rxor__()`    | `__ixor__()`    |
+| `<<`     | `__lshift__()` | `__rlshift__()` | `__ilshift__()` |
+| `>>`     | `__rshift__()` | `__rrshift__()` | `__irshift__()` |
+
+Bitwise operators are typically implemented on integer and flag types. Like
+arithmetic operators, in-place bitwise operators are syntactic sugar for
+the operator applied to the variable with assignment:
+
+```mojo
+x &= y     # x = x & y
+x |= y     # x = x | y
+x ^= y     # x = x ^ y
+x <<= y    # x = x << y
+x >>= y    # x = x >> y
+```
+
+### Unary operators
+
+Implement the methods directly on your struct to support
+prefix operators like `-x`, `+x`, and `~x`.
+
+| Operator | Method         |
+|----------|----------------|
+| `-x`     | `__neg__()`    |
+| `+x`     | `__pos__()`    |
+| `~x`     | `__invert__()` |
+
+Mojo offers one postfix unary operator.
+
+| Operator | Method                       |
+|----------|------------------------------|
+| `x^`     | Compiler implementation only |
+
+Use the `^` sigil for ownership transfer. `consume(a^)` transfers
+ownership of `a` to the `consume` function.
+
+- If the `consume` argument uses the `var` convention, the transfer moves
+  the value.
+- If not, the value is copied and the original is left intact.
+
+After transfer, the `a` variable is uninitialized. You can't re-use the
+name until it's assigned a new value.
+
+```mojo
+consume(a^) # transfers ownership of `a`'s value, leaving `a` uninitialized
+```
+
+**Disambiguation:** `^` means XOR when followed by a value, and transfer
+when used directly after a variable name.
+
+```mojo
+a ^ b   # XOR
+a^      # transfer
+```
+
+### Comparison operators
+
+Implement the methods directly on your struct to use
+`a OP b`.
+
+| Operator | Method     | Trait        | Default? |
+|----------|------------|--------------|----------|
+| `==`     | `__eq__()` | `Equatable`  | Yes      |
+| `!=`     | `__ne__()` | `Equatable`  | Yes      |
+| `<`      | `__lt__()` | `Comparable` | No       |
+| `<=`     | `__le__()` | `Comparable` | Yes      |
+| `>`      | `__gt__()` | `Comparable` | Yes      |
+| `>=`     | `__ge__()` | `Comparable` | Yes      |
+
+**Traits:**
+
+[`Equatable`](/docs/std/builtin/comparable/Equatable/) provides
+`__eq__()` if all your struct's fields conform to `Equatable` using
+pairwise field comparison. `__ne__()` derives from `__eq__()`.
+
+[`Comparable`](/docs/std/builtin/comparable/Comparable/) provides
+`__le__()`, `__gt__()`, and `__ge__()`, all derived from `__lt__()` and
+`__eq__()`. You implement `__lt__()`.
+
+`Comparable` refines `Equatable`, so conforming to
+`Comparable` requires both traits. If all your fields are
+`Equatable`, you implement `__lt__()` at a minimum.
+
+### Identity and membership operators
+
+Implement the methods directly on your struct to use `a OP b`.
+
+| Operator | Method           | Trait          | Default? |
+|----------|------------------|----------------|----------|
+| `is`     | `__is__()`       | `Identifiable` | No       |
+| `is not` | `__isnot__()`    | `Identifiable` | Yes      |
+| `in`     | `__contains__()` | —              | No       |
+| `not in` | `__contains__()` | —              | No       |
+
+`x in collection` calls `collection.__contains__(x)`. The method is on
+the **container**, not the element. `not in` calls the same method and
+negates the result.
+
+`is` tests object identity, not equality. Stdlib types that implement
+it include `ArcPointer`, `PythonObject`, and `Optional` (for `is None`
+checks).
+
+**Traits:**
+
+[`Identifiable`](/docs/std/builtin/identifiable/Identifiable/) requires
+`__is__()`. `__isnot__()` is provided (calls `not (self is rhs)`).
+
+### Subscript operators
+
+Implement the methods directly on your struct to use `a[key]`
+reads and `a[key] = b` assigns.
+
+| Operation                | Method          |
+|--------------------------|-----------------|
+| `obj[key]` (read)        | `__getitem__()` |
+| `obj[key] = val` (write) | `__setitem__()` |
+
+Both accept variadic arguments (for multi-dimensional indexing).
+
+---
+
+## Mojo simple statements reference
+
+<!-- VERIFIED: ParserStmts.cpp parseStmt(), parseImportStmt(),
+     parseFromImportStmt(), parseReturnStmt(), parseRaiseStmt(),
+     parseAssertStmt(), parseBreakOrContinueStmt(), parseVarStmt(),
+     parseComptimeCompoundStmt() -->
+
+A *simple statement* performs a single action on one logical line. Multiple
+simple statements can share a line when separated by semicolons.
+
+## Import statements
+
+*Import statements* expose modules and their members to the current scope.
+Imports can appear at module level, inside functions, or inside other scopes.
+They don't need to appear at the top of a file.
+
+```mojo
+
+from collections import Dict, Set
+```
+
+### Module imports
+
+```mojo
+
+```
+
+### Selective imports
+
+```mojo
+from math import sqrt, pi
+from collections import Dict as Dictionary   # Alias the imported name
+```
+
+### Wildcard imports
+
+```mojo
+from math import *  # Imports all public names from the math module
+```
+
+## Expression statements
+
+An *expression statement* evaluates an expression for its side effects.
+When the result is unused (other than `None`), the compiler warns:
+
+```mojo
+x + y              # Warning: result is unused
+```
+
+The compiler does not warn when the result is `None`, which is common for
+functions called for their side effects:
+
+```mojo
+print("hello")     # Side effect: prints
+trigger()          # Side effect: called for behavior
+```
+
+Assign the result to `_` to explicitly discard it and silence the warning:
+
+```mojo
+_ = update()       # Explicitly discard the result
+```
+
+Expressions are not valid at module scope or in struct bodies outside
+of methods.
+
+## Assignment statements
+
+*Assignment statements* bind values to names with `=`:
+
+```mojo
+var x = 42
+var name = "Alice"
+var result = compute()
+```
+
+Using `var` is optional when the type can be inferred from the initializer,
+as in Python, but is discouraged. Explicit `var` (and `ref`) declarations
+show your intent to declare a new variable and are easy to scan.
+
+```mojo
+x = 42          # Type inferred as Int
+name = "Alice"  # Type inferred as String
+```
+
+### Annotated assignment
+
+Annotated assignments bind a type to a name, with an optional initializer:
+
+```mojo
+x: Int = 42
+name: String = "Alice"
+values: List[Float64] = []
+```
+
+A `var` without both a type and an initializer is an error:
+
+```mojo
+var x        # Error: declaration must have either a type or an initializer
+var x: Int   # OK: type provided, value uninitialized
+var x = 42   # OK: type inferred from initializer
+```
+
+You don't need to type your variables, but it's a good practice to add type
+annotations for readability, to show intent, and to catch errors:
+
+```mojo
+var x: Int16 = 42
+var name: String = "Alice"
+```
+
+When types are complex and long to write, you can use comptime aliases to
+keep your code concise:
+
+```mojo
+comptime Vec3 = List[Float64]
+var position: Vec3 = [0.0, 0.0, 0.0]
+```
+
+### Multiple assignment
+
+```mojo
+x = y = z = 0        # Assign the same value to multiple names
+a, b = 1, 2          # Destructuring assignment
+(a, b) = (1, 2)      # Equivalent destructuring, not "assign tuple to tuple"
+```
+
+### Augmented assignment
+
+Augmented assignment is syntactic sugar that combines an operation with
+assignment. The left-hand side is evaluated once:
+
+```mojo
+x += 5       # x = x + 5
+x -= 2       # x = x - 2
+x *= 3       # x = x * 3
+x /= 4       # x = x / 4
+x //= 2      # x = x // 2
+x %= 7       # x = x % 7
+x **= 2      # x = x ** 2
+x @= m       # x = x @ m  (matrix multiply)
+x &= mask    # x = x & mask
+x |= flags   # x = x | flags
+x ^= bits    # x = x ^ bits
+x <<= 1      # x = x << 1
+x >>= 1      # x = x >> 1
+```
+
+## The pass statement
+
+`pass` is a no-op. Use it as a placeholder where a statement is required
+but no action is needed:
+
+```mojo
+def not_ready():
+    pass
+
+struct Empty:
+    pass
+```
+
+`pass` is required in empty function and struct bodies to avoid syntax
+errors.
+
+:::note Ellipsis statement
+`...` is functionally equivalent to `pass` as a statement in most code.
+Prefer `pass` to `...` for readability.
+
+In trait definitions, `...` marks a method as required. Limiting your
+use of `...` to traits makes it easier to determine its role when
+reading code that uses it.
+:::
+
+## The return statement
+
+`return` exits a function and optionally returns a value:
+
+```mojo
+def greet(name: String):
+    if not name:  # String is falsy when empty
+        return
+    print(t"Hello, {name}!")
+
+def get_value() -> Int:
+    return 42
+
+def early_exit(items: List[Int], target: Int) -> Bool:
+    for item in items:
+        if item == target:
+            return True
+    return False
+```
+
+A function without an explicit `return` implicitly returns `None`. `return`
+is only valid inside a function:
+
+```mojo
+return 42    # Error: cannot return from this context
+```
+
+## The raise statement
+
+`raise` raises an error. The function must be declared with `raises` or
+included within a `try` block:
+
+```mojo
+def validate(value: Int) raises -> Bool:
+    if value < 0:
+        raise Error("value must be non-negative")
+    return True
+
+def mitigate_risk():
+    try:
+        if not perform_some_test():
+            raise Error("test failed")
+        # perform risky work, knowing test passed
+    except e:
+        log(e)
+```
+
+To propagate errors from a `try` block, use a bare `raise` to re-raise the
+current error:
+
+```mojo
+try:
+    validate(value)
+    # perform work, knowing value is valid
+except e:
+    raise  # Re-raises current error to the next handler
+```
+
+Raising outside a valid context is an error:
+
+```mojo
+raise Error("oops")   # Error: cannot raise error in this context
+                      # (surround with try, or mark function as raises)
+
+raise                 # Error: no contextual error to reraise
+                      # (bare raise requires an active except block)
+```
+
+## Control flow with break and continue statements
+
+`break` exits the innermost loop immediately. `continue` skips to the
+next iteration:
+
+```mojo
+for x in range(10):
+    if x == 5:
+        break        # Stop at 5
+    if x % 2 == 0:
+        continue     # Skip even numbers
+    print(x)         # Prints 1, 3
+```
+
+## Compile-time declarations
+
+`comptime` declares a compile-time constant. The value must be
+computable at compile time:
+
+```mojo
+comptime SIZE = 256
+comptime MAX = SIZE * 2
+```
+
+`comptime` assignments are also used to declare associated types
+in traits, and can be used to create type aliases and trait composition
+aliases:
+
+```mojo
+comptime Permissive = ImplicitlyCopyable & ImplicitlyDestructible
+
+trait SimpleTrait (Writable):  # `SimpleTrait` refines `Writable`
+    comptime Element = Permissive  # Associated type with a comptime alias
+```
+
+---
+
+## Mojo struct declarations reference
+
+<!-- Sources:
+ParserStmts.cpp (parseStructStmt, parseVarStmt, parseClassStmt, parseSuite,
+parseComptimeCompoundStmt, parseAliasDeclStmtBody), DeclResolution.cpp
+(resolveSignature(StructDeclOp), resolveBody(StructDeclOp),
+resolveSignature(StructFieldOp), parseOptionalInheritanceList,
+verifyDerivedAncestorImplication, defSigDecorators), DeclResolver.cpp
+(resolveSignature dispatch, resolveBody dispatch), Signatures.cpp
+(TypeCheckeddefSignature::verifyFunctionNameBinding, checkSelfArgument,
+synthesizeFieldwiseInit), Signatures.h (ParsedArgument conventions,
+KWArgHandling, ParsedParamList), StructEmitter.cpp
+(synthesizeFieldwiseInit, synthesizeEmptyDtor,
+synthesizeEmptyMoveOrCopyInit, populateMoveCopy), StructEmitter.h,
+Traits.cpp (verifyAndBuildConformance,
+signatureResolveDefaultTraitdefStubs, checkMethodConstraintStatus),
+Traits.h, ASTDecl.h (traitConformanceLineage, computeSelfTypeForStruct,
+doesNominalTypeConformTo), ASTType.h, TokenKinds.def, ExprNode.h,
+MojoDiags.h, ParserBase.h
+-->
+
+A struct defines a custom type with fields and methods.
+Structs are value types: each variable holds its own
+independent copy rather than a reference to shared data.
+
+<!-- VERIFIED: From ParserStmts.cpp parseStructStmt() -->
+
+```text
+struct Name:
+    body
+
+struct Name[parameter-list]:
+    body
+
+struct Name(TraitA, TraitB):
+    body
+
+struct Name[parameter-list](TraitA, TraitB):
+    body
+```
+
+By convention, struct names use `PascalCase`. `Self` (capital S) refers to
+the struct's own type inside the body. `self` (lowercase) is a conventional
+argument name for the instance.
+
+```mojo
+from std.math import sqrt
+
+struct Point:
+    var x: Int
+    var y: Int
+
+    def __init__(out self, x: Int, y: Int):
+        self.x = x
+        self.y = y
+
+    def distance(self) -> Float64:
+        return sqrt(
+            Float64(self.x * self.x + self.y * self.y)
+        )
+
+def main():
+    p = Point(3, 4)
+    print(p.distance()) # 5.0
+```
+
+## Struct body elements
+
+A struct body can contain these elements:
+
+<!-- markdownlint-disable MD013 -->
+
+| Element               | Syntax                        | Role                       |
+|-----------------------|-------------------------------|----------------------------|
+| Field                 | `var name: Type`              | Instance data              |
+| Method                | `def name(self, ...)`         | Instance behavior          |
+| Static method         | `@staticmethod def name(...)` | Type-level behavior        |
+| Compile-time constant | `comptime name = value`       | Evaluated at compile time  |
+| Initializer           | `def __init__(out self, ...)` | Constructs an instance     |
+| Destructor            | `def __del__(deinit self)`    | Cleanup at end of lifetime |
+
+<!-- markdownlint-enable MD013 -->
+
+The most minimal struct uses `pass` for an empty body:
+
+```mojo
+struct ValidationError:
+    pass
+```
+
+Structs can't be nested inside other structs, traits, or functions:
+
+```mojo
+struct Outer:
+    struct Inner:  # Error: nested struct not supported here
+        pass
+```
+
+## Fields
+
+Declare each field with `var` and a type annotation. Fields can't have
+default values. All fields must be initialized in `__init__()`:
+
+```mojo
+struct Color:
+    var r: UInt8
+    var g: UInt8
+    var b: UInt8
+
+    def __init__(out self, r: UInt8, g: UInt8, b: UInt8):
+        (self.r, self.g, self.b) = (r, g, b)
+```
+
+Every field requires a type annotation:
+
+```mojo
+struct Unsound:
+    var x  # Error: struct field declaration must have a type
+```
+
+Field types must be concrete, not traits. A struct parameter
+establishes a concrete type at compile time:
+
+```mojo
+struct Unsound:
+    var item: Writable  # Error: dynamic traits not supported
+
+@fieldwise_init
+struct Sound[T: Writable & Copyable & ImplicitlyDestructible]:
+    var item: Self.T    # OK: concrete at compile time
+
+def main():
+    var g = Sound[Int](item=42)
+    print(g.item)       # 42
+```
+
+### Synthesized initializers
+
+The `@fieldwise_init` decorator synthesizes an `__init__()`
+from the struct's fields:
+
+```mojo
+@fieldwise_init
+struct Color:
+    var r: UInt8
+    var g: UInt8
+    var b: UInt8
+
+def main():
+    color = Color(255, 0, 0)
+    print(color.r, color.g, color.b)  # 255, 0, 0
+```
+
+Synthesis fails if any field is non-copyable and non-movable:
+
+```mojo
+@fieldwise_init
+struct Alpha:
+    var a: UInt8
+
+@fieldwise_init
+struct Color:
+    var r: UInt8
+    var g: UInt8
+    var b: UInt8
+    var alpha: Alpha
+
+    # Error: cannot synthesize fieldwise init because field
+    # 'alpha' has non-copyable and non-movable type 'Alpha'
+```
+
+### Recursive references
+
+Structs can't point to themselves. Mojo won't let you build a type that
+stores another instance of itself, even when nested within an Optional:
+
+```mojo
+struct Node:
+    var value: String
+    var next: Optional[Node]  # ERROR: Recursive reference
+```
+
+To build recursive data structures such as linked lists and trees, you must
+use unsafe pointers.
+
+## Parameters
+
+Structs accept compile-time parameters in square brackets.
+Parameters are accessed through `Self` inside the struct
+body. `Self.T` refers to the parameter `T`. Bare `T` isn't
+valid in the struct body:
+
+```mojo
+@fieldwise_init
+struct Pair[T: Copyable & ImplicitlyDestructible]:
+    var first: Self.T
+    var second: Self.T
+```
+
+## Trait conformance
+
+Declare conformance in parentheses after the name or parameter list.
+Separate multiple traits with commas or compose them with `&`:
+
+```mojo
+@fieldwise_init
+struct MyInt(Writable, Copyable):
+    var value: Int
+
+    def write_to[W: Writer](self, mut writer: W):
+        writer.write(self.value)
+
+def main():
+    my_int = MyInt(42)
+    print(my_int)  # 42
+```
+
+Conformance commits the struct to implementing every method and associated
+type the trait requires. Missing items produce errors:
+
+```mojo
+@fieldwise_init
+struct Incomplete(Sized):
+    var value: Int
+    # Error: 'Incomplete' does not implement all requirements
+    # for 'Sized'
+    # Note: required function '__len__' is not implemented
+```
+
+### Conformance lists
+
+A conformance list accepts traits and conditional `where` clauses:
+
+```mojo
+@fieldwise_init
+struct Pair[T: Copyable & ImplicitlyDestructible](
+    Equatable where conforms_to(T, Equatable)
+):
+    var first: Self.T
+    var second: Self.T
+```
+
+### Implicit conformances
+
+The compiler automatically conforms every struct to `AnyType` and
+`ImplicitlyDestructible` when all members are also implicitly destructible.
+With generics, the parameter's bounds must include `ImplicitlyDestructible`
+for this to apply:
+
+```mojo
+@fieldwise_init
+struct Box[T: Copyable & ImplicitlyDestructible](
+    Equatable where conforms_to(T, Equatable)
+):
+    var item: Self.T
+
+def main():
+    var box = Box(42)
+    print(box.item)  # OK
+```
+
+Without `ImplicitlyDestructible` in the bound, the compiler
+can't verify that the struct is safe to destroy implicitly:
+
+```mojo
+@fieldwise_init
+struct Box[T: Copyable](
+    Equatable where conforms_to(T, Equatable)
+):
+    var item: Self.T
+
+def main():
+    var box = Box(42)
+    print(box.item)
+    # Error: 'box' abandoned without being explicitly
+    # destroyed: Unhandled explicit_destroy type Copyable
+    # Note: consider adding trait conformance to
+    # ImplicitlyDestructible
+```
+
+### Synthesized lifecycle methods
+
+If a struct conforms to `Movable` but doesn't define `__init__(take:)`, the
+compiler synthesizes one that moves each field. The same applies to
+`Copyable` and `__init__(copy:)`. Synthesis fails if any field can't
+support the operation:
+
+```mojo
+struct Unsound(Copyable):
+    var item: SomeMoveOnlyType
+    # Error: cannot synthesize copy constructor because
+    # field 'item' has non-copyable type SomeMoveOnlyType
+```
+
+### Default method conflicts
+
+When two traits provide conflicting defaults for the same method, the
+struct must implement it manually:
+
+```mojo
+# Error: trait method requirement some_method has
+# conflicting default implementations in TraitA and
+# TraitB; you must implement it manually
+```
+
+### Conditional conformance
+
+Conditional conformance lets a struct conform to a trait when certain
+conditions are met. For example, the following structs conform to a set of
+(mostly hypothetical) traits when their parameters meet specific criteria:
+
+```mojo
+from std.sys import is_gpu
+
+@fieldwise_init
+struct Mathematical(
+    GPUComputable where is_gpu()
+):
+    # conforms only on GPU targets
+
+@fieldwise_init
+struct FixedBuffer[T: Copyable, N: Int](
+    Iterable where N > 0
+):
+    # conforms if N is one or more, but not if N is zero or negative
+
+@fieldwise_init
+struct Tensor[dtype: DType](
+    FloatMath where dtype.is_floating_point()
+):
+    # conforms when dtype is a floating point type
+
+@fieldwise_init
+struct Tagged[kind: StringLiteral](
+    Printable where kind == "debug"
+):
+    # only conforms in debug mode
+
+@fieldwise_init
+struct Box[T: Copyable](
+    Equatable where conforms_to(T, Equatable)
+):
+    # conforms to Equatable only when T does
+```
+
+### Conditional conformance and compile-time values
+
+Conditional conformance can depend only on information known at compile
+time. While it often uses trait bounds, it is not limited to traits. A
+condition can use any compile-time value that can be evaluated in a clear
+and consistent way.
+
+For example, a type might conform to a trait only on a specific platform,
+(such as NVIDIA GPUs or Apple Silicon with Metal) or when a compile-time
+constant has a given value. If the condition can be fully resolved at
+compile time, it can gate conformance.
+
+That said, conformance cannot depend on a computed compile-time member.
+Trait conformance is part of the type's signature, and the signature is
+needed to resolve members. Depending on a computed member would create a
+circular dependency.
+
+### Conditional conformance and default implementations
+
+Conditional conformance and default implementations are independent
+features, but they often work together.
+
+The `Writable` trait offers a default implementation that uses reflection
+to automatically write struct fields. Declare the trait conformance after
+ensuring that all fields are `Writable`:
+
+```mojo
+@fieldwise_init
+struct Point(Writable):
+    var x: Float64
+    var y: Float64
+```
+
+Consider a generic version of this `Pair` type:
+
+```mojo
+@fieldwise_init
+struct Pair[T: Copyable & ImplicitlyDestructible]:
+    var first: Self.T
+    var second: Self.T
+```
+
+If `T` is not `Writable`, the struct can still declare `Writable`
+conformance by providing its own implementation of `Writable`'s
+required methods. This is impractical without an API surface that describes
+`T` instances.
+
+A better solution is to use conditional conformance. Ensure `Pair`
+conforms to `Writable` only when its fields do. Test the `T` type with
+`conforms_to()` in a `where` clause in the struct's conformance list:
+
+```mojo
+@fieldwise_init
+struct Pair[T: Copyable & ImplicitlyDestructible](
+    Writable where conforms_to(T, Writable)
+):
+    var first: Self.T
+    var second: Self.T
+```
+
+You can print `Pair[Int]` because `Int` is `Writable`, but not
+`Pair[NotWritable]`, which doesn't conform to `Writable`:
+
+```mojo
+@fieldwise_init
+struct NotWritable(ImplicitlyCopyable & ImplicitlyDestructible):
+    var item: Int
+
+def main():
+    var not_writable = NotWritable(42)
+    var pair = Pair(not_writable, not_writable)
+    print(pair) # Error: could not convert element of 'values'
+    # with type 'Pair[NotWritable]' to expected type 'Writable'
+```
+
+### Mixed trait lists
+
+You can combine conditional and non-conditional traits in the same
+conformance list:
+
+```mojo
+@fieldwise_init
+struct Pair[T: Copyable & ImplicitlyDestructible](
+    Equatable where conforms_to(T, Equatable),
+    Writable where conforms_to(T, Writable),
+    Copyable
+):
+    # ...
+```
+
+## Methods
+
+Instance methods take `self` as the first argument. The convention on
+`self` determines access:
+
+- Bare `self` -- immutable.
+- `mut self` -- allows modification.
+- `out`, `deinit` -- used by lifecycle methods.
+- `out` -- also used to specify a named result slot.
+- `ref` -- used to declare an argument with parametric mutability, and which
+  must be passed in memory regardless of its type.
+
+A method without `self` is an error unless it's marked `@staticmethod`:
+
+```mojo
+struct Unsound:
+    def broken():
+        pass
+    # Error: self argument must be present in instance method
+
+struct OK:
+    @staticmethod
+    def utility():  # No self required
+        pass
+```
+
+`@staticmethod` marks a method that belongs to the type, not to instances.
+
+It can access type parameters and comptime members, can call other static
+methods, has no `self`, and has no access to instance fields and instance
+methods
+
+Use static methods for utility functions related to the
+struct's mission that don't need an instance to work, such as factory
+methods and general purpose helpers.
+
+### Dunder methods
+
+*Dunder methods* (double-underscored names) let a struct work with
+operators, built-in functions, and lifecycle events: `__init__()`,
+`__add__()`, `__str__()`, and so on.
+
+## Instance creation with initializers
+
+`__init__()` uses the `out self` convention to produce the newly initialized
+value. Every field must be assigned before `__init__()` returns:
+
+```mojo
+struct Point:
+    var x: Float64
+    var y: Float64
+
+    def __init__(out self, x: Float64, y: Float64):
+        (self.x, self.y) = (x, y)
+
+def main():
+    p = Point(3.0, 4.0)
+    print(p.x, p.y)  # 3.0 4.0
+```
+
+Omitting `out self` is an error:
+
+```mojo
+struct Unsound:
+    var value: Int
+
+    def __init__(self):
+        pass
+    # Error: __init__ method must return Self type with
+    # 'out' argument
+```
+
+`__init__()` is implicitly static. Adding `@staticmethod` is an error.
+Structs can define multiple `__init__()` overloads.
+
+## Instance tear-down with destructors
+
+`__del__()` runs when the compiler detects no further access to an instance.
+Its `self` uses the `deinit` convention:
+
+```mojo
+def __del__(deinit self):
+    print("cleaning up")
+```
+
+Implicitly destructible structs get a default `__del__()`. A custom `__del__()`
+overrides the default. `__del__()` can't be overloaded.
+
+:::note
+Explicitly destroyed structs write their own cleanup logic, using a
+consuming method with `deinit self`.
+:::
+
+## `comptime` members
+
+`comptime` declares type-level members inside a struct. They're evaluated
+at compile time and can't be modified at runtime. Use them for constants,
+type aliases, and computed members:
+
+```mojo
+@fieldwise_init
+struct Matrix2D[dtype: DType, w: Int, h: Int]:
+    pass
+
+struct Test[dtype: DType]:
+    comptime default_size = 1024
+    comptime DefaultMatrixType = Matrix2D[Self.dtype, Self.default_size, Self.default_size]
+    comptime SquareMatrixType[size: Int] = Matrix2D[Self.dtype, size, size]
+```
+
+Access these constants on the instance or the type. For example,
+`Test[DType.int32]().default_size` and `Test[DType.int32].default_size`.
+
+---
+
+## Mojo trait declarations
+
+<!-- Sources:
+ParserStmts.cpp (parseTraitStmt, maybeMarkDefaultedTraitMethod,
+parseVarStmt trait rejection, parseAliasDeclStmtBody trait
+handling), DeclResolution.cpp (resolveSignature(TraitDeclOp),
+resolveBody(TraitDeclOp), resolveBody(TraitType),
+addParentDeclsToTrait, addSelfTypeToTrait,
+resolveSyntheticSignature, parseOptionalInheritanceList,
+resolveSignature(AliasDeclOp) trait branch),
+DeclResolver.cpp (resolveSignature dispatch, resolveBody
+dispatch), Traits.cpp (verifyAndBuildConformance,
+signatureResolveDefaultTraitFnStubs,
+checkMethodConstraintStatus), Traits.h,
+StructEmitter.cpp (synthesizeDefaultTraitMethodWrapper),
+ASTDecl.h (traitConformanceLineage, doesNominalTypeConformTo),
+TokenKinds.def, ExprNode.h, MojoDiags.h, ParserBase.h
+-->
+
+A *trait* defines requirements that a conforming type must satisfy
+including methods, associated types, and constants. Traits are similar to
+*protocols* in Swift, *interfaces* in Java, and *traits* in Rust. When a
+type conforms to a trait, the compiler checks every requirement and rejects
+the code if anything is missing.
+
+## Trait declarations
+
+Traits are declared with the `trait` keyword followed by the trait name and
+an optional refinement list. The body contains the trait's requirements,
+both required and provided:
+
+```text
+trait Name:
+    body
+
+trait Name(ParentA, ParentB):
+    body
+```
+
+Traits must be declared at the top level of a file. They
+can't be nested inside structs, other traits, or functions:
+
+```mojo
+struct Outer:
+    trait Inner:  # Error: nested trait not supported here
+        ...
+```
+
+### Marker traits
+
+Empty traits are called *marker traits* and signal that a type has a
+specific property or capability without refining other traits or declaring
+requirements:
+
+```mojo
+trait AnyType:
+
+    pass
+```
+
+Mojo marker traits include: `AnyType`, `TrivialRegisterPassable`,
+`RegisterPassable`, and `ImplicitlyCopyable`. They tell the compiler
+about a type's properties, supporting compile-time optimizations.
+
+## Trait body elements
+
+A trait body can contain these elements:
+
+<!-- markdownlint-disable MD013 -->
+
+| Element                           | Syntax                  | Role                                     |
+|-----------------------------------|-------------------------|------------------------------------------|
+| Required method                   | `...` body              | Conforming types must implement          |
+| Provided method                   | Code body               | Inherited unless overridden              |
+| Comptime member - associated type | `comptime Name: Trait`  | Conforming types provide a concrete type |
+| Comptime member - required value  | `comptime name: Type`   | Conforming types provide a value         |
+| Comptime member - constant        | `comptime name = value` | Shared across all conforming types       |
+
+<!-- markdownlint-enable MD013 -->
+
+## Trait and member names
+
+<!-- VERIFIED: From ParserStmts.cpp parseTraitStmt() -->
+
+Trait names must be valid identifiers. By convention, they
+describe a capability: `Writable`, `Hashable`, `Copyable`.
+
+### Naming conventions
+
+<!-- markdownlint-disable MD013 -->
+
+| Element            | Naming                                                             | Notes                                                                    |
+|--------------------|--------------------------------------------------------------------|--------------------------------------------------------------------------|
+| Trait name         | `PascalCase`                                                       | Capabilities gained by conformance: `Equatable`, `Copyable`, `PathLike`. |
+| Instance method    | `lower_snake_case()`                                               | Method's action: `write_to()`, `update()`                                |
+| Static method      | `lower_snake_case()`                                               | Method's action: `get_type_name`, `get_element_bitwidth`                 |
+| `comptime` members | Trait compositions are `PascalCase`. Values are `lower_snake_case` | Describes use: `KeyElement`, `element_bitwidth`                          |
+| Associated type    | `PascalCase`                                                       | Describes use: `Element`, `Iterator`                                     |
+
+<!-- markdownlint-enable MD013 -->
+
+:::caution
+When defining traits, avoid private member names with single or double
+underscore prefixes. Required members may be hidden from trait users.
+For similar reasons, don't use `@doc_hidden` to hide trait members.
+
+The standard library has a small number of exceptions for required trait
+elements known to the compiler.
+:::
+
+## Methods
+
+Traits define both required and provided methods, and both instance and
+static members. Instance methods take `self` as the first parameter. Static
+methods require the `@staticmethod` decorator.
+
+### Required methods
+
+An ellipsis (`...`) marks a required method. Conforming types must provide
+an implementation:
+
+```mojo
+trait RequiredMethods:
+    def required_method(self):
+        ...
+
+    @staticmethod
+    def required_static_method():
+        ...
+
+@fieldwise_init
+struct SampleStruct(RequiredMethods):
+    def required_method(self):
+        print("Required method")
+
+    @staticmethod
+    def required_static_method():
+        print("Required static method")
+
+def main():
+    var s = SampleStruct()
+    s.required_method()        # Required method
+    SampleStruct.required_static_method() # Required static method
+```
+
+### Provided methods
+
+A method with a body other than `...` provides a default implementation.
+Conforming types automatically receive that behavior but can also override
+it:
+
+```mojo
+trait ProvidedMethods:
+    def provided_method(self):
+        print("Provided method")
+
+    @staticmethod
+    def provided_static_method():
+        print("Provided static method")
+
+@fieldwise_init
+struct SampleStruct(ProvidedMethods):
+    def provided_method(self):
+        print("Overridden provided method")
+
+def main():
+    var sample = SampleStruct()
+    sample.provided_method()        # Overridden provided method
+    SampleStruct.provided_static_method() # Provided static method
+```
+
+Both required and provided methods can return values:
+
+```mojo
+trait Describable:
+    def provided_describe(self) -> String:
+        return "no description"  # Type can override this implementation
+
+    def required_describe(self) -> String:
+        ...  # Type must provide an implementation for this method
+```
+
+Provided behavior can't use implementation details from any specific
+conforming type, as a trait has no knowledge of a type's capabilities
+beyond those declared in the trait and refinement list. It must work
+across all of them.
+
+### `pass` vs `...`
+
+`pass` and `...` mean distinct things in trait bodies:
+
+- `...` marks a required method stub.
+- `pass` is a no-op that counts as a provided implementation
+  body. It's only valid when the method returns `None`.
+
+If a method declares a return type but uses `pass` as its body,
+the compiler will encourage you to replace it with `...`:
+
+```mojo
+trait Unsupported:
+    def __compute__(self) -> Int:
+        pass
+    # Error: trait method has results but default
+    # implementation returns no value; did you mean '...'?
+```
+
+## Comptime members - associated types
+
+An associated type is a `comptime` member that declares a related
+subordinate type that conforming types must specify. For example, an
+associated type might be the `Element` type for a container or
+collection trait, or the `Key` and `Value` types for a map.
+
+The associated type is declared as a `comptime` member without an
+initializer. Only traits can use this declaration form. Conforming structs
+provide the concrete value that satisfies any constraints declared in the
+trait.
+
+In the following example, `Self` refers to the conforming type, so
+`Self.Associated` refers to the conforming type's value for the associated
+type `Associated`:
+
+```mojo
+trait Boxable:
+    comptime Associated: Writable & Copyable & ImplicitlyDestructible
+
+    def unbox(self) -> Self.Associated:
+        ...
+
+@fieldwise_init
+struct ConcreteBox(Boxable):
+    comptime Associated = String
+    var value: Self.Associated
+
+    def unbox(self) -> Self.Associated:
+        return self.value.copy()
+
+def main():
+    var box = ConcreteBox(value="Hello")
+    var unboxed = box.unbox()  # Known to be Copyable
+    print(unboxed)             # Known to be Writable
+    _ = unboxed^               # Known to be ImplicitlyDestructible
+```
+
+An associated type can also be assigned from call sites with a generic
+parameter. This lets the trait work across a family of types:
+
+```mojo
+comptime Base = Copyable & ImplicitlyDestructible & Writable
+
+@fieldwise_init
+struct Box[T: Base](Boxable):
+    comptime Associated = Self.T
+    var value: Self.Associated
+
+    def unbox(self) -> Self.Associated:
+        return self.value.copy()
+```
+
+A `comptime` without an assignment, type, or traits is an error:
+
+```mojo
+trait Unsupported:
+    comptime X
+    # Error: expected '=' after comptime declaration
+
+trait Supported:
+    comptime X: Copyable # OK: associated type
+    comptime y: Int      # OK: required value
+    comptime z = 42      # OK: constant
+```
+
+Outside of traits, a `comptime` member without an initializer is an error:
+
+```mojo
+struct Unsupported:
+    comptime X: Int
+    comptime Y: Copyable
+    # Error: only traits may contain a comptime member
+    # without an initializer
+```
+
+## Comptime members - constants and required values
+
+A trait can declare `comptime` constants (shared value) and required
+assignments (conforming types must provide a value).
+
+### Constants
+
+This trait provides a usable bitwidth for conforming types based on
+the `Element` associated type and a named trait composition:
+
+```mojo
+from std.sys.info import bit_width_of
+
+trait Test:
+    comptime Element: RegisterPassable
+    comptime element_bitwidth = bit_width_of[Self.Element]()
+
+    comptime KeyElement = Copyable & ImplicitlyDestructible & Writable
+
+@fieldwise_init
+struct SampleStruct[T: KeyElement](Test):
+    comptime Element = Int64
+    var x: Self.T
+
+    def show_element_bitwidth(self):
+        print(Self.element_bitwidth)
+
+def main():
+    var s = SampleStruct[Int64](x=42)
+    s.show_element_bitwidth()  # 64
+    print(s.x)                 # 42
+```
+
+:::note
+Don't use traits to define general-purpose constants like `PI` or
+`SPEED_OF_LIGHT`. Define them at the top level of a module for local use,
+or as a public member of a related struct for broader use.
+:::
+
+## Comptime members: required values
+
+A required value is a `comptime` member without an initializer. Conforming
+types must provide a value for it. This is useful when the trait needs a
+compile-time constant that varies across conforming types. For example, a
+`Measurable` trait might require a `unit` string and an `always_positive`
+boolean to validate measurements.
+
+In this example, the trait requires requires conforming types to provide a
+`unit` string, an `always_positive` boolean, and a `get_value()` method.
+The `validate()` function uses those requirements to check that the value
+is positive when `always_positive` is `True`:
+
+```mojo
+trait Measurable:
+    comptime unit: StaticString          # Required
+    comptime always_positive: Bool       # Required
+
+    def get_value(self) -> Float64: ...  # Required method
+
+def validate[T: Measurable](measurement: T) raises:
+    comptime if T.always_positive:
+        if Float64(measurement.get_value()) < 0.0:
+            raise Error(t"{T.unit} cannot be negative")
+
+@fieldwise_init
+struct Pascals(Measurable):
+    comptime unit: StaticString = "Pa"
+    comptime always_positive: Bool = True
+    var value: Float64
+    def get_value(self) -> Float64:
+        return self.value
+
+def main() raises:
+    validate(Pascals(value=101325.0))   # Validation succeeds
+    # validate(Pascals(value=-101325.0))  # Validation fails
+    # run-time error:
+    # "Unhandled exception caught during execution: Pa cannot be negative"
+```
+
+A similar conformance for `DegreesCentigrade` would set the `unit` to
+`"°C"` and `always_positive` to `False`. A value of `-10.0` would pass
+validation for `DegreesCentigrade` and fail for `Pascals`.
+
+## Trait refinement
+
+When a trait refines another, its bound implies the parent's bound:
+
+```mojo
+trait Printable:
+    def to_string(self) -> String:
+        ...
+
+trait PrettyPrintable(Printable):
+    def to_pretty_string(self) -> String:
+        ...
+
+@fieldwise_init
+struct Box[T: Copyable & Writable & ImplicitlyDestructible](PrettyPrintable):
+    var value: Self.T
+
+    def to_string(self) -> String:
+        return String(t"Box({self.value})")
+
+    def to_pretty_string(self) -> String:
+        return String(t"Box with value: {self.value}")
+
+def render[T: PrettyPrintable](item: T):
+    # to_string() available: PrettyPrintable refines Printable
+    print(item.to_string(), "-", item.to_pretty_string())
+
+def main():
+    render(Box(1))       # Box(1) - Box with value: 1
+    render(Box("hello")) # Box(hello) - Box with value: hello
+```
+
+A function requiring `T: PrettyPrintable` can call any method
+from `Printable` without naming it in the bound.
+
+### Bound resolution order
+
+When the compiler resolves a trait bound:
+
+- The parameter's declared traits are checked first.
+- Parent traits are included transitively.
+- If the bound uses `&`, all composed traits must be
+  satisfied.
+- If a `where` clause is present, its constraints are checked
+  after parameter-level bounds.
+
+If any check fails, the compiler reports which trait the type doesn't
+conform to.
+
+A child trait can override a parent method by declaring a method with the
+same signature. The parent's version is replaced in the child's
+requirements.
+
+:::note
+Every trait implicitly refines `AnyType`.
+:::
+
+## Trait restrictions
+
+Traits don't support parameter lists:
+
+```mojo
+trait Unsupported[T]:  # Error: trait declarations do not support
+    ...                # parameters
+```
+
+Traits can't declare or use fields:
+
+```mojo
+trait Unsupported:
+    var x: Int  # Error: traits do not support 'var' fields
+```
+
+Traits don't support `where` clauses on methods:
+
+```mojo
+trait Unsupported:
+    def maybe(self) -> Int where Self: Sized:
+        ...
+    # Error: 'where' clauses on trait methods are not supported
+```
+
+## Conformance checks
+
+The compiler checks every requirement and errors on unmet ones.
+
+### Missing methods
+
+```mojo
+trait Sized:
+    def __len__(self) -> Int: ...
+
+@fieldwise_init
+struct SizedStruct[T: Copyable](Sized):
+    var backing_store: List[Self.T]
+
+# Error: 'SizedStruct[T]' does not implement all requirements
+# for 'Sized'
+# Note: required function '__len__' is not implemented
+```
+
+### Missing required members
+
+```mojo
+trait Container:
+    comptime Element: Copyable
+
+@fieldwise_init
+struct Bag(Container):
+    var data: Int
+    # Error: 'Bag' does not implement all requirements for
+    # 'Container'
+    # Note: required member 'Element' is not specified
+```
+
+### Type mismatch on associated types
+
+```mojo
+trait Taggable:
+    comptime Tag: Sized
+
+@fieldwise_init
+struct Widget(Taggable):
+    comptime Tag = Int
+    # Note: comptime member 'Tag' type Int does not conform
+    # to trait's required type Sized
+```
+
+### Provided method conflicts
+
+When two traits in a struct's conformance list produce
+conflicting provided methods for the same method, the struct must
+implement it manually:
+
+```mojo
+trait Greeter:
+    def greet(self):
+        print("Hello from Greeter")
+
+trait Welcomer:
+    def greet(self):
+        print("Welcome from Welcomer")
+
+@fieldwise_init
+struct Host(Greeter, Welcomer):
+    pass
+    # Error: trait method requirement greet has conflicting
+    # default implementations in Greeter and Welcomer; you
+    # must implement it manually
+```
+
+---
+
+## Mojo types reference
+
+Mojo is statically typed. Every value has a type known at compile time. The
+type system is designed to be simple and consistent, with a small set of
+core types that can be composed in powerful ways.
+
+## Numbers
+
+Explore numbers on their dedicated page:
+[Mojo numeric types](/docs/reference/numeric-types/).
+
+<!-- markdownlint-disable MD013 -->
+
+| Type                                                                            | What it is                                                      |
+|---------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| [`IntLiteral`](/docs/reference/numeric-types/#int-literal)                      | Arbitrary-precision integer. Compile-time only.                 |
+| [`FloatLiteral`](/docs/reference/numeric-types/#float-literal)                  | Arbitrary-precision float. Compile-time only.                   |
+| [`Int`](/docs/reference/numeric-types/#int)                                     | Signed integer, system word size. Its own struct.               |
+| [`SIMD`](/docs/reference/numeric-types/#simd)                                   | Fixed-size vector of numeric values. Mojo's numeric foundation. |
+| [`DType`](/docs/reference/numeric-types/#dtype)                                 | Enumeration of numeric type identifiers. Used as a parameter.   |
+| [`Scalar`](/docs/reference/numeric-types/#scalar)                               | Single numeric value. Alias for `SIMD[dtype, 1]`.               |
+| [`UInt`](/docs/reference/numeric-types/#uint)                                   | Unsigned integer, system word size. A `Scalar` alias.           |
+| [`Int8`-`Int256`](/docs/reference/numeric-types/#sized-integer-types)           | Fixed-width signed integers. `Scalar` aliases.                  |
+| [`UInt8`-`UInt256`, `Byte`](/docs/reference/numeric-types/#sized-integer-types) | Fixed-width unsigned integers. `Scalar` aliases.                |
+| [`Float16`-`Float64`](/docs/reference/numeric-types/#floating-point-types)      | IEEE 754 floating-point types. `Scalar` aliases.                |
+| [`BFloat16`](/docs/reference/numeric-types/#bfloat16)                           | Brain floating-point (16-bit). A `Scalar` alias.                |
+| [`Float8_*`, `Float4_*`](/docs/reference/numeric-types/#floating-point-types)   | AI-optimized low-precision floats. `Scalar` aliases.            |
+
+<!-- markdownlint-enable MD013 -->
+
+## Strings
+
+<!-- markdownlint-disable MD013 -->
+
+| Type                 | What it is                                                 |
+|----------------------|------------------------------------------------------------|
+| [`String`](#strings) | Heap-allocated, owned, mutable UTF-8 string.               |
+| `StringSlice`        | Non-owning view into UTF-8 string data.                    |
+| `StaticString`       | Immutable slice of static string data. No heap allocation. |
+| `StringLiteral`      | Compile-time string constant.                              |
+
+<!-- markdownlint-enable MD013 -->
+
+## Collections
+
+<!-- markdownlint-disable MD013 -->
+
+| Type       | What it is                                |
+|------------|-------------------------------------------|
+| `Tuple`    | Fixed-size, heterogeneous collection.     |
+| `List`     | Dynamically-sized, homogeneous sequence.  |
+| `Dict`     | Key-value mapping.                        |
+| `Set`      | Unordered collection of unique values.    |
+| `Optional` | A value that may or may not be present.   |
+| `Variant`  | A value that can be one of several types. |
+
+<!-- markdownlint-enable MD013 -->
+
+## Others
+
+<!-- markdownlint-disable MD013 -->
+
+| Type              | What it is                                   |
+|-------------------|----------------------------------------------|
+| [`Bool`](#bool)   | Boolean value. Its own struct.               |
+| [`Error`](#error) | Represents a runtime error.                  |
+| [`Never`](#never) | Return type for functions that don't return. |
+| [`None`](#none)   | The type with a single value, `None`.        |
+
+<!-- markdownlint-enable MD013 -->
+
+## `Bool`
+
+`Bool` represents a boolean value (`True` or `False`). It's its own
+struct, backed by a 1-bit type, not a SIMD alias.
+
+```mojo
+var flag = True
+if flag:
+    print("yes")
+```
+
+## Using strings
+
+Mojo has several string types for different ownership and lifetime
+needs.
+
+String literals in source code (like `"hello"`) are `StringLiteral`
+values. They implicitly convert to `String` when needed.
+
+All string types use UTF-8 encoding.
+
+Mojo strings are Unicode-aware. Byte length, codepoint count, and
+grapheme count are distinct measurements:
+
+```mojo
+var s: StringSlice = "café"  # NFD: e + U+0301
+print(s.byte_length())       # 5
+print(len(s.codepoints()))   # 4
+print(s.count_graphemes())   # 4
+```
+
+NFD normalization and emoji with modifiers or ZWJ sequences can
+widen these gaps further.
+
+## Tuples
+
+A tuple is a fixed-size, heterogeneous collection. Elements can have
+different types, and the types are known at compile time.
+
+```mojo
+var pair = (42, "hello")
+var x = pair[0]  # 42
+var y = pair[1]  # "hello"
+```
+
+Tuples support unpacking:
+
+```mojo
+var a: Int
+var b: String
+(a, b) = (42, "hello")
+```
+
+## `Error`
+
+`Error` represents a recoverable runtime error. Functions that can
+fail are marked `raises` and throw `Error` values:
+
+```mojo
+def parse(s: String) raises -> Int:
+    ...
+    raise Error("invalid input")
+```
+
+## `Never`
+
+`Never` is the return type for functions that never return, such as
+functions that always abort or loop forever:
+
+```mojo
+def fatal(msg: String) -> Never:
+    print(msg)
+    abort()
+```
+
+The compiler uses `Never` to prove that code after a call to such a
+function is unreachable.
+
+## `None`
+
+`None` is both a value and a type. The `NoneType` struct has exactly
+one value: `None`. Functions that don't declare a return type
+implicitly return `None`.
+
+```mojo
+def greet(name: String):
+    print("hello", name)
+    # implicitly returns None
+```

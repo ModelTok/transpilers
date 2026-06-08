@@ -1,0 +1,1138 @@
+[
+ {
+  "name": "AABB2",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpkjmzwdpe/b.mojo:22:27: error: expected a type, not a value",
+  "code": "struct AABB2(Copyable, Movable):\n    var minx: Float64\n    var miny: Float64\n    var maxx: Float64\n    var maxy: Float64\n\n    def __init__(out self, minx: Float64, miny: Float64, maxx: Float64, maxy: Float64):\n        self.minx = minx\n        self.miny = miny\n        self.maxx = maxx\n        self.maxy = maxy\n\n    def width(self) -> Float64:\n        return self.maxx - self.minx\n\n    def height(self) -> Float64:\n        return self.maxy - self.miny\n\n    def area(self) -> Float64:\n        return self.width() * self.height()\n\n    def overlaps(self, o: 'AABB2') -> Bool:\n        return self.minx <= o.maxx and self.maxx >= o.minx and self.miny <= o.maxy and self.maxy >= o.miny",
+  "repaired": false
+ },
+ {
+  "name": "Accumulator_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpxdrtaqsq/b.mojo:1:43: error: use of unknown declaration '_Copyable'",
+  "code": "struct Accumulator[T: Copyable & Movable](_Copyable, _Movable):\n    var total: T\n\n    def __init__(out self):\n        self.total = T(0)\n\n    def add(mut self, v: T):\n        self.total = self.total + v\n\n    def get(self) -> T:\n        return self.total",
+  "repaired": false
+ },
+ {
+  "name": "BankAccount",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct BankAccount(Copyable, Movable):\n    var balance: Float64\n\n    def __init__(out self, initial: Float64):\n        self.balance = initial\n\n    def deposit(mut self, amount: Float64):\n        self.balance += amount\n\n    def withdraw(mut self, amount: Float64) -> Bool:\n        if amount > self.balance:\n            return False\n        self.balance -= amount\n        return True\n\n    def get_balance(self) -> Float64:\n        return self.balance",
+  "repaired": false
+ },
+ {
+  "name": "BoundingBox",
+  "category": "struct",
+  "status": "pass",
+  "detail": "",
+  "code": "struct BoundingBox(Copyable, Movable):\n    var x0: Float64\n    var y0: Float64\n    var x1: Float64\n    var y1: Float64\n\n    def __init__(out self, a: Float64, b: Float64, c: Float64, d: Float64):\n        self.x0 = a\n        self.y0 = b\n        self.x1 = c\n        self.y1 = d\n\n    def width(self) -> Float64:\n        return self.x1 - self.x0\n\n    def height(self) -> Float64:\n        return self.y1 - self.y0\n\n    def area(self) -> Float64:\n        return (self.x1 - self.x0) * (self.y1 - self.y0)",
+  "repaired": false
+ },
+ {
+  "name": "Box_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmphvyme22x/b.mojo:2:16: error: unqualified access to struct parameter 'T'; use 'Self.T' instead",
+  "code": "struct Box[T: Copyable & Movable]:\n    var value: T\n\n    def __init__(out self, v: T):\n        self.value = v\n\n    def get(self) -> T:\n        return self.value\n\n    def set(self, v: T):\n        self.value = v",
+  "repaired": false
+ },
+ {
+  "name": "CircularCounter",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpuvw9bcog/b.mojo:12:13: error: expression must be mutable in assignment",
+  "code": "struct CircularCounter(Copyable, Movable):\n    var value: Int\n    var limit: Int\n    var wraps: Int\n\n    def __init__(out self, lim: Int):\n        self.value = 0\n        self.limit = lim\n        self.wraps = 0\n\n    def increment(self):\n        self.value = (self.value + 1) % self.limit\n        if self.value == 0:\n            self.value = 0\n            self.wraps = self.wraps + 1\n\n    def current(self) -> Int:\n        return self.value\n\n    def cycles(self) -> Int:\n        return self.wraps",
+  "repaired": false
+ },
+ {
+  "name": "Color",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpn5dzgf6t/b.mojo:7:17: error: no matching function in initialization",
+  "code": "struct Color(Copyable, Movable):\n    var r: Int\n    var g: Int\n    var b: Int\n\ndef blend(a: Color, b: Color) -> Color:\n    return Color((a.r + b.r) // 2, (a.g + b.g) // 2, (a.b + b.b) // 2)\n\ndef luminance(c: Color) -> Int:\n    return (c.r * 30 + c.g * 59 + c.b * 11) // 100",
+  "repaired": false
+ },
+ {
+  "name": "Cone",
+  "category": "struct",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "struct Cone(Copyable, Movable):\n    var radius: Float64\n    var height: Float64\n\n    def __init__(out self, r: Float64, h: Float64):\n        self.radius = r\n        self.height = h\n\n    def volume(self) -> Float64:\n        return 3.141592653589793 * self.radius * self.radius * self.height / 3.0\n\n    def slant(self) -> Float64:\n        return self.radius * self.radius + self.height * self.height",
+  "repaired": false
+ },
+ {
+  "name": "Counter3",
+  "category": "struct",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Counter3(Copyable, Movable):\n    var count: Int\n\n    def __init__(out self):\n        self.count = 0\n\n    def inc(mut self):\n        self.count += 1\n\n    def add(mut self, n: Int):\n        self.count += n\n\n    def get(self) -> Int:\n        return self.count",
+  "repaired": false
+ },
+ {
+  "name": "Date",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpdzsvnh6u/b.mojo:25:11: error: use of unknown declaration 'day_of_year'",
+  "code": "struct Date(Copyable, Movable):\n    var year: Int\n    var month: Int\n    var day: Int\n\n    def __init__(out self, year: Int, month: Int, day: Int):\n        self.year = year\n        self.month = month\n        self.day = day\n\n    def is_leap(self) -> Bool:\n        return (self.year % 4 == 0 and self.year % 100 != 0) or (self.year % 400 == 0)\n\n    def day_of_year(mut self) -> Int:\n        var days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]\n        var total = self.day\n        for i in range(0, self.month - 1):\n            total += days[i]\n        if self.month > 2 and self.is_leap():\n            total += 1\n        return total",
+  "repaired": false
+ },
+ {
+  "name": "Dual",
+  "category": "operator",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Dual(Copyable, Movable):\n    var val: Float64\n    var eps: Float64\n\n    def __init__(out self, v: Float64, e: Float64):\n        self.val = v\n        self.eps = e\n\n    def __add__(self, o: Dual) -> Dual:\n        return Dual(self.val + o.val, self.eps + o.eps)\n\n    def __sub__(self, o: Dual) -> Dual:\n        return Dual(self.val - o.val, self.eps - o.eps)\n\n    def __mul__(self, o: Dual) -> Dual:\n        return Dual(self.val * o.val, self.val * o.eps + self.eps * o.val)\n\n    def __neg__(self) -> Dual:\n        return Dual(-self.val, -self.eps)\n\n    def __eq__(self, o: Dual) -> Bool:\n        return self.val == o.val and self.eps == o.eps",
+  "repaired": false
+ },
+ {
+  "name": "Fraction",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpd6heklf7/b.mojo:3:9: error: invalid redefinition of 'a'",
+  "code": "def gcd_l(a: Int, b: Int) -> Int:\n    if a < 0:\n        a = -a\n    if b < 0:\n        b = -b\n    while b != 0:\n        var t = b\n        b = a % b\n        a = t\n    return a\n\ndef Fraction(a: Int, b: Int) -> Fraction:\n    var g = gcd_l(a, b)\n    if g == 0:\n        g = 1\n    var num = a // g\n    var den = b // g\n    return Fraction(num, den)\n\ndef __add__(self: Fraction, o: Fraction) -> Fraction:\n    var t = self.den * o.den\n    return Fraction(self.num * o.den + o.num * t, self.den * o.den)\n\ndef __eq__(self: Fraction, o: Fraction) -> Bool:\n    return self.num == o.num and self.den == o.den",
+  "repaired": false
+ },
+ {
+  "name": "GaussInt",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmptw71zkda/b.mojo:9:26: error: expected a type, not a value",
+  "code": "struct GaussInt(Copyable, Movable):\n    var re: Int\n    var im: Int\n\n    def __init__(out self, r: Int, i: Int):\n        self.re = r\n        self.im = i\n\n    def __add__(self, o: 'GaussInt') -> 'GaussInt':\n        return GaussInt(self.re + o.re, self.im + o.im)\n\n    def __sub__(self, o: 'GaussInt') -> 'GaussInt':\n        return GaussInt(self.re - o.re, self.im - o.im)\n\n    def __mul__(self, o: 'GaussInt') -> 'GaussInt':\n        return GaussInt(self.re * o.re - self.im * o.im, self.re * o.im + self.im * o.re)\n\n    def __neg__(self) -> 'GaussInt':\n        return GaussInt(-self.re, -self.im)\n\n    def norm(self) -> Int:\n        return self.re * self.re + self.im * self.im\n\n    def __eq__(self, o: 'GaussInt') -> Bool:\n        return self.re == o.re and self.im == o.im",
+  "repaired": false
+ },
+ {
+  "name": "GridPoint",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct GridPoint(Copyable, Movable):\n    var x: Int\n    var y: Int\n\n    def __init__(out self, x_: Int, y_: Int):\n        self.x = x_\n        self.y = y_\n\n    def move(mut self, dx: Int, dy: Int):\n        self.x = self.x + dx\n        self.y = self.y + dy\n\n    def manhattan(mut self, o: GridPoint) -> Int:\n        var ax = self.x - o.x\n        if ax < 0:\n            ax = -ax\n        var ay = self.y - o.y\n        if ay < 0:\n            ay = -ay\n        return ax + ay",
+  "repaired": false
+ },
+ {
+  "name": "Interval",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpj8po1lt4/b.mojo:23:11: error: use of unknown declaration 'length'",
+  "code": "struct Interval(Copyable, Movable):\n    var lo: Float64\n    var hi: Float64\n\n    def __init__(out self, lo: Float64, hi: Float64):\n        self.lo = lo\n        self.hi = hi\n\n    def length(self) -> Float64:\n        return self.hi - self.lo\n\n    def contains(self, x: Float64) -> Bool:\n        return x >= self.lo and x <= self.hi\n\n    def intersect(self, other: Interval) -> Interval:\n        var lo = self.lo.max(other.lo)\n        var hi = self.hi.min(other.hi)\n        return Interval(lo, hi)",
+  "repaired": false
+ },
+ {
+  "name": "Ledger",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpj8qu1s36/b.mojo:2:23: error: use of unknown declaration 'Double'",
+  "code": "struct Ledger(Copyable, Movable):\n    var entries: List[Double]\n\n    def record(mut self, amount: Double):\n        self.entries.append(amount)\n\n    def balance(self) -> Double:\n        var s = 0.0\n        for e in self.entries:\n            s += e\n        return s\n\n    def num_entries(self) -> Int:\n        return len(self.entries)\n\n    def largest(self) -> Double:\n        var m = self.entries[0]\n        for e in self.entries:\n            if e > m:\n                m = e\n        return m",
+  "repaired": false
+ },
+ {
+  "name": "Mat3",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpkx5xfeq6/b.mojo:2:17: error: use of unknown declaration 'Double'",
+  "code": "struct Mat3(Copyable, Movable):\n    var m: List[Double]\n\n    def __init__(out self, a: Double, b: Double, c: Double, d: Double, e: Double, f: Double, g: Double, h: Double, i: Double):\n        self.m = [a, b, c, d, e, f, g, h, i]\n\n    def __add__(self, o: Mat3) -> Mat3:\n        return Mat3(self.m[0] + o.m[0], self.m[1] + o.m[1], self.m[2] + o.m[2], self.m[3] + o.m[3], self.m[4] + o.m[4], self.m[5] + o.m[5], self.m[6] + o.m[6], self.m[7] + o.m[7], self.m[8] + o.m[8])\n\n    def __mul__(self, s: Double) -> Mat3:\n        return Mat3(self.m[0] * s, self.m[1] * s, self.m[2] * s, self.m[3] * s, self.m[4] * s, self.m[5] * s, self.m[6] * s, self.m[7] * s, self.m[8] * s)\n\n    def trace(self) -> Double:\n        return self.m[0] + self.m[4] + self.m[8]\n\n    def det(self) -> Double:\n        return self.m[0] * (self.m[4] * self.m[8] - self.m[5] * self.m[7]) - self.m[1] * (self.m[3] * self.m[8] - self.m[5] * self.m[6]) + self.m[2] * (self.m[3] * self.m[7] - self.m[4] * self.m[6])",
+  "repaired": false
+ },
+ {
+  "name": "Matrix3x3",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp9cwyu3ah/b.mojo:2:17: error: use of unknown declaration 'Double'",
+  "code": "struct Matrix3x3(Copyable, Movable):\n    var m: List[Double]\n\n    def __init__(out self):\n        self.m = [0.0] * 9\n\n    def setIdentity(self):\n        for i in range(9):\n            self.m[i] = 0.0\n        self.m[0] = 1.0\n        self.m[4] = 1.0\n        self.m[8] = 1.0\n\n    def set(self, r: Int, c: Int, v: Double):\n        self.m[r * 3 + c] = v\n\n    def get(self, r: Int, c: Int) -> Double:\n        return self.m[r * 3 + c]\n\n    def trace(self) -> Double:\n        return self.m[0] + self.m[4] + self.m[8]\n\n    def det(self) -> Double:\n        return self.m[0] * (self.m[4] * self.m[8] - self.m[5] * self.m[7])",
+  "repaired": false
+ },
+ {
+  "name": "ModularInt",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpodfn5g2m/b.mojo:1:22: error: package 'math' does not contain 'mod'",
+  "code": "from std.math import mod\n\nstruct ModInt(Copyable, Movable):\n    var v: Int\n\n    def __init__(out self, x: Int):\n        var r = x % ModInt.M\n        if r < 0:\n            r += ModInt.M\n        self.v = r\n\n    def __add__(self, o: ModInt) -> ModInt:\n        return ModInt(self.v + o.v)\n\n    def __mul__(self, o: ModInt) -> ModInt:\n        return ModInt(self.v * o.v)\n\n    def __eq__(self, o: ModInt) -> Bool:\n        return self.v == o.v",
+  "repaired": false
+ },
+ {
+  "name": "MovingAverage",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpa3hwhyiv/b.mojo:3:19: error: use of unknown declaration 'Double'",
+  "code": "struct MovingAverage(Copyable, Movable):\n    var window: Int\n    var buf: List[Double]\n    def __init__(out self, w: Int):\n        self.window = w\n        self.buf = List[Double]()\n    def add(mut self, v: Double):\n        self.buf.append(v)\n        if len(self.buf) > self.window:\n            self.buf.remove_at(0)\n    def avg(self) -> Float64:\n        if len(self.buf) == 0:\n            return 0.0\n        var s = 0.0\n        for x in self.buf:\n            s += x\n        return s / Float64(len(self.buf))\n    def count(self) -> Int:\n        return len(self.buf)",
+  "repaired": false
+ },
+ {
+  "name": "Particle",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp6p_ge9eq/b.mojo:14:13: error: expression must be mutable for in-place operator destination",
+  "code": "struct Particle(Copyable, Movable):\n    var px: Float64\n    var py: Float64\n    var vx: Float64\n    var vy: Float64\n\n    def __init__(out self, px_: Float64, py_: Float64, vx_: Float64, vy_: Float64):\n        self.px = px_\n        self.py = py_\n        self.vx = vx_\n        self.vy = vy_\n\n    def step(self, dt: Float64):\n        self.px += self.vx * dt\n        self.py += self.vy * dt\n\n    def speed(self) -> Float64:\n        return self.vx * self.vx + self.vy * self.vy",
+  "repaired": false
+ },
+ {
+  "name": "Point2D",
+  "category": "class",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "struct Point2D(Copyable, Movable):\n    var x: Float64\n    var y: Float64\n\n    def __init__(out self, x: Float64, y: Float64):\n        self.x = x\n        self.y = y\n\n    def distance(self, other: Point2D) -> Float64:\n        var dx = self.x - other.x\n        var dy = self.y - other.y\n        return dx * dx + dy * dy\n\n    def norm(self) -> Float64:\n        var dx = self.x - self.x\n        var dy = self.y - self.y\n        return dx * dx + dy * dy",
+  "repaired": false
+ },
+ {
+  "name": "Pose2",
+  "category": "struct",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "struct Pose2(Copyable, Movable):\n    var x: Float64\n    var y: Float64\n    var theta: Float64\n\n    def __init__(out self, x: Float64, y: Float64, theta: Float64):\n        self.x = x\n        self.y = y\n        self.theta = theta\n\n    def translate(mut self, dx: Float64, dy: Float64):\n        self.x += dx\n        self.y += dy\n\n    def rotate(mut self, dt: Float64):\n        self.theta += dt\n\n    def dist_origin(self) -> Float64:\n        return self.x * self.x + self.y * self.y",
+  "repaired": false
+ },
+ {
+  "name": "Queue_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpmh25h4fa/b.mojo:2:20: error: unqualified access to struct parameter 'T'; use 'Self.T' instead",
+  "code": "struct Queue[T: Copyable & Movable](Copyable, Movable):\n    var data: List[T]\n\n    def enqueue(self, v: T) -> None:\n        self.data.append(v)\n\n    def dequeue(self) -> T:\n        var v = self.data[0]\n        self.data.remove_at(0)\n        return v\n\n    def size(self) -> Int:\n        return len(self.data)",
+  "repaired": false
+ },
+ {
+  "name": "RangeTracker",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct RangeTracker(Copyable, Movable):\n    var lo: Float64\n    var hi: Float64\n    var n: Int\n\n    def __init__(out self):\n        self.lo = 0.0\n        self.hi = 0.0\n        self.n = 0\n\n    def observe(mut self, x: Float64):\n        if self.n == 0:\n            self.lo = x\n            self.hi = x\n        elif x < self.lo:\n            self.lo = x\n        elif x > self.hi:\n            self.hi = x\n        self.n = self.n + 1\n\n    def span(self) -> Float64:\n        return self.hi - self.lo\n\n    def midpoint(self) -> Float64:\n        return (self.lo + self.hi) / 2.0",
+  "repaired": false
+ },
+ {
+  "name": "Rect",
+  "category": "struct",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Rect(Copyable, Movable):\n    var w: Float64\n    var h: Float64\n\n    def __init__(out self, w_: Float64, h_: Float64):\n        self.w = w_\n        self.h = h_\n\n    def area(self) -> Float64:\n        return self.w * self.h\n\n    def perimeter(self) -> Float64:\n        return 2.0 * (self.w + self.h)\n\n    def contains(self, px: Float64, py: Float64) -> Int:\n        if px >= 0.0 and px <= self.w and py >= 0.0 and py <= self.h:\n            return 1\n        return 0",
+  "repaired": false
+ },
+ {
+  "name": "RunningProduct",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct RunningProduct(Copyable, Movable):\n    var prod: Float64\n    var count: Int\n\n    def __init__(out self):\n        self.prod = 1.0\n        self.count = 0\n\n    def multiply(mut self, v: Float64):\n        self.prod *= v\n        self.count += 1\n\n    def geometricMean(self) -> Float64:\n        if self.count == 0:\n            return 0.0\n        return self.prod ** (1.0 / Float64(self.count))\n\n    def value(self) -> Float64:\n        return self.prod",
+  "repaired": false
+ },
+ {
+  "name": "Segment",
+  "category": "struct",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "struct Segment(Copyable, Movable):\n    var x0: Float64\n    var y0: Float64\n    var x1: Float64\n    var y1: Float64\n\n    def __init__(out self, a: Float64, b: Float64, c: Float64, d: Float64):\n        self.x0 = a\n        self.y0 = b\n        self.x1 = c\n        self.y1 = d\n\n    def length(self) -> Float64:\n        var dx = self.x1 - self.x0\n        var dy = self.y1 - self.y0\n        return dx * dx + dy * dy\n\n    def midx(self) -> Float64:\n        var dx = self.x1 - self.x0\n        var dy = self.y1 - self.y0\n        return (self.x0 + self.x1) / 2.0",
+  "repaired": false
+ },
+ {
+  "name": "Stack_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmplaxw_g4r/b.mojo:2:20: error: unqualified access to struct parameter 'T'; use 'Self.T' instead",
+  "code": "struct Stack[T: Copyable & Movable](Copyable, Movable):\n    var data: List[T]\n\n    def __init__(out self):\n        self.data = List[T]()\n\n    def push(self, v: T):\n        self.data.append(v)\n\n    def pop(self) -> T:\n        var v = self.data.last()\n        self.data.remove_last()\n        return v\n\n    def size(self) -> Int:\n        return len(self.data)",
+  "repaired": false
+ },
+ {
+  "name": "Stopwatch2",
+  "category": "class",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpn82i7iht/b.mojo:10:13: error: expression must be mutable in assignment",
+  "code": "struct Stopwatch2(Copyable, Movable):\n    var elapsed: Float64\n    var running: Bool\n\n    def __init__(out self):\n        self.elapsed = 0.0\n        self.running = False\n\n    def start(self):\n        self.running = True\n\n    def advance(self, dt: Float64):\n        if self.running:\n            self.elapsed = self.elapsed + dt\n\n    def stop(self):\n        self.running = False\n\n    def reset(self):\n        self.elapsed = 0.0\n        self.running = False\n\n    def read(self) -> Float64:\n        return self.elapsed",
+  "repaired": false
+ },
+ {
+  "name": "Temperature",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Temperature(Copyable, Movable):\n    var celsius: Float64\n\n    def __init__(out self, c: Float64):\n        self.celsius = c\n\n    def to_fahrenheit(self) -> Float64:\n        return self.celsius * 9.0 / 5.0 + 32.0\n\n    def to_kelvin(self) -> Float64:\n        return self.celsius + 273.15\n\n    def set_fahrenheit(mut self, f: Float64) -> None:\n        self.celsius = (f - 32.0) * 5.0 / 9.0",
+  "repaired": false
+ },
+ {
+  "name": "TimeSpan",
+  "category": "operator",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpog5odc0v/b.mojo:7:30: error: expected a type, not a value",
+  "code": "struct TimeSpan(Copyable, Movable):\n    var secs: Int\n\n    def __init__(out self, h: Int, m: Int, s: Int):\n        self.secs = h * 3600 + m * 60 + s\n\n    def __add__(self, other: 'TimeSpan') -> 'TimeSpan':\n        var r = TimeSpan(0, 0, 0)\n        r.secs = self.secs + other.secs\n        return r\n\n    def __sub__(self, other: 'TimeSpan') -> 'TimeSpan':\n        var r = TimeSpan(0, 0, 0)\n        r.secs = self.secs - other.secs\n        return r\n\n    def __mul__(self, n: Int) -> 'TimeSpan':\n        var r = TimeSpan(0, 0, 0)\n        r.secs = self.secs * n\n        return r\n\n    def __lt__(self, other: 'TimeSpan') -> Bool:\n        return self.secs < other.secs\n\n    def __eq__(self, other: 'TimeSpan') -> Bool:\n        return self.secs == other.secs\n\n    def hours(self) -> Int:\n        return self.secs // 3600",
+  "repaired": false
+ },
+ {
+  "name": "TripleT",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpy07grpqz/b.mojo:21:13: error: use of unknown declaration 'Triple'",
+  "code": "struct TripleD(Copyable, Movable):\n    var a: Float64\n    var b: Float64\n    var c: Float64\n\n    def __init__(out self, a_: Float64, b_: Float64, c_: Float64):\n        self.a = a_\n        self.b = b_\n        self.c = c_\n\n    def last(self) -> Float64:\n        return self.c\n\n    def rotate(mut self):\n        var t = self.a\n        self.a = self.b\n        self.b = self.c\n        self.c = t",
+  "repaired": false
+ },
+ {
+  "name": "Vec2i",
+  "category": "operator",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Vec2i(Copyable, Movable):\n    var x: Int\n    var y: Int\n\n    def __init__(out self, a: Int, b: Int):\n        self.x = a\n        self.y = b\n\n    def __add__(self, o: Self) -> Self:\n        return Vec2i(self.x + o.x, self.y + o.y)\n\n    def __mul__(self, s: Int) -> Self:\n        return Vec2i(self.x * s, self.y * s)\n\n    def dot(self, o: Self) -> Int:\n        return self.x * o.x + self.y * o.y\n\n    def __eq__(self, o: Self) -> Bool:\n        return self.x == o.x and self.y == o.y",
+  "repaired": false
+ },
+ {
+  "name": "Vec4",
+  "category": "class",
+  "status": "pass",
+  "detail": "",
+  "code": "struct Vec4(Copyable, Movable):\n    var a: Float64\n    var b: Float64\n    var c: Float64\n    var d: Float64\n\n    def __init__(out self, a_: Float64, b_: Float64, c_: Float64, d_: Float64):\n        self.a = a_\n        self.b = b_\n        self.c = c_\n        self.d = d_\n\n    def add(mut self, o: Vec4):\n        self.a += o.a\n        self.b += o.b\n        self.c += o.c\n        self.d += o.d\n\n    def scale(mut self, s: Float64):\n        self.a *= s\n        self.b *= s\n        self.c *= s\n        self.d *= s\n\n    def dot(self, o: Vec4) -> Float64:\n        return self.a * o.a + self.b * o.b + self.c * o.c + self.d * o.d\n\n    def sum(self) -> Float64:\n        return self.a + self.b + self.c + self.d",
+  "repaired": false
+ },
+ {
+  "name": "abs_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp7_acd8_8/b.mojo:2:31: error: unqualified access to struct parameter 'T'; use 'Self.T' instead",
+  "code": "struct Abs[T: Copyable & Movable](Copyable, Movable):\n    def __init__(out self, x: T):\n        self.x = x\n\n    def abs(self) -> T:\n        return if self.x < T(0):\n            -self.x\n        else:\n            self.x",
+  "repaired": false
+ },
+ {
+  "name": "accumulate_then_get",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp7x_0crf9/b.mojo:5:16: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def accumulate_then_get(events: List[String], key: String) -> Int:\n    var acc = Dict[String, Int]()\n    for i in range(len(events)):\n        if key in acc:\n            acc[key] += Int(i + 1)\n        else:\n            acc[key] = Int(i + 1)\n    if key not in acc:\n        return -1\n    return acc[key]",
+  "repaired": false
+ },
+ {
+  "name": "adder_closure",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmprprojuyj/b.mojo:1:26: error: use of unknown declaration 'NoReturn'",
+  "code": "def adder(x: Int) -> Int[NoReturn]:\n    var result = 0\n    for _ in range(x):\n        result += 1\n    return result\n\ndef call_adder(k: Int, x: Int) -> Int:\n    return adder(k)(x)",
+  "repaired": false
+ },
+ {
+  "name": "apply_functor",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpuk6dpj_k/b.mojo:3:22: error: use of unknown declaration 'Callable'",
+  "code": "from std.python import Python\n\ndef apply_functor(f: Callable[Callable[None, Int], Int], x: Int) -> Int:\n    var py_f = Python.import_module(\"functools\")\n    var py_f_apply = py_f.partial(*f.args())\n    return py_f_apply(x)",
+  "repaired": false
+ },
+ {
+  "name": "apply_twice_dtype",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpj5dhi0ru/b.mojo:2:12: error: unqualified access to struct parameter 'T'; use 'Self.T' instead",
+  "code": "struct Bumpable[T: Copyable & Movable](Copyable, Movable):\n    var x: T\n\n    def __init__(out self, x: T):\n        self.x = x\n\n    def bump_by(mut self, k: T) -> T:\n        return self.x + k\n\n    def apply_twice(mut self, k: T) -> T:\n        return self.bump_by(self.bump_by(self.x, k), k)",
+  "repaired": false
+ },
+ {
+  "name": "binary_to_decimal",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpvineozrc/b.mojo:4:34: error: unexpected character",
+  "code": "def binary_to_decimal(s: String) -> Int:\n    var r = 0\n    for i in range(len(s)):\n        r = r * 2 + (s[i] == \"1\" ? 1 : 0)\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "bounds_checked_get",
+  "category": "error",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpa1awestu/b.mojo:1:48: error: unknown function effect 'throws', expected 'raises', 'capturing', 'thin",
+  "code": "def bounds_checked_get(v: List[Int], idx: Int) throws -> Int:\n    if idx < 0 or idx >= len(v):\n        raise IndexError(\"index\")\n    return v[idx]",
+  "repaired": false
+ },
+ {
+  "name": "bump_counter",
+  "category": "reference",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmplmogrc2v/b.mojo:3:9: error: expression must be mutable for in-place operator destination",
+  "code": "def bump_counter(counter: Int, times: Int):\n    for _ in range(times):\n        counter += 1",
+  "repaired": false
+ },
+ {
+  "name": "catalan_number",
+  "category": "algo",
+  "status": "pass",
+  "detail": "",
+  "code": "def catalan_number(n: Int) -> Int:\n    var c = 1\n    for i in range(n):\n        c = c * 2 * (2 * i + 1) / (i + 2)\n    return c",
+  "repaired": false
+ },
+ {
+  "name": "celsius_to_fahrenheit",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def celsius_to_fahrenheit(c: Float64) -> Float64:\n    return c * 9.0 / 5.0 + 32.0",
+  "repaired": false
+ },
+ {
+  "name": "char_positions",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp52g82jbg/b.mojo:1:39: error: use of unknown declaration 'Char'",
+  "code": "def char_positions(s: String, target: Char) -> Int:\n    var last = Dict[Char, Int]()\n    for i in range(s.len()):\n        if target in last:\n            last[target] = i\n        else:\n            last[target] = i\n    if target not in last:\n        return -1\n    return last[target]",
+  "repaired": false
+ },
+ {
+  "name": "checked_factorial",
+  "category": "error",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpjbxdrcan/b.mojo:3:15: error: use of unknown declaration 'ValueError'",
+  "code": "def checked_factorial(n: Int) raises -> Int:\n    if n < 0:\n        raise ValueError(\"negative\")\n    if n > 20:\n        raise OverflowError(\"overflow\")\n    var r = 1\n    for i in range(2, n + 1):\n        r *= i\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "checked_log2",
+  "category": "error",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp3afywc0v/b.mojo:1:30: error: unknown function effect 'throws', expected 'raises', 'capturing', 'thin",
+  "code": "def checked_log2(x: Float64) throws -> Float64:\n    if x <= 0.0:\n        raise ValueError(\"non-positive\")\n    return 1.0 / log2(x)",
+  "repaired": false
+ },
+ {
+  "name": "checked_percent",
+  "category": "error",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpdzo60lvd/b.mojo:3:15: error: use of unknown declaration 'ValueError'",
+  "code": "def checked_percent(part: Float64, whole: Float64) raises -> Float64:\n    if whole == 0.0:\n        raise ValueError(\"zero whole\")\n    return part / whole * 100.0",
+  "repaired": false
+ },
+ {
+  "name": "chess_piece_value",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp4_0suizs/b.mojo:2:1: error: statement does not support decorators; remove the decorator",
+  "code": "@fieldwise_init\nenum Piece:\n    PIECE_PAWN = 1\n    PIECE_KNIGHT = 3\n    PIECE_BISHOP = 3\n    PIECE_ROOK = 5\n    PIECE_QUEEN = 9\n    PIECE_KING = 0\n\ndef chess_piece_value(p: Int) -> Int:\n    match p:\n        | PIECE_PAWN: return 1\n        | PIECE_KNIGHT: return 3\n        | PIECE_BISHOP: return 3\n        | PIECE_ROOK: return 5\n        | PIECE_QUEEN: return 9\n        | PIECE_KING: return 0\n        else: return -1",
+  "repaired": false
+ },
+ {
+  "name": "clamp_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp_gpj4tj0/b.mojo:2:10: error: 'T' does not implement the '__lt__' method",
+  "code": "def clamp_generic[T: Copyable & Movable](x: T, lo: T, hi: T) -> T:\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x",
+  "repaired": false
+ },
+ {
+  "name": "classify_number",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def classify_number(n: Int) -> Int:\n    if n < 0:\n        return -1\n    elif n == 0:\n        return 0\n    else:\n        return 1",
+  "repaired": false
+ },
+ {
+  "name": "climb_stairs",
+  "category": "algo",
+  "status": "pass",
+  "detail": "",
+  "code": "def climb_stairs(n: Int) -> Int:\n    if n <= 2:\n        return n\n    var a = 1\n    var b = 2\n    for i in range(3, n + 1):\n        var t = a + b\n        a = b\n        b = t\n    return b",
+  "repaired": false
+ },
+ {
+  "name": "col_min_vector",
+  "category": "matrix",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp50a35zpu/b.mojo:1:30: error: use of unknown declaration 'Double'",
+  "code": "def col_min_vec(m: List[List[Double]]) -> List[Double]:\n    var n = len(m)\n    var c = len(m[0])\n    var r = List[Double](len(c))\n    for j in range(c):\n        var mn = m[0][j]\n        for i in range(1, n):\n            if m[i][j] < mn:\n                mn = m[i][j]\n        r[j] = mn\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "collatz_steps_capped",
+  "category": "control",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmplm9d5ay0/b.mojo:5:13: error: expression must be mutable for in-place operator destination",
+  "code": "def collatz(n: Int, cap: Int) -> Int:\n    var steps = 0\n    while n != 1 and steps < cap:\n        if n % 2 == 0:\n            n //= 2\n        else:\n            n = 3 * n + 1\n        steps += 1\n    return steps",
+  "repaired": false
+ },
+ {
+  "name": "concat_n",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def concat_n(s: String, n: Int) -> String:\n    var result = String(\"\")\n    for i in range(n):\n        result += s\n    return result",
+  "repaired": false
+ },
+ {
+  "name": "cosine_similarity2d",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def cosine_similarity2d(ax: Float64, ay: Float64, bx: Float64, by: Float64) -> Float64:\n    var dot = ax * bx + ay * by\n    var na = sqrt(ax * ax + ay * ay)\n    var nb = sqrt(bx * bx + by * by)\n    return dot / (na * nb)",
+  "repaired": true
+ },
+ {
+  "name": "count_chars",
+  "category": "string",
+  "status": "pass",
+  "detail": "",
+  "code": "def count_chars(s: String) -> Int:\n    return len(s)",
+  "repaired": false
+ },
+ {
+  "name": "count_distinct",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpe0kb6jsq/b.mojo:5:17: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def count_distinct(v: List[Int]) -> Int:\n    var seen = Dict[Int, Int]()\n    for i in range(len(v)):\n        if v[i] in seen:\n            seen[v[i]] += 1\n        else:\n            seen[v[i]] = 1\n    return len(seen)",
+  "repaired": false
+ },
+ {
+  "name": "count_leading_zeros",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp90v5dfu3/b.mojo:15:11: error: invalid call to 'clz64': value passed to 'n' cannot be converted from ",
+  "code": "def clz64(n: Int) -> Int:\n    if n == 0:\n        return 64\n    var c = 0\n    var mask = 1 << 63\n    while (n & mask) == 0:\n        c += 1\n        mask >>= 1\n    return c",
+  "repaired": false
+ },
+ {
+  "name": "count_satisfying",
+  "category": "closure",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpmrmvenfm/b.mojo:1:33: error: unexpected token in expression",
+  "code": "def count_satisfying[B: Int](p: @Callable[[], Bool] -> B, v: List[Int]) -> Int:\n    var c = 0\n    for x in v:\n        if p(x):\n            c += 1\n    return c",
+  "repaired": false
+ },
+ {
+  "name": "count_vowels",
+  "category": "string",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpgi5cjre8/b.mojo:4:18: error: no matching method in call to '__getitem__'",
+  "code": "def count_vowels(s: String) -> Int:\n    var count = 0\n    for i in range(len(s)):\n        var c = s[i].charCodeAt(0)\n        if c >= 65 and c <= 90:\n            c += 32\n        if c == 97 or c == 101 or c == 105 or c == 111 or c == 117:\n            count += 1\n    return count",
+  "repaired": false
+ },
+ {
+  "name": "cumulative_product",
+  "category": "array",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp9016pozv/b.mojo:7:12: error: value of type 'List[Int]' cannot be implicitly copied, it does not conf",
+  "code": "def cumulative_product(v: List[Int]) -> List[Int]:\n    var r = List[Int]()\n    var p = 1\n    for i in range(len(v)):\n        p *= v[i]\n        r.append(p)\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "decimal_to_binary_string",
+  "category": "algo",
+  "status": "no_code",
+  "detail": "",
+  "code": "",
+  "repaired": false
+ },
+ {
+  "name": "deg2rad",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def deg2rad(d: Float64) -> Float64:\n    return d * 3.14159265358979323846 / 180.0",
+  "repaired": false
+ },
+ {
+  "name": "digit_count",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp4ju349rf/b.mojo:3:9: error: invalid redefinition of 'n'",
+  "code": "def digit_count(n: Int) -> Int:\n    if n < 0:\n        n = -n\n    if n == 0:\n        return 1\n    var c = 0\n    while n > 0:\n        c += 1\n        n //= 10\n    return c",
+  "repaired": false
+ },
+ {
+  "name": "direction_vector",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp61ix2t1o/b.mojo:2:1: error: statement does not support decorators; remove the decorator",
+  "code": "@fieldwise_init\nenum Dir(Int):\n    NORTH = 0\n    EAST = 1\n    SOUTH = 2\n    WEST = 3\n\ndef move_x(dir: Dir) -> Int:\n    match dir:\n        0: return 1\n        1: return -1\n        2: return 0\n        3: return 0\n    raise ValueError(\"Unknown direction\")\n\ndef move_y(dir: Dir) -> Int:\n    match dir:\n        0: return 1\n        1: return -1\n        2: return 0\n        3: return 0\n    raise ValueError(\"Unknown direction\")",
+  "repaired": false
+ },
+ {
+  "name": "doppler_shift",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def doppler_shift(f: Float64, vs: Float64, vr: Float64) -> Float64:\n    var c = 343.0\n    return f * (c + vr) / (c - vs)",
+  "repaired": false
+ },
+ {
+  "name": "ema_step",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def ema_step(prev: Float64, x: Float64, alpha: Float64) -> Float64:\n    return alpha * x + (1.0 - alpha) * prev",
+  "repaired": false
+ },
+ {
+  "name": "erase_and_size",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpxbq14u6u/b.mojo:6:9: error: unexpected token in expression",
+  "code": "def erase_and_size(keys: List[String], remove_key: String) -> Int:\n    var m = Dict[String, Int]()\n    for i in range(len(keys)):\n        m[keys[i]] = 1\n    if remove_key in m:\n        del m[remove_key]\n    return len(m)",
+  "repaired": false
+ },
+ {
+  "name": "factorial",
+  "category": "algo",
+  "status": "pass",
+  "detail": "",
+  "code": "def factorial(n: Int) -> Int:\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)",
+  "repaired": false
+ },
+ {
+  "name": "fib_pair_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def fib_pair_rec(n: Int) -> Int:\n    if n == 0:\n        return 0\n    if n == 1:\n        return 1\n    return fib_pair_rec(n - 1) + fib_pair_rec(n - 2)",
+  "repaired": false
+ },
+ {
+  "name": "fill_lowest_bits",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def fill_lowest_bits(n: Int) -> UInt64:\n    if n == 0:\n        return 0\n    return (1 << n) - 1",
+  "repaired": false
+ },
+ {
+  "name": "find_index_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp4zdud25u/b.mojo:1:50: error: 'Pointer' failed to infer parameter 'origin', specify the parameter or ",
+  "code": "def find_index[T: Copyable & Movable](xs: Pointer[T], n: Int, target: T) -> Int:\n    var i = 0\n    for _ in range(n):\n        if xs[i] == target:\n            return i\n        i += 1\n    return -1",
+  "repaired": false
+ },
+ {
+  "name": "fizzbuzz_count",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def fizzbuzz_count(n: Int) -> Int:\n    var c = 0\n    for i in range(1, n + 1):\n        if i % 15 == 0:\n            c += 3\n        elif i % 3 == 0:\n            c += 1\n        elif i % 5 == 0:\n            c += 2\n        else:\n            c += 0\n    return c",
+  "repaired": false
+ },
+ {
+  "name": "fractional_part",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp3ymijq3h/b.mojo:2:17: error: 'Float64' value has no attribute 'floor'",
+  "code": "def fractional_part(x: Float64) -> Float64:\n    return x - x.floor()",
+  "repaired": false
+ },
+ {
+  "name": "gcd",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpy__0cvoh/b.mojo:4:9: error: invalid redefinition of 'b'",
+  "code": "def gcd(a: Int, b: Int) -> Int:\n    while b != 0:\n        var t = b\n        b = a % b\n        a = t\n    return a",
+  "repaired": false
+ },
+ {
+  "name": "gcd_subtraction_rec",
+  "category": "recursion",
+  "status": "run_timeout",
+  "detail": "",
+  "code": "def gcd_subtraction_rec(a: Int, b: Int) -> Int:\n    if a == b:\n        return a\n    if a > b:\n        return gcd_subtraction_rec(a - b, b)\n    return gcd_subtraction_rec(a, a - b)",
+  "repaired": false
+ },
+ {
+  "name": "geometric_mean3",
+  "category": "numeric",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def geometric_mean3(a: Float64, b: Float64, c: Float64) -> Float64:\n    return a * b * c ** (1.0 / 3.0)",
+  "repaired": false
+ },
+ {
+  "name": "group_count",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmprdjdvyuh/b.mojo:5:19: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def group_count(items: List[String], group: String) -> Int:\n    var counts = Dict[String, Int]()\n    for i in range(len(items)):\n        if items[i] in counts:\n            counts[items[i]] += 1\n        else:\n            counts[items[i]] = 1\n    return counts[group]",
+  "repaired": false
+ },
+ {
+  "name": "highest_bit_position",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp9dpzmo3i/b.mojo:7:9: error: expression must be mutable for in-place operator destination",
+  "code": "def highest_bit_pos(n: UInt64) -> Int:\n    if n == 0:\n        return -1\n    var p = -1\n    while n != 0:\n        p += 1\n        n >>= 1\n    return p",
+  "repaired": false
+ },
+ {
+  "name": "http_status_class",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpftgng3o_/b.mojo:2:1: error: statement does not support decorators; remove the decorator",
+  "code": "@fieldwise_init\nenum HttpClass(Int):\n    var HTTP_INFO: Int = 1\n    var HTTP_OK: Int = 2\n    var HTTP_REDIRECT: Int = 3\n    var HTTP_CLIENT_ERR: Int = 4\n    var HTTP_SERVER_ERR: Int = 5\n    var HTTP_UNKNOWN: Int = 0\n\ndef http_status_class(code: Int) -> Int:\n    if code >= 100 and code < 200:\n        return HttpClass.HTTP_INFO\n    if code >= 200 and code < 300:\n        return HttpClass.HTTP_OK\n    if code >= 300 and code < 400:\n        return HttpClass.HTTP_REDIRECT\n    if code >= 400 and code < 500:\n        return HttpClass.HTTP_CLIENT_ERR\n    if code >= 500 and code < 600:\n        return HttpClass.HTTP_SERVER_ERR\n    return HttpClass.HTTP_UNKNOWN",
+  "repaired": false
+ },
+ {
+  "name": "ideal_gas_pressure",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def ideal_gas_pressure(n: Float64, t: Float64, v: Float64) -> Float64:\n    var R = 8.314462618\n    return n * R * t / v",
+  "repaired": false
+ },
+ {
+  "name": "increment_inplace",
+  "category": "reference",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmptb7bvgj3/b.mojo:2:5: error: expression must be mutable for in-place operator destination",
+  "code": "def increment_inplace(x: Int) raises -> None:\n    x += 1",
+  "repaired": false
+ },
+ {
+  "name": "int_log2",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpyngyi3mq/b.mojo:4:9: error: expression must be mutable for in-place operator destination",
+  "code": "def log2(n: Int) -> Int:\n    var r = 0\n    while n > 1:\n        n >>= 1\n        r += 1\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "invert_lookup",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp7qrc453g/b.mojo:2:40: error: no matching function in initialization",
+  "code": "def invert_lookup(names: List[String], ids: List[Int], target: Int) -> String:\n    var by_id: Dict[Int, String] = Dict()\n    for i in range(len(names)):\n        by_id[ids[i]] = names[i]\n    var it: Dict[Int, String].Iterator = by_id.find(target)\n    if it == None:\n        return String(\"?\")\n    return it.value",
+  "repaired": false
+ },
+ {
+  "name": "is_even_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def is_even_rec(n: Int) -> Int:\n    if n == 0:\n        return 1\n    if n == 1:\n        return 0\n    return is_even_rec(n - 2)",
+  "repaired": false
+ },
+ {
+  "name": "is_prime",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp95kry5il/b.mojo:4:23: error: use of unknown declaration 'int'",
+  "code": "def is_prime(n: Int) -> Bool:\n    if n < 2:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True",
+  "repaired": false
+ },
+ {
+  "name": "kadane_max_subarray",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def kadane(v: List[Int]) -> Int:\n    var best = v[0]\n    var cur = v[0]\n    for i in range(len(v)):\n        if cur + v[i] > v[i]:\n            cur = cur + v[i]\n        else:\n            cur = v[i]\n        if cur > best:\n            best = cur\n    return best",
+  "repaired": false
+ },
+ {
+  "name": "kinetic_energy",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def kinetic_energy(m: Float64, v: Float64) -> Float64:\n    return 0.5 * m * v * v",
+  "repaired": false
+ },
+ {
+  "name": "leaky_relu",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def leaky_relu(x: Float64) -> Float64:\n    if x > 0.0:\n        return x\n    else:\n        return 0.01 * x",
+  "repaired": false
+ },
+ {
+  "name": "lerp_dtype",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpj6ji61mf/b.mojo:2:20: error: 'T' does not implement the '__sub__' method",
+  "code": "def lerp_dtype[T: Copyable & Movable](a: T, b: T, t: Float64) -> T:\n    var c = a + (b - a) * t\n    return c",
+  "repaired": false
+ },
+ {
+  "name": "list_minmax",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmplbq8f5yf/b.mojo:13:18: error: no matching function in initialization",
+  "code": "struct MinMax(Copyable, Movable):\n    var min: Float64\n    var max: Float64\n\ndef minmax(xs: List[Float64]) -> MinMax:\n    var lo = xs[0]\n    var hi = xs[0]\n    for i in range(len(xs)):\n        if xs[i] < lo:\n            lo = xs[i]\n        if xs[i] > hi:\n            hi = xs[i]\n    return MinMax(lo, hi)",
+  "repaired": false
+ },
+ {
+  "name": "log_sum_exp2",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp3g3e99rw/b.mojo:2:13: error: unexpected token in expression",
+  "code": "def log_sum_exp2(a: Float64, b: Float64) -> Float64:\n    var m = if a > b else b\n    var res = m + log(exp(a - m) + exp(b - m))\n    return res",
+  "repaired": false
+ },
+ {
+  "name": "lookup_default",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpzt3ii13y/b.mojo:5:14: error: cannot emit closure for method 'value'",
+  "code": "def lookup_default(m: Dict[String, Int], key: String, dflt: Int) -> Int:\n    var it = m.get(key)\n    if it is None:\n        return dflt\n    return it.value",
+  "repaired": false
+ },
+ {
+  "name": "majority_element",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpuq50mswq/b.mojo:7:19: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def majority_element(nums: List[Int]) -> Int:\n    var counts = Dict[Int, Int]()\n    var n = len(nums)\n    for i in range(n):\n        var num = nums[i]\n        if num in counts:\n            counts[num] += 1\n        else:\n            counts[num] = 1\n        if counts[num] * 2 > n:\n            return num\n    return -1",
+  "repaired": false
+ },
+ {
+  "name": "matrix_col_sums",
+  "category": "matrix",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp7mjd7dav/b.mojo:1:34: error: use of unknown declaration 'Double'",
+  "code": "def matrix_col_sums(m: List[List[Double]]) -> List[Double]:\n    var cols = len(m[0])\n    var out = List[Double](cols, 0.0)\n    for i in range(len(m)):\n        for j in range(cols):\n            out[j] += m[i][j]\n    return out",
+  "repaired": false
+ },
+ {
+  "name": "matrix_max_element",
+  "category": "matrix",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmplmcie_l7/b.mojo:1:37: error: use of unknown declaration 'Double'",
+  "code": "def matrix_max_element(m: List[List[Double]]) -> Double:\n    var best = m[0][0]\n    for i in range(len(m)):\n        for j in range(len(m[i])):\n            if m[i][j] > best:\n                best = m[i][j]\n    return best",
+  "repaired": false
+ },
+ {
+  "name": "max_element",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def max_element(v: List[Int]) -> Int:\n    var best = v[0]\n    for i in range(len(v)):\n        if v[i] > best:\n            best = v[i]\n    return best",
+  "repaired": false
+ },
+ {
+  "name": "max_value_key",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpot0v6fic/b.mojo:4:10: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def max_value_key(keys: List[String], vals: List[Int]) -> String:\n    var m = Dict[String, Int]()\n    for i in range(len(keys)):\n        m[keys[i]] += vals[i]\n    var best = String(\"\")\n    var best_val = -2147483647\n    for key, val in m.items():\n        if val > best_val:\n            best_val = val\n            best = key\n    return best",
+  "repaired": false
+ },
+ {
+  "name": "merge_sorted",
+  "category": "array",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpu6q51pty/b.mojo:12:12: error: value of type 'List[Int]' cannot be implicitly copied, it does not con",
+  "code": "def merge_sorted(a: List[Int], b: List[Int]) -> List[Int]:\n    var r = List[Int]()\n    var i = 0\n    var j = 0\n    while i < len(a) and j < len(b):\n        if a[i] <= b[j]: r.append(a[i])\n        else: r.append(b[j])\n        i += 1\n        j += 1\n    while i < len(a): r.append(a[i])\n    while j < len(b): r.append(b[j])\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "min_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpe36ml5p_/b.mojo:2:5: error: unexpected token in expression",
+  "code": "def min_generic[T: Copyable & Movable](a: T, b: T) -> T: Copyable & Movable[Self]:\n    if a < b:\n        return a\n    else:\n        return b",
+  "repaired": false
+ },
+ {
+  "name": "min_value_key",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpusi_zuvk/b.mojo:6:21: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def min_value_key(keys: List[Int], vals: List[Int]) -> Int:\n    var m = Dict[Int, Int]()\n    for i in range(len(keys)):\n        m[keys[i]] = vals[i]\n    var best_key = keys[0]\n    var best_val = m[keys[0]]\n    for i in range(len(keys)):\n        if m[keys[i]] < best_val:\n            best_val = m[keys[i]]\n            best_key = keys[i]\n    return best_key",
+  "repaired": false
+ },
+ {
+  "name": "multiply_by_addition_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def multiply_by_addition_rec(a: Int, b: Int) -> Int:\n    if b == 0:\n        return 0\n    return a + multiply_by_addition_rec(a, b - 1)",
+  "repaired": false
+ },
+ {
+  "name": "nested_loop_count",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def nested_loop_count(n: Int) -> Int:\n    var c = 0\n    for i in range(n):\n        for j in range(i, n):\n            if (i + j) % 2 == 0:\n                c += 1\n    return c",
+  "repaired": false
+ },
+ {
+  "name": "next_power_of_two",
+  "category": "bitops",
+  "status": "pass",
+  "detail": "",
+  "code": "def next_pow2(n: Int) -> Int:\n    if n <= 1:\n        return 1\n    var p = 1\n    while p < n:\n        p <<= 1\n    return p",
+  "repaired": false
+ },
+ {
+  "name": "normalize_sign",
+  "category": "reference",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpj7d3z5km/b.mojo:3:9: error: invalid redefinition of 'x'",
+  "code": "def normalize_sign(x: Int) raises -> None:\n    if x > 0:\n        x = 1\n    elif x < 0:\n        x = -1\n    else:\n        x = 0",
+  "repaired": false
+ },
+ {
+  "name": "pair_swap",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpj08pz3lq/b.mojo:2:16: error: unqualified access to struct parameter 'T'; use 'Self.T' instead",
+  "code": "struct Pair[T: Copyable & Movable](Copyable, Movable):\n    var first: T\n    var second: T\n\n    def swapped(self) -> Pair[T]:\n        return Pair[T](self.second, self.first)",
+  "repaired": false
+ },
+ {
+  "name": "parse_grade_checked",
+  "category": "error",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp_mle15go/b.mojo:1:37: error: unknown function effect 'throws', expected 'raises', 'capturing', 'thin",
+  "code": "def parse_grade_checked(score: Int) throws -> String:\n    if score < 0 or score > 100:\n        raise ValueError(\"out of range\")\n    if score >= 90:\n        return \"A\"\n    if score >= 80:\n        return \"B\"\n    if score >= 70:\n        return \"C\"\n    return \"F\"",
+  "repaired": false
+ },
+ {
+  "name": "pascal_row",
+  "category": "algo",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpiclcjq_1/b.mojo:7:12: error: value of type 'List[Int]' cannot be implicitly copied, it does not conf",
+  "code": "def pascal_row(n: Int) -> List[Int]:\n    var r = List[Int]()\n    r.append(1)\n    for k in range(1, n + 1):\n        var next = r[k - 1] * (n - k + 1) // k\n        r.append(next)\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "point_normalize",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpjk2xgsq0/b.mojo:16:13: error: use of unknown declaration 'normalize'",
+  "code": "struct Point(Copyable, Movable):\n    var x: Float64\n    var y: Float64\n\n    def __init__(out self, x: Float64, y: Float64):\n        self.x = x\n        self.y = y\n\n    def normalize(mut self) -> Point:\n        var mag = self.x * self.x + self.y * self.y\n        if mag == 0.0:\n            return Point(0.0, 0.0)\n        return Point(self.x / mag, self.y / mag)",
+  "repaired": false
+ },
+ {
+  "name": "power_of_two_rec",
+  "category": "recursion",
+  "status": "pass",
+  "detail": "",
+  "code": "def power_of_two_rec(n: Int) -> Int:\n    if n == 1:\n        return 1\n    if n <= 0 or n % 2 != 0:\n        return 0\n    return power_of_two_rec(n // 2)",
+  "repaired": false
+ },
+ {
+  "name": "present_value",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmplb4ovg35/b.mojo:5:11: error: invalid call to 'present_value': value passed to 'n' cannot be converte",
+  "code": "def present_value(fv: Float64, r: Float64, n: Int) -> Float64:\n    return fv / pow(1.0 + r, n)",
+  "repaired": false
+ },
+ {
+  "name": "quadratic_root_max",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp0f90lzpf/b.mojo:3:13: error: use of unknown declaration 'sqrt'",
+  "code": "def quadratic_root_max(a: Float64, b: Float64, c: Float64) -> Float64:\n    var disc = b * b - 4.0 * a * c\n    var s = sqrt(disc)\n    var r1 = (-b + s) / (2.0 * a)\n    var r2 = (-b - s) / (2.0 * a)\n    return if r1 > r2 then r1 else r2",
+  "repaired": false
+ },
+ {
+  "name": "range_sum",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def range_sum(v: List[Int], lo: Int, hi: Int) -> Int:\n    var s = 0\n    for i in range(lo, hi + 1):\n        s += v[i]\n    return s",
+  "repaired": false
+ },
+ {
+  "name": "relu",
+  "category": "numeric",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp8bs623f6/b.mojo:2:12: error: unexpected token in expression",
+  "code": "def relu(x: Float64) -> Float64:\n    return if x > 0.0:\n        x\n    else:\n        0.0",
+  "repaired": false
+ },
+ {
+  "name": "reverse_bits",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpr6c_7wgd/b.mojo:5:9: error: expression must be mutable for in-place operator destination",
+  "code": "def reverse_bits(n: Int) -> Int:\n    var r = 0\n    for i in range(64):\n        r = (r << 1) | (n & 1)\n        n >>= 1\n    return r",
+  "repaired": false
+ },
+ {
+  "name": "reverse_list_generic",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpb9gt7uwh/b.mojo:1:35: error: unexpected token in expression",
+  "code": "def reverse_list[T: Copyable](xs: &mut [T], n: Int):\n    for i in range(n // 2):\n        var t = xs[i]\n        xs[i] = xs[n - 1 - i]\n        xs[n - 1 - i] = t",
+  "repaired": false
+ },
+ {
+  "name": "reynolds_number",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def reynolds_number(rho: Float64, v: Float64, l: Float64, mu: Float64) -> Float64:\n    return rho * v * l / mu",
+  "repaired": false
+ },
+ {
+  "name": "rotate_left",
+  "category": "array",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpzozvt3xg/b.mojo:3:9: error: invalid redefinition of 'k'",
+  "code": "def rotate_left(v: List[Int], k: Int) -> List[Int]:\n    var n = len(v)\n    var k = k % n\n    var out = List[Int]()\n    for i in range(n):\n        out.append(v[(i + k) % n])\n    return out",
+  "repaired": false
+ },
+ {
+  "name": "round_to_decimals",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def round_to_decimals(x: Float64, n: Int) -> Float64:\n    var p: Float64 = 10.0 ** n\n    return Float64(round(x * p) / p)",
+  "repaired": false
+ },
+ {
+  "name": "run_length_count",
+  "category": "control",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmppdiuk9c2/b.mojo:9:9: error: expression must be mutable for in-place operator destination",
+  "code": "def run_length_count(n: Int) -> Int:\n    var runs = 0\n    var prev = -1\n    while n > 0:\n        var d = n % 10\n        if d != prev:\n            runs += 1\n            prev = d\n        n //= 10\n    return runs",
+  "repaired": false
+ },
+ {
+  "name": "running_distinct_count",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmppj3i57sw/b.mojo:5:17: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def running_distinct_count(nums: List[Int], upto: Int) -> Int:\n    var seen = Dict[Int, Int]()\n    for i in range(upto + 1):\n        if i in seen:\n            seen[i] += 1\n        else:\n            seen[i] = 1\n    return len(seen)",
+  "repaired": false
+ },
+ {
+  "name": "saturation_pressure",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def saturation_pressure(tc: Float64) -> Float64:\n    return 0.61078 * exp(17.27 * tc / (tc + 237.3))",
+  "repaired": true
+ },
+ {
+  "name": "score_tally_lookup",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpb2p5ndfn/b.mojo:2:40: error: no matching function in initialization",
+  "code": "def score_tally_lookup(players: List[String], points: List[Int], who: String) -> Int:\n    var tally: Dict[String, Int] = Dict()\n    for i in range(len(players)):\n        tally[players[i]] = tally.get(players[i], 0) + points[i]\n    if who not in tally:\n        return 0\n    return tally[who]",
+  "repaired": false
+ },
+ {
+  "name": "second_largest",
+  "category": "array",
+  "status": "pass",
+  "detail": "",
+  "code": "def second_largest(v: List[Int]) -> Int:\n    var first = v[0]\n    var second = -2147483647\n    for i in range(len(v)):\n        if v[i] > first:\n            second = first\n            first = v[i]\n        elif v[i] < first and v[i] > second:\n            second = v[i]\n    return second",
+  "repaired": false
+ },
+ {
+  "name": "severity_order",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpyccko2le/b.mojo:2:1: error: statement does not support decorators; remove the decorator",
+  "code": "@fieldwise_init\nenum Severity(Int):\n    DEBUG = 0\n    INFO = 1\n    WARN = 2\n    ERROR = 3\n    FATAL = 4\n\ndef is_at_least(level: Int, threshold: Int) -> Int:\n    if level >= threshold:\n        return 1\n    return 0",
+  "repaired": false
+ },
+ {
+  "name": "sign_from_bits",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpxjub7sh_/b.mojo:2:14: error: 'Int' value has no attribute 'to_bits'",
+  "code": "def sign_from_bits(n: Int) -> Int:\n    var b = n.to_bits()\n    var s = b[63]\n    var t = b[62] + b[61] + b[60] + b[59] + b[58] + b[57] + b[56] + b[55] + b[54] + b[53] + b[52] + b[51] + b[50] + b[49] + b[48] + b[47] + b[46] + b[45] + b[44] + b[43] + b[42] + b[41] + b[40] + b[39] + b[38] + b[37] + b[36] + b[35] + b[34] + b[33] + b[32] + b[31] + b[30] + b[29] + b[28] + b[27] + b[26] + b[25] + b[24] + b[23] + b[22] + b[21] + b[20] + b[19] + b[18] + b[17] + b[16] + b[15] + b[14] + b[13] + b[12] + b[11] + b[10] + b[9] + b[8] + b[7] + b[6] + b[5] + b[4] + b[3] + b[2] + b[1] + b[0]\n    if s == 0:\n        return t\n    if s < 0:\n        return -t\n    return t",
+  "repaired": false
+ },
+ {
+  "name": "slope",
+  "category": "math",
+  "status": "pass",
+  "detail": "",
+  "code": "def slope(x1: Float64, y1: Float64, x2: Float64, y2: Float64) -> Float64:\n    return (y2 - y1) / (x2 - x1)",
+  "repaired": false
+ },
+ {
+  "name": "softplus",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def softplus(x: Float64) -> Float64:\n    return log(1.0 + exp(x))",
+  "repaired": true
+ },
+ {
+  "name": "stddev4",
+  "category": "numeric",
+  "status": "wrong_output",
+  "detail": "",
+  "code": "def stddev4(a: Float64, b: Float64, c: Float64, d: Float64) -> Float64:\n    var m = (a + b + c + d) / 4.0\n    var s = (a - m) * (a - m) + (b - m) * (b - m) + (c - m) * (c - m) + (d - m) * (d - m)\n    return s / 4.0",
+  "repaired": false
+ },
+ {
+  "name": "sum_by_key",
+  "category": "map",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpbw81v1m5/b.mojo:7:18: error: cannot call function that may raise in a context that cannot raise",
+  "code": "def sum_by_key(keys: List[String], vals: List[Int], target: String) -> Int:\n    var totals = Dict[String, Int]()\n    for i in range(len(keys)):\n        totals[keys[i]] = totals.get(keys[i], 0) + vals[i]\n    if target not in totals:\n        return 0\n    return totals[target]",
+  "repaired": false
+ },
+ {
+  "name": "sum_list_dtype",
+  "category": "template",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpks2oop7j/b.mojo:1:32: error: unexpected token in expression",
+  "code": "def range_sum[T: Copyable](xs: &Array[T], n: Int) -> Float64:\n    var lo = xs[0]\n    var hi = xs[0]\n    for i in range(n):\n        if xs[i] < lo:\n            lo = xs[i]\n        if hi < xs[i]:\n            hi = xs[i]\n    return hi - lo",
+  "repaired": false
+ },
+ {
+  "name": "swap_nibbles",
+  "category": "bitops",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpj79m490v/b.mojo:1:21: error: use of unknown declaration 'u64'",
+  "code": "def swap_nibbles(b: u64) -> u64:\n    var lo = b & 0x0FULL\n    var hi = (b >> 4) & 0x0FULL\n    return (lo << 4) | hi",
+  "repaired": false
+ },
+ {
+  "name": "switch_calculator",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def switch_calculator(op: Int, a: Float64, b: Float64) -> Float64:\n    if op == 0:\n        return a + b\n    elif op == 1:\n        return a - b\n    elif op == 2:\n        return a * b\n    elif op == 3:\n        if b == 0.0:\n            return 0.0\n        return a / b\n    return -1",
+  "repaired": false
+ },
+ {
+  "name": "tower_of_hanoi_moves",
+  "category": "recursion",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpthu6ivwn/b.mojo:5:12: error: expected ')' in call argument list",
+  "code": "def hanoi(n: Int) -> Int:\n    if n <= 0:\n        return 0\n    var res = 2 * hanoi(n - 1) + 1\n    print(f\"{n}! = {res}\")\n    return res",
+  "repaired": false
+ },
+ {
+  "name": "transpose",
+  "category": "matrix",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmp386ywfve/b.mojo:1:28: error: use of unknown declaration 'Double'",
+  "code": "def transpose(m: List[List[Double]]) -> List[List[Double]]:\n    var rows = len(m)\n    var cols = len(m[0])\n    var t = List[List[Double]](cols, List[Double](rows, 0.0))\n    for i in range(rows):\n        for j in range(cols):\n            t[j][i] = m[i][j]\n    return t",
+  "repaired": false
+ },
+ {
+  "name": "turn_right",
+  "category": "enum",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpvizjxj1_/b.mojo:2:1: error: statement does not support decorators; remove the decorator",
+  "code": "@fieldwise_init\nenum Dir2(Int, Int):\n    var D_NORTH: Int = 0\n    var D_EAST: Int = 1\n    var D_SOUTH: Int = 2\n    var D_WEST: Int = 3\n\ndef turn_right(dir: Dir2) -> Int:\n    return (dir + 1) % 4\n\ndef turn_left(dir: Dir2) -> Int:\n    return (dir + 3) % 4",
+  "repaired": false
+ },
+ {
+  "name": "vec2_add",
+  "category": "struct",
+  "status": "compile_error",
+  "detail": "/tmp/claude-1000/tmpkf3k8rwt/b.mojo:9:13: error: use of unknown declaration 'add'",
+  "code": "struct Vec2(Copyable, Movable):\n    var x: Float64\n    var y: Float64\n\n    def __add__(self, other: Self) -> Self:\n        return Vec2(self.x + other.x, self.y + other.y)",
+  "repaired": false
+ },
+ {
+  "name": "weekday_from_daynum",
+  "category": "control",
+  "status": "pass",
+  "detail": "",
+  "code": "def weekday_from_daynum(d: Int) -> Int:\n    var r = d % 7\n    if r == 0:\n        return 6\n    return r - 1",
+  "repaired": false
+ },
+ {
+  "name": "wind_chill",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def wind_chill(tc: Float64, v: Float64) -> Float64:\n    var vp = pow(v, 0.16)\n    return 13.12 + 0.6215 * tc - 11.37 * vp + 0.3965 * tc * vp",
+  "repaired": false
+ },
+ {
+  "name": "z_score",
+  "category": "numeric",
+  "status": "pass",
+  "detail": "",
+  "code": "def z_score(x: Float64, mu: Float64, sigma: Float64) -> Float64:\n    return (x - mu) / sigma",
+  "repaired": false
+ }
+]

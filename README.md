@@ -3,6 +3,22 @@
 Hybrid algorithmic + LLM source-to-source transpiler. **N-to-M** across
 many languages with a single shared IR pipeline.
 
+## Repository layout
+
+```
+transpilers/
+├── src/transpilers/   the engine — frontends · ir · passes · backends · llm · verify
+├── scripts/           pipelines — dataset builders, sft/ (fine-tune + eval), rag/
+├── data/              datasets, fine-tuned model adapters, the codebase RAG index
+├── examples/          the verified corpus (algorithms/, per-language samples)
+├── tests/             engine test suite
+├── docs/              design docs and research notes
+├── benchmarks/        transpilation-bench (40-task C++/Python→Mojo) · OSVBench
+├── tools/             migraph (migration dep-graph dashboard) · cloud (RunPod bundle)
+├── third_party/       vendored externals — CodePivot, CodeNexus, crust, py2many
+└── artifacts/         scratch outputs — training runs, reports, sample emissions
+```
+
 ## Two engines, four granularities
 
 - **Strict pipeline** (`transpile`, `transpilers.cli.main`): source → HIR → MIR

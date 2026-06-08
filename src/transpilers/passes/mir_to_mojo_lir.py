@@ -36,8 +36,11 @@ from ._mir_lower_base import MirLoweringBase
 # <cmath> functions that live in Mojo's `math` module -> emit as `math.<name>`
 # (with an `import math` header). Names not here that are Mojo builtins map to
 # the builtin directly (no import).
+# NOTE: `fmod` is intentionally NOT here — Mojo's `math` module has no `fmod`,
+# and Mojo's `%` operator follows Python sign-of-divisor semantics, not C
+# `fmod`'s sign-of-dividend. It is lowered to `a - b*trunc(a/b)` below.
 _MATH_FNS = frozenset({
-    "exp", "log", "log2", "log10", "sqrt", "cbrt", "pow", "fmod", "hypot",
+    "exp", "log", "log2", "log10", "sqrt", "cbrt", "pow", "hypot",
     "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
     "sinh", "cosh", "tanh", "ceil", "floor", "trunc",
 })
@@ -94,6 +97,17 @@ class _MojoLowering(MirLoweringBase):
                 params.append((p.name, _mojo_type(p.ty)))
         return params
 
+    # -- statements -------------------------------------------------------- #
+
+    def lower_stmt(self, node: mir.MirNode, declared: set[str], mut: set[str]):
+        # Drop bare `assert(...)` statements: Mojo has no free `assert` function,
+        # and EnergyPlus uses C `assert` only as a debug-build precondition check
+        # (compiled out under NDEBUG) — it never affects the returned value. The
+        # behavioral oracle is built with -DNDEBUG so this matches the C++ result.
+        if isinstance(node, mir.MirCall) and node.func == "assert":
+            return None
+        return super().lower_stmt(node, declared, mut)
+
     # -- assign: var vs bare reassign ------------------------------------- #
 
     def lower_assign(self, node: mir.MirAssign, declared: set[str], mut: set[str]):
@@ -145,9 +159,30 @@ class _MojoLowering(MirLoweringBase):
         if _pn and len(args) == 1:
             return lir.MojoBinOp(op="**", left=args[0],
                                  right=lir.MojoIntLiteral(value=int(_pn.group(1))))
+        # ObjexxFCL integer-root helpers: root_4(x)==x^(1/4)==sqrt(sqrt(x)),
+        # root_8(x)==x^(1/8)==sqrt(sqrt(sqrt(x))) (Fmath.hh). Lower to nested
+        # sqrt rather than `** 0.25` to bit-match ObjexxFCL's implementation.
+        _rn = re.fullmatch(r"root_([48])", node.func)
+        if _rn and len(args) == 1:
+            self._used_math.add("sqrt")
+            depth = 2 if _rn.group(1) == "4" else 3
+            expr = args[0]
+            for _ in range(depth):
+                expr = lir.MojoCall(func="sqrt", args=[expr])
+            return expr
         # ObjexxFCL/Fortran scalar intrinsics.
         if node.func == "mod" and len(args) == 2:          # mod(a, b) -> a % b
             return lir.MojoBinOp(op="%", left=args[0], right=args[1])
+        if node.func == "fmod" and len(args) == 2:
+            # C fmod(a, b) = a - b*trunc(a/b) (result takes sign of a). Mojo has
+            # no math.fmod and its `%` takes the divisor's sign, so build the
+            # truncation form explicitly. (Args are pure scalars in this domain,
+            # so referencing them twice is side-effect-free.)
+            self._used_math.add("trunc")
+            quotient = lir.MojoBinOp(op="/", left=args[0], right=args[1])
+            truncq = lir.MojoCall(func="trunc", args=[quotient])
+            return lir.MojoBinOp(op="-", left=args[0],
+                                 right=lir.MojoBinOp(op="*", left=args[1], right=truncq))
         if node.func == "sign" and len(args) == 2:         # Fortran SIGN(a,b) == copysign
             self._used_math.add("copysign")
             return lir.MojoCall(func="copysign", args=args)

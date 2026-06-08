@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Transpilation Benchmark Task",
+  "type": "object",
+  "required": ["id","name","tier","concept","tags","description","cpp_source","python_reference","mojo_reference","tests"],
+  "properties": {
+    "id":                 { "type": "string", "description": "Zero-padded 3-digit identifier" },
+    "name":               { "type": "string", "description": "Snake_case task name" },
+    "tier": {
+      "type": "integer", "enum": [1,2,3,4],
+      "description": "1=token-level, 2=syntactic, 3=library/OOP, 4=algorithmic"
+    },
+    "concept":            { "type": "string", "description": "Primary programming concept tested" },
+    "tags":               { "type": "array", "items": {"type": "string"} },
+    "description":        { "type": "string" },
+    "cpp_source":         { "type": "string", "description": "C++ implementation" },
+    "python_reference":   { "type": "string", "description": "Idiomatic Python reference translation" },
+    "mojo_reference":     { "type": "string", "description": "Typed Mojo reference translation" },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["args","expected"],
+        "properties": {
+          "args":     { "type": "array" },
+          "expected": { "type": "string" }
+        }
+      }
+    }
+  }
+}

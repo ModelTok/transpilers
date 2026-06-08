@@ -1,0 +1,57 @@
+[
+ {
+  "name": "Accumulator",
+  "category": "class",
+  "status": "compile_error"
+ },
+ {
+  "name": "Fraction",
+  "category": "operator",
+  "status": "compile_error"
+ },
+ {
+  "name": "apply_op",
+  "category": "enum",
+  "status": "compile_error"
+ },
+ {
+  "name": "checked_sqrt",
+  "category": "error",
+  "status": "compile_error"
+ },
+ {
+  "name": "count_vowels",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "int_pow",
+  "category": "algo",
+  "status": "compile_error"
+ },
+ {
+  "name": "matmul",
+  "category": "matrix",
+  "status": "compile_error"
+ },
+ {
+  "name": "max_of_three",
+  "category": "template",
+  "status": "compile_error"
+ },
+ {
+  "name": "parse_positive",
+  "category": "error",
+  "status": "compile_error"
+ },
+ {
+  "name": "reverse_string",
+  "category": "string",
+  "status": "compile_error"
+ },
+ {
+  "name": "transpose",
+  "category": "matrix",
+  "status": "no_code"
+ }
+]
