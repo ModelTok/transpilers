@@ -256,8 +256,12 @@ def main(argv: list[str] | None = None) -> int:
             _, _, verify_fn = TARGETS[args.target]
             result = verify_fn(out)
             if not result.ok:
+                from transpilers.verify.taxonomy import classify_compile_stderr
+
+                bucket, _ = classify_compile_stderr(result.stderr)
                 sys.stderr.write(f"\n--- {args.target} compiler rejected emitted code ---\n")
                 sys.stderr.write(result.stderr)
+                sys.stderr.write(f"\n[taxonomy] bucket={bucket} stage=compile\n")
                 return 1
             sys.stderr.write("\n[verify] ok\n")
 
@@ -266,14 +270,24 @@ def main(argv: list[str] | None = None) -> int:
     # ------------------------------------------------------------------
     # Default direct path
     # ------------------------------------------------------------------
-    trace = run_stages(
-        src_input,
-        source_lang=source_lang,
-        target=args.target,
-        llm_fill=llm_fill,
-        llm_rename_fill=rename_fill,
-        ir_hints=ir_hints,
-    )
+    try:
+        trace = run_stages(
+            src_input,
+            source_lang=source_lang,
+            target=args.target,
+            llm_fill=llm_fill,
+            llm_rename_fill=rename_fill,
+            ir_hints=ir_hints,
+        )
+    except Exception as exc:
+        # Verify-gate instrumentation (failure taxonomy): tag the failure
+        # bucket before the traceback propagates, so sweeps can grep it.
+        from transpilers.verify.taxonomy import classify_exception
+
+        bucket, construct = classify_exception("transpile", exc)
+        suffix = f" construct={construct!r}" if construct else ""
+        sys.stderr.write(f"[taxonomy] bucket={bucket} stage=transpile{suffix}\n")
+        raise
     out = trace.output
     sys.stdout.write(out)
 
@@ -281,8 +295,12 @@ def main(argv: list[str] | None = None) -> int:
         _, _, verify_fn = TARGETS[args.target]
         result = verify_fn(out)
         if not result.ok:
+            from transpilers.verify.taxonomy import classify_compile_stderr
+
+            bucket, _ = classify_compile_stderr(result.stderr)
             sys.stderr.write(f"\n--- {args.target} compiler rejected emitted code ---\n")
             sys.stderr.write(result.stderr)
+            sys.stderr.write(f"\n[taxonomy] bucket={bucket} stage=compile\n")
             return 1
         if args.fidelity == "structural":
             from transpilers.verify.structural import check_structural_fidelity
@@ -291,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             if not report.ok:
                 sys.stderr.write("\n--- structural fidelity check failed ---\n")
                 sys.stderr.write(report.summary() + "\n")
+                sys.stderr.write("[taxonomy] bucket=structural-divergence stage=structural\n")
                 return 1
         sys.stderr.write("\n[verify] ok\n")
     return 0

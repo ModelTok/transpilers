@@ -103,6 +103,15 @@ uv run python scripts/run_matrix.py examples/algorithms
 uv run python scripts/transpile_matrix.py examples/samples/Python rust   # transpile only
 ```
 
+Failure taxonomy — classify every verify-gate failure over a corpus into
+`parse · unresolved-symbol · unfilled-UnknownT-hole · type-inference-miss ·
+target-compile-error · output-mismatch · structural-divergence · timeout`
+and roll it up per (source, target) pair (CSV + markdown):
+
+```sh
+uv run python scripts/failure_taxonomy.py examples/samples --targets rust,mojo --csv out.csv
+```
+
 ## Fidelity dial
 
 `transpile --fidelity {structural|idiomatic}` (default `structural`) controls
