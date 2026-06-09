@@ -42,6 +42,11 @@ fmt:
 # Lint + tests — what CI should run
 check: lint test
 
+# Fine-tune on a cloud RunPod GPU (needs RUNPOD_API_KEY). Deps pulled ephemerally.
+cloud-train model="Qwen/Qwen2.5-Coder-1.5B-Instruct" gpu="4090" *args:
+    uv run --with runpod --with paramiko --with scp \
+        python tools/cloud/runpod_train.py --model {{model}} --gpu {{gpu}} {{args}}
+
 # Remove caches and build artefacts (leaves .venv)
 clean:
     rm -rf .pytest_cache .ruff_cache build dist src/*.egg-info

@@ -1,0 +1,50 @@
+{
+  "id": "033",
+  "name": "ep_clamp",
+  "tier": 1,
+  "concept": "numeric_clamp",
+  "tags": [
+    "energyplus",
+    "clamp",
+    "range",
+    "real_world"
+  ],
+  "description": "Clamp value to [lo, hi]. Source: EnergyPlus/PlantUtilities.cc BoundValueToWithinTwoValues().",
+  "cpp_source": "// Source: EnergyPlus/src/EnergyPlus/PlantUtilities.cc — BoundValueToWithinTwoValues()\n#include <algorithm>\ndouble ep_clamp(double value, double lo, double hi) {\n    return std::max(lo, std::min(hi, value));\n}",
+  "python_reference": "def ep_clamp(value: float, lo: float, hi: float) -> float:\n    return max(lo, min(hi, value))",
+  "mojo_reference": "fn ep_clamp(value: Float64, lo: Float64, hi: Float64) -> Float64:\n    return max(lo, min(hi, value))",
+  "tests": [
+    {
+      "args": [
+        5.0,
+        0.0,
+        10.0
+      ],
+      "expected": "5.0"
+    },
+    {
+      "args": [
+        -2.0,
+        0.0,
+        10.0
+      ],
+      "expected": "0.0"
+    },
+    {
+      "args": [
+        15.0,
+        0.0,
+        10.0
+      ],
+      "expected": "10.0"
+    },
+    {
+      "args": [
+        3.5,
+        1.0,
+        5.0
+      ],
+      "expected": "3.5"
+    }
+  ]
+}

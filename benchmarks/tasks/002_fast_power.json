@@ -1,0 +1,41 @@
+{
+  "id": "002",
+  "name": "fast_power",
+  "tier": 2,
+  "concept": "recursion_divide_and_conquer",
+  "tags": [
+    "recursion",
+    "math",
+    "divide_and_conquer"
+  ],
+  "description": "Compute base^exp mod m using fast (binary) exponentiation.",
+  "cpp_source": "long long fast_power(long long base, long long exp, long long mod) {\n    long long result = 1;\n    base %= mod;\n    while (exp > 0) {\n        if (exp & 1) result = result * base % mod;\n        base = base * base % mod;\n        exp >>= 1;\n    }\n    return result;\n}",
+  "python_reference": "def fast_power(base: int, exp: int, mod: int) -> int:\n    result = 1\n    base %= mod\n    while exp > 0:\n        if exp & 1:\n            result = result * base % mod\n        base = base * base % mod\n        exp >>= 1\n    return result",
+  "mojo_reference": "fn fast_power(base: Int, exp: Int, mod: Int) -> Int:\n    var result: Int = 1\n    var b = base % mod\n    var e = exp\n    while e > 0:\n        if e & 1:\n            result = result * b % mod\n        b = b * b % mod\n        e >>= 1\n    return result",
+  "tests": [
+    {
+      "args": [
+        2,
+        10,
+        1000
+      ],
+      "expected": "24"
+    },
+    {
+      "args": [
+        3,
+        0,
+        7
+      ],
+      "expected": "1"
+    },
+    {
+      "args": [
+        2,
+        31,
+        1000000007
+      ],
+      "expected": "147483634"
+    }
+  ]
+}

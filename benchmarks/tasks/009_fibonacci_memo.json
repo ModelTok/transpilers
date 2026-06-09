@@ -1,0 +1,35 @@
+{
+  "id": "009",
+  "name": "fibonacci_memo",
+  "tier": 3,
+  "concept": "memoization_hashmap",
+  "tags": [
+    "memoization",
+    "hashmap",
+    "recursion"
+  ],
+  "description": "Return nth Fibonacci using a memoization dict. Handles n up to 50.",
+  "cpp_source": "#include <unordered_map>\nstd::unordered_map<int,long long> memo;\nlong long fibonacci_memo(int n) {\n    if (n <= 1) return n;\n    if (memo.count(n)) return memo[n];\n    return memo[n] = fibonacci_memo(n-1) + fibonacci_memo(n-2);\n}",
+  "python_reference": "from functools import lru_cache\n\n@lru_cache(maxsize=None)\ndef fibonacci_memo(n: int) -> int:\n    if n <= 1:\n        return n\n    return fibonacci_memo(n - 1) + fibonacci_memo(n - 2)",
+  "mojo_reference": "fn fibonacci_memo(n: Int, memo: Dict[Int, Int]) -> Int:\n    if n <= 1:\n        return n\n    if n in memo:\n        return memo[n]\n    var result = fibonacci_memo(n - 1, memo) + fibonacci_memo(n - 2, memo)\n    memo[n] = result\n    return result",
+  "tests": [
+    {
+      "args": [
+        10
+      ],
+      "expected": "55"
+    },
+    {
+      "args": [
+        30
+      ],
+      "expected": "832040"
+    },
+    {
+      "args": [
+        50
+      ],
+      "expected": "12586269025"
+    }
+  ]
+}

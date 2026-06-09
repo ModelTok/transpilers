@@ -1,0 +1,6 @@
+# Local-only deps for runpod_train.py (the orchestrator that runs on YOUR machine).
+# Kept separate from requirements.txt, which holds the training deps installed ON the pod.
+# All pure-python / cross-platform -> works from Windows or WSL.
+runpod
+paramiko
+scp

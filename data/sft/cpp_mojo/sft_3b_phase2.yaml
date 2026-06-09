@@ -1,0 +1,64 @@
+# LLaMA-Factory SFT config — 3B adapter, Phase 2: C++/Python→Mojo translation.
+#
+# Warm-starts from adapter_3b_v1_phase1 (produced by sft_3b_phase1.yaml).
+# Trains on cpp_mojo_translation (1005 samples) at lower LR to specialize the
+# adapter for translation without catastrophically forgetting Mojo idioms.
+#
+# Memory budget: same as Phase 1 (gradient_checkpointing + batch=1 + accum=8).
+# If OOM, uncomment quantization_bit: 4 and set quantization_type: bitsandbytes.
+#
+# Run (from repo root in WSL, venv active) AFTER Phase 1 completes:
+#   /root/venvs/lf/bin/llamafactory-cli train data/sft/cpp_mojo/sft_3b_phase2.yaml
+
+### model
+model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+# Warm-start: load Phase 1 adapter weights before continuing training
+adapter_name_or_path: /home/bart/Github/transpilers/data/sft/cpp_mojo/adapter_3b_v1_phase1
+# Plain bf16 LoRA (no QLoRA): bitsandbytes 0.49.2 ROCM avail: False — NF4 backward hangs on gfx1101.
+# 3B * bf16 ~6GB + LoRA + optimizer + activations(GC) ~8GB total, fits in 12GB.
+
+### attention fix (ROCm RDNA3 gfx1101 — roctracer deadlock fix)
+# flash_attn: disabled — forces HuggingFace eager attention (vanilla SDPA).
+# use_unsloth_gc: false — Unsloth GC backward does async non_blocking CPU→GPU copy that
+#   deadlocks via libhsa-runtime64.so → libroctracer64.so on gfx1101.
+#   Standard torch.utils.checkpoint (no async copies) is safe.
+# use_reentrant_gc: false — non-reentrant GC, avoids nested autograd issues.
+flash_attn: disabled
+use_unsloth_gc: false
+use_reentrant_gc: false
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+
+### dataset
+dataset_dir: /home/bart/Github/transpilers/data/sft/cpp_mojo
+dataset: cpp_mojo_translation
+template: qwen
+cutoff_len: 4096
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: /home/bart/Github/transpilers/data/sft/cpp_mojo/adapter_3b_v1
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+learning_rate: 5e-5
+num_train_epochs: 4.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true

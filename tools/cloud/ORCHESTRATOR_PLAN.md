@@ -1,7 +1,9 @@
 # Plan: Custom RunPod fine-tuning orchestrator (local Python CLI)
 
-> Design doc / implementation plan for an automated RunPod training loop built on top of this
-> `tools/cloud/` bundle. Not yet implemented — see "Files" for what will be added.
+> Design doc for an automated RunPod training loop built on top of this `tools/cloud/` bundle.
+> **Implemented** as `runpod_train.py` (+ `orchestrator-requirements.txt`, README section, `just
+> cloud-train` recipe). Live RunPod end-to-end smoke (verification step 2) still pending — it needs
+> a real `RUNPOD_API_KEY` and creates a billable pod, so run it manually.
 
 ## Context
 

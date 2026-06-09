@@ -73,6 +73,9 @@ The project leans on a small set of core tools:
   C++/Python→Mojo LoRA adapter (`data/sft/cpp_mojo/adapter_15b_v2`, base
   `Qwen/Qwen2.5-Coder-1.5B-Instruct`) are pulled/hosted here; the SFT stack runs
   on the HF ecosystem (Transformers / PEFT / LLaMA Factory).
+- **[ROCm / HIP SDK](https://rocm.docs.amd.com/)** — local AMD GPU compute for
+  fine-tuning on Radeon hardware (RDNA3+); provides the `hipcc` toolchain and the
+  ROCm PyTorch backend used by the local SFT runs (see `RUN.md`).
 - **[RunPod](https://runpod.io/)** — cloud GPU fine-tuning for runs too big for
   local hardware (see `tools/cloud/` and `docs/runpod_guide.md`).
 

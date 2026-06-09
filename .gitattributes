@@ -1,0 +1,6 @@
+# Shell scripts must use LF — they run on Linux pods/CI; CRLF breaks bash
+# (e.g. `set -e\r` -> "invalid option") and turns paths into 'name\r'.
+*.sh text eol=lf
+# Keep the cloud bundle LF so it works when uploaded to a RunPod pod from Windows.
+tools/cloud/run.sh text eol=lf
+tools/cloud/requirements.txt text eol=lf

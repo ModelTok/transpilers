@@ -1,0 +1,46 @@
+{
+  "id": "038",
+  "name": "ep_moist_enthalpy",
+  "tier": 2,
+  "concept": "psychrometric_formula",
+  "tags": [
+    "energyplus",
+    "thermodynamics",
+    "psychrometrics",
+    "real_world"
+  ],
+  "description": "Compute moist-air enthalpy (J/kg) from dry-bulb temperature (°C) and humidity ratio (kg/kg). Source: EnergyPlus/Psychrometrics.hh PsyHFnTdbW(). Formula: 1004.84·T + max(W,1e-5)·(2500940 + 1858.95·T). Result rounded to 2 dp.",
+  "cpp_source": "// Source: EnergyPlus/src/EnergyPlus/Psychrometrics.hh — PsyHFnTdbW()\n// ASHRAE HANDBOOK OF FUNDAMENTALS 1972, p100, Eqn 32\n#include <algorithm>\ndouble ep_moist_enthalpy(double tdb, double dw) {\n    double w = std::max(dw, 1.0e-5);\n    return std::round((1.00484e3 * tdb + w * (2.50094e6 + 1.85895e3 * tdb)) * 100.0) / 100.0;\n}",
+  "python_reference": "def ep_moist_enthalpy(tdb: float, dw: float) -> float:\n    w = max(dw, 1e-5)\n    return round(1.00484e3 * tdb + w * (2.50094e6 + 1.85895e3 * tdb), 2)",
+  "mojo_reference": "import math\n\nfn ep_moist_enthalpy(tdb: Float64, dw: Float64) -> Float64:\n    var w = max(dw, 1e-5)\n    var h = 1.00484e3 * tdb + w * (2.50094e6 + 1.85895e3 * tdb)\n    return math.round(h * 100.0) / 100.0",
+  "tests": [
+    {
+      "args": [
+        0.0,
+        0.0
+      ],
+      "expected": "25.01"
+    },
+    {
+      "args": [
+        20.0,
+        0.01
+      ],
+      "expected": "45477.99"
+    },
+    {
+      "args": [
+        30.0,
+        0.02
+      ],
+      "expected": "81279.37"
+    },
+    {
+      "args": [
+        25.0,
+        0.008
+      ],
+      "expected": "45500.31"
+    }
+  ]
+}

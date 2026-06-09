@@ -1,16 +1,9 @@
-MIT License
+Copyright (c) 2026 Bartlomiej Tokarzewski. All Rights Reserved.
 
-Copyright (c) 2026 Bartlomiej Tokarzewski
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Unauthorized copying, distribution, modification, public display, or public
+performance of this software and associated documentation files (the "Software"),
+via any medium, is strictly prohibited without the prior written permission of
+the copyright holder.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -23,5 +16,5 @@ SOFTWARE.
 NOTE: This repository vendors third-party components under their own licenses.
 See the `vendor/` directory and `vendor/NOTICE.md` for attribution and the
 full text of each vendored component's license. Those components remain under
-their original licenses (MIT / Apache-2.0); this MIT license covers only the
+their original licenses (MIT / Apache-2.0); this notice covers only the
 first-party code in this repository.

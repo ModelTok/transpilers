@@ -35,3 +35,19 @@ dev = [
     "pytest>=8",
     "ruff>=0.7",
 ]
+# Install PyTorch separately with the ROCm build matching your GPU/driver — NOT pinned here
+# because the wheel index is hardware-specific. For AMD RX 7700 XT (RDNA3, gfx1101), ROCm >= 6.2:
+#   uv pip install --index-url https://download.pytorch.org/whl/rocm6.3 torch
+# (built/run with torch==2.9.1+rocm6.3)
+ml = [
+    "transformers==5.10.2",
+    "peft==0.19.1",
+    "trl==1.5.1",
+    "datasets==5.0.0",
+    "accelerate==1.13.0",
+    "safetensors==0.7.0",
+    "tokenizers",
+    "huggingface-hub",
+    "numpy==2.4.6",
+    "sentence-transformers==5.5.1",  # codebase RAG index (scripts/rag/)
+]

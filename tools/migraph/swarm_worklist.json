@@ -1,0 +1,547 @@
+{
+  "ranking_method": "inbound #include count (leverage proxy), LOC tiebreak; infra_replaced rows are architecturally replaced, not physics ports",
+  "by_inbound_includes": [
+    {
+      "module": "InputProcessor",
+      "status": "PARTIAL",
+      "inbound_includes": 189,
+      "loc": 2810,
+      "cpp_path": "src/EnergyPlus/InputProcessing/InputProcessor.cc",
+      "target_py": "site/ground_heat_transfer_records.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "DataEnvironment",
+      "status": "PARTIAL",
+      "inbound_includes": 172,
+      "loc": 517,
+      "cpp_path": "src/EnergyPlus/DataEnvironment.cc",
+      "target_py": "weather/, site/",
+      "infra_replaced": true
+    },
+    {
+      "module": "DataHVACGlobals",
+      "status": "PARTIAL",
+      "inbound_includes": 160,
+      "loc": 947,
+      "cpp_path": "src/EnergyPlus/DataHVACGlobals.cc",
+      "target_py": "runtime/, hvac/",
+      "infra_replaced": true
+    },
+    {
+      "module": "General",
+      "status": "PARTIAL",
+      "inbound_includes": 141,
+      "loc": 1955,
+      "cpp_path": "src/EnergyPlus/General.cc",
+      "target_py": "output/config.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "DataHeatBalance",
+      "status": "PARTIAL",
+      "inbound_includes": 123,
+      "loc": 3107,
+      "cpp_path": "src/EnergyPlus/DataHeatBalance.cc",
+      "target_py": "heat_balance/, runtime/ctf.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "NodeInputManager",
+      "status": "PARTIAL",
+      "inbound_includes": 115,
+      "loc": 1467,
+      "cpp_path": "src/EnergyPlus/NodeInputManager.cc",
+      "target_py": "hvac/plant_loops/records.py, hvac/airloop_components.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "BranchNodeConnections",
+      "status": "PARTIAL",
+      "inbound_includes": 99,
+      "loc": 2753,
+      "cpp_path": "src/EnergyPlus/BranchNodeConnections.cc",
+      "target_py": "hvac/airloop_components.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "PlantUtilities",
+      "status": "PARTIAL",
+      "inbound_includes": 89,
+      "loc": 2354,
+      "cpp_path": "src/EnergyPlus/PlantUtilities.cc",
+      "target_py": "runtime/plant.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "EMSManager",
+      "status": "PARTIAL",
+      "inbound_includes": 72,
+      "loc": 2497,
+      "cpp_path": "src/EnergyPlus/EMSManager.cc",
+      "target_py": "runtime/ems_manager.py, ems/ems.py, ems/erl.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "DataZoneEquipment",
+      "status": "PARTIAL",
+      "inbound_includes": 70,
+      "loc": 3154,
+      "cpp_path": "src/EnergyPlus/DataZoneEquipment.cc",
+      "target_py": "hvac/zone_hvac.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "GeneralRoutines",
+      "status": "PARTIAL",
+      "inbound_includes": 65,
+      "loc": 1931,
+      "cpp_path": "src/EnergyPlus/GeneralRoutines.cc",
+      "target_py": "\u2014",
+      "infra_replaced": true
+    },
+    {
+      "module": "DataSurfaces",
+      "status": "PARTIAL",
+      "inbound_includes": 64,
+      "loc": 2689,
+      "cpp_path": "src/EnergyPlus/DataSurfaces.cc",
+      "target_py": "geometry/, heat_balance/surface.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "Base",
+      "status": "PARTIAL",
+      "inbound_includes": 63,
+      "loc": 1396,
+      "cpp_path": "src/EnergyPlus/Autosizing/Base.cc",
+      "target_py": "hvac/fans/records.py",
+      "infra_replaced": true
+    },
+    {
+      "module": "DataZoneEnergyDemands",
+      "status": "PARTIAL",
+      "inbound_includes": 44,
+      "loc": 589,
+      "cpp_path": "src/EnergyPlus/DataZoneEnergyDemands.cc",
+      "target_py": "\u2014",
+      "infra_replaced": true
+    },
+    {
+      "module": "OutAirNodeManager",
+      "status": "PARTIAL",
+      "inbound_includes": 36,
+      "loc": 739,
+      "cpp_path": "src/EnergyPlus/OutAirNodeManager.cc",
+      "target_py": "hvac/controllers/records.py (OutdoorAir:Node)",
+      "infra_replaced": true
+    },
+    {
+      "module": "FaultsManager",
+      "status": "PARTIAL",
+      "inbound_includes": 20,
+      "loc": 2560,
+      "cpp_path": "src/EnergyPlus/FaultsManager.cc",
+      "target_py": "faults/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "WaterManager",
+      "status": "PARTIAL",
+      "inbound_includes": 19,
+      "loc": 1875,
+      "cpp_path": "src/EnergyPlus/WaterManager.cc",
+      "target_py": "water_use/",
+      "infra_replaced": false
+    },
+    {
+      "module": "HeatingCapacitySizing",
+      "status": "PARTIAL",
+      "inbound_includes": 19,
+      "loc": 565,
+      "cpp_path": "src/EnergyPlus/Autosizing/HeatingCapacitySizing.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "SteamCoils",
+      "status": "PARTIAL",
+      "inbound_includes": 17,
+      "loc": 2427,
+      "cpp_path": "src/EnergyPlus/SteamCoils.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "MixedAir",
+      "status": "PARTIAL",
+      "inbound_includes": 16,
+      "loc": 6148,
+      "cpp_path": "src/EnergyPlus/MixedAir.cc",
+      "target_py": "hvac/controllers/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "ZonePlenum",
+      "status": "PARTIAL",
+      "inbound_includes": 16,
+      "loc": 1558,
+      "cpp_path": "src/EnergyPlus/ZonePlenum.cc",
+      "target_py": "runtime/ctf.py, hvac/air_distribution/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "CoolingCapacitySizing",
+      "status": "PARTIAL",
+      "inbound_includes": 16,
+      "loc": 665,
+      "cpp_path": "src/EnergyPlus/Autosizing/CoolingCapacitySizing.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "VariableSpeedCoils",
+      "status": "PARTIAL",
+      "inbound_includes": 14,
+      "loc": 8624,
+      "cpp_path": "src/EnergyPlus/VariableSpeedCoils.cc",
+      "target_py": "hvac/coils_heating/records.py, hvac/coil_curve_fit.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "ReportCoilSelection",
+      "status": "PARTIAL",
+      "inbound_includes": 13,
+      "loc": 2492,
+      "cpp_path": "src/EnergyPlus/ReportCoilSelection.cc",
+      "target_py": "hvac/airloop_components.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "SimAirServingZones",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 8141,
+      "cpp_path": "src/EnergyPlus/SimAirServingZones.cc",
+      "target_py": "hvac/airloop_components.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "SetPointManager",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 5291,
+      "cpp_path": "src/EnergyPlus/SetPointManager.cc",
+      "target_py": "hvac/setpoint_managers/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "HVACHXAssistedCoolingCoil",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 2067,
+      "cpp_path": "src/EnergyPlus/HVACHXAssistedCoolingCoil.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "PluginManager",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 1862,
+      "cpp_path": "src/EnergyPlus/PluginManager.cc",
+      "target_py": "python_plugin/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "CoolingAirFlowSizing",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 492,
+      "cpp_path": "src/EnergyPlus/Autosizing/CoolingAirFlowSizing.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "HVACVariableRefrigerantFlow",
+      "status": "PARTIAL",
+      "inbound_includes": 10,
+      "loc": 16442,
+      "cpp_path": "src/EnergyPlus/HVACVariableRefrigerantFlow.cc",
+      "target_py": "hvac/coils.py (CoilCoolingDXVariableRefrigerantFlow)",
+      "infra_replaced": false
+    }
+  ],
+  "physics_priority": [
+    {
+      "module": "EMSManager",
+      "status": "PARTIAL",
+      "inbound_includes": 72,
+      "loc": 2497,
+      "cpp_path": "src/EnergyPlus/EMSManager.cc",
+      "target_py": "runtime/ems_manager.py, ems/ems.py, ems/erl.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "FaultsManager",
+      "status": "PARTIAL",
+      "inbound_includes": 20,
+      "loc": 2560,
+      "cpp_path": "src/EnergyPlus/FaultsManager.cc",
+      "target_py": "faults/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "WaterManager",
+      "status": "PARTIAL",
+      "inbound_includes": 19,
+      "loc": 1875,
+      "cpp_path": "src/EnergyPlus/WaterManager.cc",
+      "target_py": "water_use/",
+      "infra_replaced": false
+    },
+    {
+      "module": "HeatingCapacitySizing",
+      "status": "PARTIAL",
+      "inbound_includes": 19,
+      "loc": 565,
+      "cpp_path": "src/EnergyPlus/Autosizing/HeatingCapacitySizing.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "SteamCoils",
+      "status": "PARTIAL",
+      "inbound_includes": 17,
+      "loc": 2427,
+      "cpp_path": "src/EnergyPlus/SteamCoils.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "MixedAir",
+      "status": "PARTIAL",
+      "inbound_includes": 16,
+      "loc": 6148,
+      "cpp_path": "src/EnergyPlus/MixedAir.cc",
+      "target_py": "hvac/controllers/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "ZonePlenum",
+      "status": "PARTIAL",
+      "inbound_includes": 16,
+      "loc": 1558,
+      "cpp_path": "src/EnergyPlus/ZonePlenum.cc",
+      "target_py": "runtime/ctf.py, hvac/air_distribution/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "CoolingCapacitySizing",
+      "status": "PARTIAL",
+      "inbound_includes": 16,
+      "loc": 665,
+      "cpp_path": "src/EnergyPlus/Autosizing/CoolingCapacitySizing.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "VariableSpeedCoils",
+      "status": "PARTIAL",
+      "inbound_includes": 14,
+      "loc": 8624,
+      "cpp_path": "src/EnergyPlus/VariableSpeedCoils.cc",
+      "target_py": "hvac/coils_heating/records.py, hvac/coil_curve_fit.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "ReportCoilSelection",
+      "status": "PARTIAL",
+      "inbound_includes": 13,
+      "loc": 2492,
+      "cpp_path": "src/EnergyPlus/ReportCoilSelection.cc",
+      "target_py": "hvac/airloop_components.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "SimAirServingZones",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 8141,
+      "cpp_path": "src/EnergyPlus/SimAirServingZones.cc",
+      "target_py": "hvac/airloop_components.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "SetPointManager",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 5291,
+      "cpp_path": "src/EnergyPlus/SetPointManager.cc",
+      "target_py": "hvac/setpoint_managers/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "HVACHXAssistedCoolingCoil",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 2067,
+      "cpp_path": "src/EnergyPlus/HVACHXAssistedCoolingCoil.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "PluginManager",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 1862,
+      "cpp_path": "src/EnergyPlus/PluginManager.cc",
+      "target_py": "python_plugin/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "CoolingAirFlowSizing",
+      "status": "PARTIAL",
+      "inbound_includes": 12,
+      "loc": 492,
+      "cpp_path": "src/EnergyPlus/Autosizing/CoolingAirFlowSizing.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "HVACVariableRefrigerantFlow",
+      "status": "PARTIAL",
+      "inbound_includes": 10,
+      "loc": 16442,
+      "cpp_path": "src/EnergyPlus/HVACVariableRefrigerantFlow.cc",
+      "target_py": "hvac/coils.py (CoilCoolingDXVariableRefrigerantFlow)",
+      "infra_replaced": false
+    },
+    {
+      "module": "PoweredInductionUnits",
+      "status": "PARTIAL",
+      "inbound_includes": 10,
+      "loc": 3077,
+      "cpp_path": "src/EnergyPlus/PoweredInductionUnits.cc",
+      "target_py": "hvac/air_terminals.py (ParallelPIUReheat)",
+      "infra_replaced": false
+    },
+    {
+      "module": "CoilCoolingDX",
+      "status": "PARTIAL",
+      "inbound_includes": 10,
+      "loc": 1337,
+      "cpp_path": "src/EnergyPlus/Coils/CoilCoolingDX.cc",
+      "target_py": "hvac/coils.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "SystemAirFlowSizing",
+      "status": "PARTIAL",
+      "inbound_includes": 10,
+      "loc": 1062,
+      "cpp_path": "src/EnergyPlus/Autosizing/SystemAirFlowSizing.cc",
+      "target_py": "hvac/zonehvac_terminal_units/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "UnitarySystem",
+      "status": "PARTIAL",
+      "inbound_includes": 9,
+      "loc": 19469,
+      "cpp_path": "src/EnergyPlus/UnitarySystem.cc",
+      "target_py": "hvac/airloop_components.py (AirLoopHVACUnitarySystem)",
+      "infra_replaced": false
+    },
+    {
+      "module": "ResultsFramework",
+      "status": "PARTIAL",
+      "inbound_includes": 9,
+      "loc": 1801,
+      "cpp_path": "src/EnergyPlus/ResultsFramework.cc",
+      "target_py": "output/config.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "MixerComponent",
+      "status": "PARTIAL",
+      "inbound_includes": 9,
+      "loc": 891,
+      "cpp_path": "src/EnergyPlus/MixerComponent.cc",
+      "target_py": "hvac/air_distribution/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "HVACControllers",
+      "status": "PARTIAL",
+      "inbound_includes": 8,
+      "loc": 3164,
+      "cpp_path": "src/EnergyPlus/HVACControllers.cc",
+      "target_py": "hvac/controllers/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "StandardRatings",
+      "status": "PARTIAL",
+      "inbound_includes": 7,
+      "loc": 8562,
+      "cpp_path": "src/EnergyPlus/StandardRatings.cc",
+      "target_py": "hvac/standard_ratings.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "ZoneEquipmentManager",
+      "status": "PARTIAL",
+      "inbound_includes": 7,
+      "loc": 7411,
+      "cpp_path": "src/EnergyPlus/ZoneEquipmentManager.cc",
+      "target_py": "runtime/multi_zone.py, hvac/zone_exhaust_control.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "SingleDuct",
+      "status": "PARTIAL",
+      "inbound_includes": 7,
+      "loc": 6393,
+      "cpp_path": "src/EnergyPlus/SingleDuct.cc",
+      "target_py": "hvac/airterminal_vav/records.py, hvac/air_terminals.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "WindowComplexManager",
+      "status": "PARTIAL",
+      "inbound_includes": 7,
+      "loc": 3947,
+      "cpp_path": "src/EnergyPlus/WindowComplexManager.cc",
+      "target_py": "windows/complex_fenestration.py, windows/complex_shade.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "ThermalComfort",
+      "status": "PARTIAL",
+      "inbound_includes": 7,
+      "loc": 3611,
+      "cpp_path": "src/EnergyPlus/ThermalComfort.cc",
+      "target_py": "internal_gains/people_extended.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "UserDefinedComponents",
+      "status": "PARTIAL",
+      "inbound_includes": 7,
+      "loc": 3443,
+      "cpp_path": "src/EnergyPlus/UserDefinedComponents.cc",
+      "target_py": "hvac/zone_hvac.py (ZoneHVACForcedAirUserDefined), hvac/airterminal_cv/records.py",
+      "infra_replaced": false
+    },
+    {
+      "module": "HVACDXHeatPumpSystem",
+      "status": "PARTIAL",
+      "inbound_includes": 7,
+      "loc": 1393,
+      "cpp_path": "src/EnergyPlus/HVACDXHeatPumpSystem.cc",
+      "target_py": "hvac/coils_heating/records.py",
+      "infra_replaced": false
+    }
+  ]
+}

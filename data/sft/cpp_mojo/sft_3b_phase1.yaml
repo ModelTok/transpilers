@@ -1,0 +1,74 @@
+# LLaMA-Factory SFT config — 3B adapter, Phase 1: Mojo acquisition.
+#
+# Target: Qwen/Qwen2.5-Coder-3B-Instruct, LoRA r=16/alpha=32/dropout=0.05
+# Hardware: AMD RX 7700 XT (12 GB VRAM, ROCm), WSL Ubuntu-24.04
+#
+# Memory budget (12 GB VRAM):
+#   - 3B params in bf16 ~ 6 GB
+#   - LoRA trainable params (r=16, all-linear) ~ 120 MB
+#   - gradient_checkpointing: true  — recompute activations, saves ~3-4 GB
+#   - per_device_train_batch_size: 1 + gradient_accumulation_steps: 8
+#     -> effective batch = 8, fits in remaining headroom
+#   No QLoRA needed for Phase 1. If OOM, uncomment quantization_bit: 4 below.
+#
+# Two-phase recipe (RUN.md §Two-phase):
+#   Phase 1 (this file): train mojo_acquisition (1163 samples) 2 epochs to
+#     teach the model Mojo syntax/idioms → saves to adapter_3b_v1_phase1/
+#   Phase 2 (sft_3b_phase2.yaml): fine-tune on cpp_mojo_translation (1005
+#     samples) 4 epochs, lower LR, warm-starting from phase1 adapter.
+#
+# Run (from repo root in WSL, venv active):
+#   /root/venvs/lf/bin/llamafactory-cli train data/sft/cpp_mojo/sft_3b_phase1.yaml
+
+### model
+model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+# Plain bf16 LoRA (no QLoRA): 3B * bf16 ~6GB + LoRA ~120MB + optimizer ~240MB + activations(GC) ~1.5GB = ~8GB, fits in 12GB.
+# bitsandbytes 0.49.2 reports ROCM avail: False — NF4 backward hangs in device-to-device copy on gfx1101.
+# Remove quantization_bit/quantization_type entirely to use HF native bf16 path.
+
+### attention fix (ROCm RDNA3 gfx1101 — roctracer deadlock fix)
+# flash_attn: disabled — forces HuggingFace eager attention (vanilla SDPA).
+# use_unsloth_gc: false — Unsloth GC backward does `hidden_states.to("cuda", non_blocking=True)`
+#   which triggers an async HIP copy completion callback through libhsa-runtime64.so →
+#   libroctracer64.so that deadlocks (pthread_cond_wait in ReadyQueue::pop).
+#   Standard torch.utils.checkpoint keeps tensors on GPU — no async copy, no deadlock.
+# use_reentrant_gc: false — non-reentrant GC avoids nested autograd issues.
+flash_attn: disabled
+use_unsloth_gc: false
+use_reentrant_gc: false
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+
+### dataset
+dataset_dir: /home/bart/Github/transpilers/data/sft/cpp_mojo
+dataset: mojo_acquisition
+template: qwen
+cutoff_len: 4096
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: /home/bart/Github/transpilers/data/sft/cpp_mojo/adapter_3b_v1_phase1
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+learning_rate: 1.5e-4
+num_train_epochs: 2.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true

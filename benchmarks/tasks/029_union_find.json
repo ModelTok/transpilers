@@ -1,0 +1,65 @@
+{
+  "id": "029",
+  "name": "union_find",
+  "tier": 4,
+  "concept": "disjoint_set_path_compression",
+  "tags": [
+    "union_find",
+    "graph",
+    "data_structures",
+    "path_compression"
+  ],
+  "description": "Given n nodes and list of edges, return the number of connected components.",
+  "cpp_source": "#include <vector>\nstruct UF {\n    std::vector<int> parent, rank;\n    UF(int n) : parent(n), rank(n,0) { std::iota(parent.begin(), parent.end(), 0); }\n    int find(int x) { return parent[x]==x ? x : parent[x]=find(parent[x]); }\n    bool unite(int a, int b) {\n        a=find(a); b=find(b); if(a==b) return false;\n        if(rank[a]<rank[b]) std::swap(a,b);\n        parent[b]=a; if(rank[a]==rank[b]) rank[a]++;\n        return true;\n    }\n};\nint union_find(int n, std::vector<std::vector<int>> edges) {\n    UF uf(n);\n    for (auto& e : edges) uf.unite(e[0], e[1]);\n    int comps = 0;\n    for (int i=0;i<n;i++) if(uf.find(i)==i) comps++;\n    return comps;\n}",
+  "python_reference": "def union_find(n: int, edges: list) -> int:\n    parent = list(range(n))\n    rank = [0] * n\n\n    def find(x):\n        if parent[x] != x:\n            parent[x] = find(parent[x])\n        return parent[x]\n\n    def unite(a, b):\n        a, b = find(a), find(b)\n        if a == b: return\n        if rank[a] < rank[b]: a, b = b, a\n        parent[b] = a\n        if rank[a] == rank[b]: rank[a] += 1\n\n    for a, b in edges:\n        unite(a, b)\n    return sum(1 for i in range(n) if find(i) == i)",
+  "mojo_reference": "fn union_find(n: Int, edges: List[Tuple[Int,Int]]) -> Int:\n    var parent = List[Int]()\n    var rank_ = List[Int]()\n    for i in range(n):\n        parent.append(i); rank_.append(0)\n\n    fn find(x: Int) -> Int:\n        var cur = x\n        while parent[cur] != cur:\n            parent[cur] = parent[parent[cur]]\n            cur = parent[cur]\n        return cur\n\n    for edge in edges:\n        var a = find(edge[].get[0,Int]())\n        var b = find(edge[].get[1,Int]())\n        if a == b: continue\n        if rank_[a] < rank_[b]:\n            var tmp = a; a = b; b = tmp\n        parent[b] = a\n        if rank_[a] == rank_[b]: rank_[a] += 1\n\n    var comps = 0\n    for i in range(n):\n        if find(i) == i: comps += 1\n    return comps",
+  "tests": [
+    {
+      "args": [
+        5,
+        [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ]
+      ],
+      "expected": "2"
+    },
+    {
+      "args": [
+        5,
+        []
+      ],
+      "expected": "5"
+    },
+    {
+      "args": [
+        4,
+        [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            3
+          ]
+        ]
+      ],
+      "expected": "1"
+    }
+  ]
+}
