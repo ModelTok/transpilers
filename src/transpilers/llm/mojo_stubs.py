@@ -25,7 +25,7 @@ Last reviewed: 2025-05
 
 from __future__ import annotations
 
-from typing import TypeVar, Generic, Iterator, Optional
+from typing import TypeVar
 
 T = TypeVar("T")
 K = TypeVar("K")

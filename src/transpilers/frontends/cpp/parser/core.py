@@ -16,7 +16,6 @@ this works against any reasonably recent libclang.
 """
 from __future__ import annotations
 
-import glob as _glob
 import os as _os
 
 import clang.cindex as ci
