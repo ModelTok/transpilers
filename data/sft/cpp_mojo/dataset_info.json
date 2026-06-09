@@ -33,5 +33,14 @@
       "response": "output",
       "system": "system"
     }
+  },
+  "cpp_mojo_translation_v2": {
+    "file_name": "train_translation_v2.jsonl",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output",
+      "system": "system"
+    }
   }
 }

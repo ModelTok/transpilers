@@ -1,0 +1,55 @@
+# LLaMA-Factory SFT config — 3B adapter, Phase 2: C++/Python→Mojo translation.
+# CLOUD / CUDA edition — portable paths, flash-attn enabled, ROCm workarounds removed.
+#
+# Warm-starts from ./out/adapter_3b_phase1 (produced by sft_3b_phase1_cloud.yaml).
+# Trains on cpp_mojo_translation_v2 (train_translation_v2.jsonl, 1065 pairs) at
+# lower LR to specialize for translation without forgetting Mojo idioms.
+#
+# Run AFTER Phase 1 completes:
+#   llamafactory-cli train data/sft/cpp_mojo/sft_3b_phase2_cloud.yaml
+
+### model
+model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+# Warm-start: load Phase 1 adapter weights before continuing training.
+# Relative path — resolves from the llamafactory-cli working directory (bundle root).
+adapter_name_or_path: ./out/adapter_3b_phase1
+# Flash-attention 2 — works on Ampere+ (A10/A100/H100).
+flash_attn: fa2
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+
+### dataset
+dataset_dir: ./data/sft/cpp_mojo
+# cpp_mojo_translation_v2 maps to train_translation_v2.jsonl (registered by cloud_train.sh).
+dataset: cpp_mojo_translation_v2
+template: qwen
+cutoff_len: 4096
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: ./out/adapter_3b
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 4
+gradient_checkpointing: true
+use_reentrant_gc: false
+learning_rate: 5e-5
+num_train_epochs: 4.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true

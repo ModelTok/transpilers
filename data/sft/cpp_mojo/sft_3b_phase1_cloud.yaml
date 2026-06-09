@@ -1,0 +1,61 @@
+# LLaMA-Factory SFT config — 3B adapter, Phase 1: Mojo acquisition.
+# CLOUD / CUDA edition — portable paths, flash-attn enabled, ROCm workarounds removed.
+#
+# Target: Qwen/Qwen2.5-Coder-3B-Instruct, LoRA r=16/alpha=32/dropout=0.05, bf16
+# Hardware: any NVIDIA GPU with ≥16 GB VRAM (A10 24GB / L4 24GB / A100 40-80GB)
+#   - flash_attn: fa2   — works on Ampere+ (A10/A100/H100). Faster than eager SDPA.
+#   - If on Turing (T4): change flash_attn to sdpa (or omit; HF picks best available).
+#
+# Two-phase recipe:
+#   Phase 1 (this): train mojo_acquisition (1163 samples), 2 epochs → ./out/adapter_3b_phase1/
+#   Phase 2 (sft_3b_phase2_cloud.yaml): warm-start from phase1, train cpp_mojo_translation
+#     (train_translation_v2.jsonl, 1065 pairs), 4 epochs → ./out/adapter_3b/
+#
+# Run from the bundle root (the dir you rsync'd to the box):
+#   llamafactory-cli train data/sft/cpp_mojo/sft_3b_phase1_cloud.yaml
+
+### model
+model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+# Flash-attention 2 — install with: pip install flash-attn --no-build-isolation
+# Works on Ampere+ (A10/A100/H100). Gives ~1.5-2x throughput vs SDPA.
+flash_attn: fa2
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+
+### dataset
+# Relative to the bundle root (rsync the whole bundle dir to /workspace/transpilers/).
+# LLaMA-Factory resolves dataset_dir + dataset_info.json -> file_name.
+dataset_dir: ./data/sft/cpp_mojo
+dataset: mojo_acquisition
+template: qwen
+cutoff_len: 4096
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: ./out/adapter_3b_phase1
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 4
+gradient_checkpointing: true
+# use_reentrant_gc: false is safe on CUDA too; keep it for reproducibility.
+use_reentrant_gc: false
+learning_rate: 1.5e-4
+num_train_epochs: 2.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
