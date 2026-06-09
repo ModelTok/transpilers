@@ -35,3 +35,11 @@ artifacts/
 # LLaMA Factory / LLaMA Board GUI runtime cache + run outputs (created in cwd when running the webui)
 llamaboard_cache/
 saves/
+
+# Mojo corpus: raw third-party shallow clones (license + bloat).
+# Only the manifest + README are committed.
+data/mojo_corpus/
+# corpus build scratch (regenerable)
+data/build_corpus_list.py
+data/clone_corpus.sh
+data/analyze_corpus.py
