@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from transpilers.cli.main import TARGETS, transpile
+from transpilers.cli.main import transpile
 from transpilers.verify import (
     c_compiles,
     fortran_compiles,

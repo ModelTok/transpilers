@@ -24,7 +24,6 @@ import ast
 import json
 import re
 from pathlib import Path
-from typing import Iterable
 
 try:
     import networkx as nx
