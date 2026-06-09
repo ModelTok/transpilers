@@ -43,3 +43,7 @@ data/mojo_corpus/
 data/build_corpus_list.py
 data/clone_corpus.sh
 data/analyze_corpus.py
+# dedup/analysis intermediate caches (regenerable from data/dedup_corpus.py et al.)
+data/_dedup_cache.json
+data/_clean_aux.json
+data/_repo_signals.json

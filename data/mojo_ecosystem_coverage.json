@@ -1,0 +1,2493 @@
+{
+  "summary": {
+    "kept_repos_classified": 1043,
+    "noise_repos_zero_mojo": 131,
+    "uncategorized": 126
+  },
+  "domain_repos": {
+    "ML/DL/tensors": {
+      "rating": "mature",
+      "repos": [
+        "tairov/llama2.mojo",
+        "basalt-org/basalt",
+        "dorjeduck/llm.mojo",
+        "nabla-ml/nabla",
+        "modular/mojo-gpu-puzzles",
+        "Mojo-Numerics-and-Algorithms-group/NuMojo",
+        "Benny-Nottonson/voodoo",
+        "automata/mojograd",
+        "yetalit/Mojmelo",
+        "dorjeduck/momograd",
+        "lrmantovani10/Stable-Diffusion.mojo",
+        "tkimingi25-spec/Nairobi_Protocol-GDE-",
+        "bikrammajhi/100-days-of-GPU",
+        "leandrolcampos/specials",
+        "mfranzon/mojo-is-awesome",
+        "thomas-gale/mo3d",
+        "fnands/mimage",
+        "dorjeduck/kamo",
+        "YichengDWu/matmul.mojo",
+        "h2oai/mlops-dai-runtimes",
+        "HomericIntelligence/ProjectOdyssey",
+        "ttrenty/QLabs",
+        "ExtraMojo/ExtraMojo",
+        "HJLebbink/sort-networks-mojo",
+        "Terapines/llama3.mojo",
+        "bertaveira/mojosplat",
+        "ratulb/tenmo",
+        "konjoai/vectro",
+        "atveit/pi-mojo",
+        "itsdevcoffee/mojo-audio",
+        "FarhanAliRaza/moonshine-mojo",
+        "dorjeduck/minbpe.mojo",
+        "talhatahir-10xe/Mojo-Yolo",
+        "sdgunaa/Mojonet",
+        "alainrollejr/mocodes",
+        "atooln/modular-hacks-physics-sim",
+        "Awrsha/Advanced-CUDA-Programming-GPU-Architecture",
+        "Lyvena/Mojoflow",
+        "atsentia/mojo-tokenizer",
+        "atsentia/mojo-contrib",
+        "dorjeduck/mopro",
+        "mytechnotalent/mojonet",
+        "itsdevcoffee/mojo-visage",
+        "kraudy/mojo-grad",
+        "talhatahir-10xe/MoonDreamMojo",
+        "carlca/ca_mojo",
+        "martinvuyk/clifford",
+        "teilomillet/materl",
+        "divijg19/Ranunculales",
+        "codenetwork/mojomagic",
+        "denislabs/mojo-rl",
+        "a730/MojoLlama",
+        "jgsimard/bajo",
+        "cofin/mogemma",
+        "mojomath/matmojo",
+        "TilliFe/Infermo",
+        "helderm989/vectro",
+        "TheAgaveFairy/MojoCNN",
+        "Terapines/llm.mojo",
+        "sandeepnmenon/gsplat_mojo",
+        "ashishrai12/Dashcam-Image-Analysis-Alpamayo-R1-Mojo",
+        "tjkessler/mojoml",
+        "femtomc/patches",
+        "shivasankarka/MLAlgorithms",
+        "basalt-org/examples",
+        "tahmeedtoqi/ToqiNet-v--1.1.3",
+        "PiXeLfLeX01010101/BinaryMan-Is-Me-010101010",
+        "Harqer/IQ",
+        "automata/modex",
+        "shyamsridhar123/MedAssist_MOE",
+        "antonvice/whisper.Mojo",
+        "RameshBabuAsh/FriDAY-AI",
+        "emd1tey/mojo-example-app",
+        "rcghpge/pymo",
+        "thomas-gale/micrograd",
+        "joelflaig/NexusNet",
+        "starplatinummaster/MojoCodeCollection",
+        "vincentme/onnx-kmeans",
+        "jagtesh/gguf-mojo",
+        "drujensen/evolvenet-mojo",
+        "lyffseba/mojo-music-genre-classifier",
+        "tpurifoy52/mojo-pdf-search",
+        "RuthvikMukkamala/mojo-pinns",
+        "lyffseba/arton",
+        "JoeFerrara/mojo-24-languages",
+        "SarasinJ/healthcare-symptoms-ml",
+        "drobertson-dev/gpt-oss-modular",
+        "abhisheksreesaila/mxframe",
+        "CodeAlexx/mojodiffusion",
+        "Ammar-Alnagar/MILI",
+        "aarnphm/monpy",
+        "exergy-connect/xYang.mojo",
+        "johnsoez4/pendulum",
+        "AurelienTollard/mojo-gpu-puzzles",
+        "ezRyder-personal/mojo-gpu-puzzles-2025-07-12",
+        "lee101/mojo-search",
+        "millrace/mojo-backend",
+        "phunck/MojoStream",
+        "al3x3n0/mojo_experiments",
+        "kaakkkaaaa/modlr",
+        "TheAgaveFairy/mojollm",
+        "tomas-janicek/mocrograd",
+        "qryptum/main",
+        "Meidverse/COMMRI",
+        "johnsoez4/mojo_max_syntax",
+        "SergiuDeveloper/mojo-tensor",
+        "shiv207/underwater-acoustics-mojo-",
+        "whistlebee/openai-mojo",
+        "bentocollab/tokenizer-exploration",
+        "rcghpge/llm.mojo",
+        "msaelices/mojo-unnet",
+        "tboerstad/agentic_matmul",
+        "millrace/headgate",
+        "h3adeu/mojo-from-scratch",
+        "Odyssey-Therapeia/atomas-simulator",
+        "sam99dave/mmgrad",
+        "psychomonkeyinc/chatty_cathy",
+        "unknownsaying/divworld-II",
+        "jloveric/delta",
+        "jamesharden122/read_bin",
+        "jamesharden122/approx-mll",
+        "AurelienTollard/mojo-mnist",
+        "ebaenamar/whisper-max",
+        "winding-lines/kd_tree.mojo",
+        "nktkt/mojo-flash-attention",
+        "Jainam1673/weather-data-pipeline",
+        "dvirarad/mojo-postgres",
+        "al626/mandelbrot",
+        "drobertson-dev/gptoss-120-server",
+        "tangentscraps/kgpu",
+        "winding-lines/nms.mojo",
+        "tacio/esper",
+        "henrithomas/mojo-dojo",
+        "cyrillzadra/build-llm-from-scratch",
+        "mashriram/mojotorch",
+        "mehta302/SimpleNN",
+        "fedodudkin/mojorag",
+        "qryptum/examples",
+        "nathanbreitsch/siren-mojo",
+        "warrormac/Mojo-Test",
+        "duong-nguy/mojograd",
+        "Surfer12/workbenchv3",
+        "SilentDemonSD/mojoserve",
+        "tyukei/llm-mojo",
+        "shezmic/Mojo-Test",
+        "carlca/ca_preset_parser",
+        "hylkedonker/bridge",
+        "fiskrt/LU-mojo",
+        "vrtnis/whisper-mel-mojo",
+        "vipulSharma18/Tis-but-a-GEMM",
+        "philipbholm/moml",
+        "tyukei/mojo-gpts",
+        "vijayagopalsb/mojo-programming",
+        "gutierrezje/mojo-gpu-course",
+        "kutt27/decision-agent",
+        "mehta302/Tensor-Transpose",
+        "zeuzmakessoftware/mojo-transformer-attention-block",
+        "jekel1818/mojo-micrograd",
+        "Surfer12/cursor",
+        "cntm-labs/chronos"
+      ]
+    },
+    "numerics/linalg": {
+      "rating": "mature",
+      "repos": [
+        "gonsolo/Gonzales",
+        "MoSafi2/BlazeSeq",
+        "kszucs/marrow",
+        "BioRadOpenSource/ish",
+        "spluta/MMMAudio",
+        "f0cii/moxt",
+        "bgreni/EmberJson",
+        "mzaks/mojo-csv",
+        "forfudan/MojoMiji",
+        "Moosems/Mojo-Types",
+        "Benny-Nottonson/Mojo-Marathons",
+        "rd4com/mojo-ui-html",
+        "mzaks/mojo-flx",
+        "helehex/blade",
+        "forfudan/decimo",
+        "sbrunk/duckdb.mojo",
+        "ehsanmok/json",
+        "martinvuyk/hackathon-fft",
+        "guidorice/mogeo",
+        "ashvardanian/ScalingElections",
+        "martinvuyk/forge-tools",
+        "overby-me/overby-me",
+        "furnace-dev/furnace-examples",
+        "samufi/larecs",
+        "mojomath/SciJo",
+        "maxim-saplin/mandelbrot",
+        "bgreni/Kelvin",
+        "brainwave-sh/mosaic",
+        "furnace-dev/sonic-mojo",
+        "rd4com/ui-terminal-mojo",
+        "mzaks/mojo-fast-base64",
+        "ssslakter/stargine",
+        "atsentia/mojo-json",
+        "Mojo-Numerics-and-Algorithms-group/MojoSci",
+        "shivasankarka/HEPJo",
+        "JRedrupp/bison",
+        "adamreidsmith/ember",
+        "shivasankarka/mojoBLAS",
+        "tdehoff/MojoBLAS",
+        "HJLebbink/quine-mccluskey-mojo",
+        "axiomhq/mojo-bloomfilter",
+        "leandrolcampos/mpfr-for-mojo",
+        "guidorice/modcon23-contest",
+        "jiel/laplacian_filters_benchmark",
+        "electricalgorithm/dsplib-mojo",
+        "msaelices/mojo-protobuf",
+        "ORNL/mojito",
+        "mzaks/mojo-prefix-sum",
+        "marcelroed/monolithic-sup",
+        "shivasankarka/hdf5-mojo",
+        "ehsanmok/uuid",
+        "DataBooth/mojo-benchsuite",
+        "duckki/field-fft-mojo",
+        "laranzu/multijulia",
+        "learnqc/code_mojo",
+        "mojomath/MSL",
+        "elyase/mojo_evm",
+        "josiahls/firehose",
+        "magayagalabs/MathMojo",
+        "msaelices/mojo-csv",
+        "holdenb/mojo-num-analysis",
+        "VMois/mojo-atol-simd",
+        "SuperInstance/constraint-theory-mojo",
+        "lightofbaldr/baldr",
+        "MVPavan/mojos",
+        "oaustegard/remex",
+        "mojomath/stamojo",
+        "SuperInstance/conservation-spectral-mojo",
+        "msaelices/claude-mojo-skills",
+        "andresnowak/Fast_linear_algebra",
+        "SuperInstance/grand-pattern-mojo",
+        "YichengDWu/random123",
+        "BenzoXdev/NetProbe-X",
+        "JuniMay/playing-rust-simd",
+        "Evan-Bluhm/mojoxm",
+        "Evan-Bluhm/warpxm-mojo",
+        "Tokarzewski/topokernel",
+        "dogdogsecond/phosphomojo",
+        "asdrubale88/mojofix",
+        "sdgunaa/mlir",
+        "jloveric/shapely-mojo",
+        "vl3c/Cellatons",
+        "gogoncalves/rinha-mojo-2026",
+        "sumanthkolli03/MOJOKNN",
+        "mothball/astrolabe",
+        "ZuzoSteppenwolf/parallel_Lee",
+        "lchi021497/modular_topk",
+        "andeplane/mojo-molecular-dynamics",
+        "DataBooth/mojo-fireplace",
+        "dankirsdot/flexure",
+        "PeytonSalv/CodeLens",
+        "atsentia/mojo-websocket",
+        "nlaanait/stimojo",
+        "yuhuishi-convect/mojo-bm25",
+        "Harmeet10000/Sweet-Framework",
+        "lightofbaldr/mojo-yara",
+        "Issyl-m/secondary",
+        "pmatern/mojo-socket",
+        "lczerniawski/uuid",
+        "lightofbaldr/heimdall",
+        "atsentia/mojo-vec",
+        "CyanStarlight/posix-3d-navigator",
+        "richardkiss/vangen",
+        "CoffeeVampir3/Mojo-Simd-Math",
+        "lightofbaldr/mojo-multimatch",
+        "nadineMck/mojo-project",
+        "Phelsong/mojo_csv",
+        "atsentia/mojo-validation",
+        "SuperInstance/exocortex-embed-mojo",
+        "atsentia/mojo-testing",
+        "BadandBoolean/modular_hackathon",
+        "spluta/pyaudio_mojo_test",
+        "zeuzmakessoftware/marallel",
+        "johnsoez4/mojo_scalar",
+        "nktkt/CIFAR-mojo",
+        "nico-byte/mojo_nn",
+        "ShanoToni/mojo-matmul",
+        "BenCichos/matrix",
+        "atsentia/mojo-cache",
+        "fsa3z/box_blur_mojo",
+        "SHA888/mojo-matrix-multiply",
+        "bhansconnect/mojo-raytracer",
+        "josiahls/ash_dynamics",
+        "CyanStarlight/mojo-bugreport-01",
+        "YuChiang-Chang/firefly",
+        "dotnethero/Philox",
+        "wizardyhnr/mojo.ustring",
+        "94qmm4r8nv-oss/ULTRON-RT",
+        "hank08819/MojoKtreeFin",
+        "llinauer/matmul_mojo",
+        "jacobnzw/pscan_torch",
+        "MI-1222/hello-mojo",
+        "tom-pollak/mojo-play",
+        "EstRodr/mojo_gol",
+        "mja/DistributionsInFire",
+        "10x-Engineers/Mojo-SIMD",
+        "yablokolabs/mojoforge",
+        "fedodudkin/fast-stats-engine",
+        "nathanbreitsch/mojo-cell-cycle-feedback",
+        "kutt27/query-correction-service",
+        "torsjonas/mojo-battery-remaining-useful-life",
+        "cntm-labs/cntm-graph",
+        "KathiraveluLab/Mojito",
+        "dogdogsecond/mojo-vs-python-gc",
+        "mulveyj/mojo-demo",
+        "freewind-demos/mojo-parallel-demo",
+        "Ogarit/Modelo-Evasao-Campus-Arinos",
+        "freewind-demos/mojo-performance-demo",
+        "Mwangi-Derrick/fire-mojo",
+        "GianFree/mojo_md"
+      ]
+    },
+    "GPU/compute": {
+      "rating": "mature",
+      "repos": [
+        "DataBooth/py-run-mojo",
+        "alisterburt/mojo-cryoem-projection",
+        "libalpm64/Thistle",
+        "jake-danton/mojo-gb",
+        "aleph-ra/kompass-mojo",
+        "Ryul0rd/vulkan-mojo",
+        "DataBooth/mojo-toml",
+        "sstadick/mojo-lapper",
+        "DataBooth/mojo-dotenv",
+        "rd4com/live-stats-for-linux-based-operating-systems-in-mojo",
+        "gonsolo/mojo_gpu_raytracer",
+        "Hundo1018/wgpu-mojo",
+        "kirillbobyrev/prefix-scan-mojo-agi-house",
+        "Jason-Hoford/mojo-fluid-sim",
+        "codetalcott/napi-mojo",
+        "manhld0206/100_days_gpu_with_mojo",
+        "BradLarson/mojo-operation-template",
+        "lightofbaldr/mojo-template",
+        "orianexxx/OrianeCoreAI-mojo",
+        "NeoMagCustoms/UMG_NEOCORE",
+        "corv89/mojo-tls",
+        "sdgunaa/mccl",
+        "ratulb/mojo_programming",
+        "oaustegard/fusemojo",
+        "DataBooth/mojo-ini",
+        "emillma/caspar_mojo",
+        "quinnavila/algo_land",
+        "BenWibking/mojo-mpi",
+        "mdeclerk/MojoChess",
+        "little-world/fuse",
+        "carlcodecode/gpu-team-2",
+        "lightofbaldr/mojo-gpuq",
+        "Leikoe/mojo-apple-m1-pro-gpu",
+        "sosloan/ideal-robot",
+        "AceMouse/golbach-mojo",
+        "dpiresearch/modular",
+        "CasperHK/Singularity-X",
+        "hubayirp/tma_intro_mojo",
+        "SuperRiley64/MojoGameOfLife",
+        "lightofbaldr/mojo-cudart-shim",
+        "eschmidt42/pixi-mojo-experiments",
+        "vijpiml/phase-oredring",
+        "lyffseba/gemmm4xx",
+        "RiverDave/gpu-mojo",
+        "MehmedMulalic/P1",
+        "jancarloonce/gpu-programming",
+        "milocortes/parallel_sovereign_default_models",
+        "SamuelV7/gpu_kernals",
+        "stevejohnson15/mojo-map"
+      ]
+    },
+    "graphics": {
+      "rating": "mature",
+      "repos": [
+        "thatstoasty/mog",
+        "msteele/mojo-sdl",
+        "vietanhdev/chess.mojo",
+        "thatstoasty/mist",
+        "Hammad-hab/CombustUI",
+        "mlange-42/modo",
+        "rd4com/mojo-new-web-framework",
+        "Ryul0rd/sdl-bindings",
+        "MojoGameDevs/opengl-mojo",
+        "rectalogic/mojo-qt",
+        "RyanLeber/fire-physics-engine",
+        "thatstoasty/banjo",
+        "MojoGameDevs/sdl-mojo",
+        "boxed/TurboKod",
+        "helehex/thermo",
+        "helehex/dustbin",
+        "Hammad-hab/Mojo-GTK",
+        "CodeAlexx/MojoGUI-UI",
+        "ehsanmok/mobin",
+        "RyanLeber/mojo-ecs-nightly",
+        "RomanRobot/game-master",
+        "bitcloud2/battlesnake-mojo",
+        "automata/basquiat",
+        "yetalit/Terminal-SnakeGame",
+        "xingxuanli/Piano_Bit_by_Bit",
+        "MoSafi2/cairo-mojo",
+        "Zbornak/morabaraba_v2",
+        "rd4com/mojo_neovim_theme_app",
+        "fajaralfa/mojo-game-of-life",
+        "NathanaelRea/Strut",
+        "Ryul0rd/sdl-mojo",
+        "andrew-suprun/Game-of-Stones",
+        "DataBooth/mojo-asciichart",
+        "mohankumargupta/libui-mojo",
+        "Zbornak/morabaraba",
+        "AtharvBhat/mojo-raytracer",
+        "David-Holl/chip8",
+        "SveinIsdahl/mojo-sdl-bindings",
+        "christoph-schlumpf/rgb-gol-mojo",
+        "DuncanMcBain/dfs-tracer",
+        "robertgoss/mojo-ray",
+        "bonev-st/life",
+        "gslarsen/mojo-game-of-life",
+        "caestrada/game-of-life_mojo",
+        "rishikanthkc/Conway-s-Game-of-Life",
+        "sazid/conway-life",
+        "benoitchamot/mojo-life",
+        "jesper-olsen/mandelbrot-mojo",
+        "agostini01/mojo-game_of_life",
+        "boisgera/snake-mojo",
+        "Hundo1018/Game-Of-Life",
+        "chandanbsd/conway-game-of-life-mojo",
+        "adillari/life",
+        "avoidTheLite/life",
+        "Haj222/CS-4080",
+        "HamxAnwar/guesser_game_mojo"
+      ]
+    },
+    "web/HTTP": {
+      "rating": "mature",
+      "repos": [
+        "Lightbug-HQ/lightbug_http",
+        "Lightbug-HQ/lightbug_api",
+        "thatstoasty/gojo",
+        "Jensen-holm/FireTCP",
+        "thatstoasty/floki",
+        "msaelices/mojo-websockets",
+        "ehsanmok/flare",
+        "andresnowak/raylib-mojo",
+        "kivicode/mojo-raylib",
+        "better-mojo/uuid",
+        "Conobi/navette",
+        "Eldergenix/FireClaw",
+        "better-mojo/jojo",
+        "thatstoasty/mojo-curl",
+        "theo-keyzer/Core-gen",
+        "sstadick/hat",
+        "vikramsg/mossl",
+        "kivicode/mo_grpc",
+        "shogo314/ac-library-mojo",
+        "corv89/mojo-gemini",
+        "better-mojo/disc",
+        "igorgue/fire",
+        "ehsanmok/envo",
+        "SynergiaOS/MojoRust-Polyglot-Trading-Bot",
+        "trungpt0/QuantumMojoSimulation",
+        "better-mojo/logger",
+        "ateska/mojoz80",
+        "gerald-scharitzer/mop",
+        "jgsimard/moclap",
+        "OnlyF0uR/discord.mojo",
+        "Lightbug-HQ/pyre",
+        "pythoninthegrasses/jupyterlab_devbox",
+        "dnErf/app-reference-26",
+        "Mosaad-M/tls",
+        "nowex35/mojo_mcp",
+        "Mosaad-M/requests",
+        "bgreni/EmberRegex",
+        "SynergiaOS/MojoRust",
+        "Mosaad-M/mojo-pkg",
+        "jloveric/networkx-mojo",
+        "carlca/ca_web",
+        "jmikaelr/mojoreq",
+        "ImKKingshuk/HyperMojo",
+        "atsentia/mojo-trace",
+        "atsentia/mojo-jwt",
+        "TomLo-FStack/Lo",
+        "Ali-Jemo/MoEasy",
+        "atsentia/mojo-http",
+        "atsentia/mojo-oauth2",
+        "Mosaad-M/websocket",
+        "atsentia/mojo-observability",
+        "atsentia/mojo-server",
+        "atsentia/mojo-health",
+        "atsentia/mojo-socket",
+        "atsentia/mojo-auth",
+        "atsentia/mojo-config",
+        "atsentia/mojo-base64",
+        "KathiraveluLab/FIRM",
+        "atsentia/mojo-session",
+        "binsworld/calculator-collection",
+        "Mosaad-M/tcp",
+        "lightofbaldr/mojo-serve",
+        "carlca/ca_web_server",
+        "satoshin-des/MojoMath",
+        "Mosaad-M/url",
+        "lightofbaldr/mojo-http",
+        "francisl/fire",
+        "lightofbaldr/mojo-json",
+        "sazid/fireflake",
+        "cirello-py/nanoid",
+        "AmidVoshakul/to-do-list",
+        "deadsg235/ultima-singularity-agi-agent",
+        "pkoscielny/easy_mojo",
+        "phuong-tran/coakka-samples",
+        "sstadick/pixi-build-mojo-test"
+      ]
+    },
+    "networking": {
+      "rating": "nascent",
+      "repos": [
+        "crisadamo/mojo-libc",
+        "zverianskii/mojosiphash",
+        "ericwb/mojo-socket",
+        "YichengDWu/interface",
+        "taylorpool/libc",
+        "rad-roots-labs/hyf",
+        "msaelices/mojo-libc",
+        "KathiraveluLab/Ararat",
+        "Euan-M-Campbell/networkM"
+      ]
+    },
+    "crypto": {
+      "rating": "mature",
+      "repos": [
+        "gabrieldemarmiesse/mojo-stdlib-extensions",
+        "mzaks/compact-dict",
+        "furnace-dev/furnace",
+        "gabrieldemarmiesse/mojo-zlib",
+        "mewmix/keccak256_mojo",
+        "zmalatrax/uint",
+        "ByteJoseph/primes",
+        "eginez/mojo-hamt",
+        "martinvuyk/1brc-mojo",
+        "mewmix/mojo-secp256k1",
+        "f0cii/pure-strat",
+        "atsentia/mojo-redis",
+        "Mr-Leshiy/mojo-crypto",
+        "ttrenty/Mojo-vs-Cpp-DataStructures",
+        "atsentia/mojo-crypto",
+        "lczerniawski/crypto",
+        "remroc/public_cryptovortex",
+        "masachika-kamada/azure-vm-mojo",
+        "gabrieldemarmiesse/modular-runpath-bug"
+      ]
+    },
+    "data/serialization": {
+      "rating": "mature",
+      "repos": [
+        "mojoto/morrow.mojo",
+        "thatstoasty/prism",
+        "mojo-data/arrow.mojo",
+        "guidorice/mojo-pytest",
+        "dmitry-salin/io_uring",
+        "mzaks/mojo-sort",
+        "better-mojo/mod",
+        "YichengDWu/yoho-legacy",
+        "thatstoasty/stump",
+        "forfudan/argmojo",
+        "msaelices/mojo-regex",
+        "lsh/lsx",
+        "illinoisdata/MojoFrame",
+        "lsh/wgpu-mojo",
+        "ZacHooper/mojo-json",
+        "helehex/moplex",
+        "phomola/mojolibs",
+        "thatstoasty/weave",
+        "mojothon/libc",
+        "itsdevcoffee/mojoenv",
+        "bartesaghilab/cryoluge",
+        "BudNoise/Birdol",
+        "learnqc/code_mojo_old",
+        "bernaferrari/material-color-utilities-mojo",
+        "mojo-data/arrow-schema",
+        "axiomhq/mojo-hyperloglog",
+        "rd4com/mojo-magiclist",
+        "CoffeeVampir3/Mojo-Gemma4-CPU",
+        "thatstoasty/slight",
+        "MojoGameDevs/mojot",
+        "forfudan/my-first-mojo-project",
+        "gabrieldemarmiesse/mojo-simdjson",
+        "ehsanmok/pprint",
+        "Verdagon/MojoCompileTimeRegex",
+        "helehex/huffman",
+        "teilomillet/operatio",
+        "dorjeduck/mostring",
+        "rolkotaki/mojo-vs-python-examples",
+        "Hammad-hab/MojoINI",
+        "mzaks/mojo-unicode",
+        "josiahls/momanim",
+        "ehsanmok/morph",
+        "martinvuyk/mojo_datetime",
+        "winding-lines/pontoneer",
+        "thatstoasty/mojo-rustls",
+        "ehsanmok/sqlite",
+        "ehsanmok/mozz",
+        "thatstoasty/mojo-tlse",
+        "ehsanmok/tempo",
+        "CyanStarlight/mojo-glfw-bindings",
+        "helehex/monums",
+        "seanpm2001/SNU_2D_ProgrammingTools_IDE_Mojo",
+        "josiahls/mav",
+        "josiahls/c_binder_mojo",
+        "gabrieldemarmiesse/mojo-zipfile",
+        "agentwp/mojo-vllm",
+        "lsh/glfw-mojo",
+        "sstadick/mojopt",
+        "nico-byte/mojo-torch",
+        "IbarraSamuel/strata",
+        "thatstoasty/hue",
+        "lsh/tephra",
+        "BraSDon/advent-of-mojo",
+        "toffaletti/mojo-uv",
+        "IgorBabalich/mojotime",
+        "Xopilot-AI-NN/Xopilot",
+        "MoSafi2/rapidgzip_mojo",
+        "bgreni/ChronoFlare",
+        "IbarraSamuel/termo",
+        "int3/mpt",
+        "VerdagonModular/BorrowRL",
+        "gabrieldemarmiesse/mojo-parameter-or-arg",
+        "mojothon/dotenv",
+        "carlca/ca_ga",
+        "jancarloonce/mojo-message-queue",
+        "Sposito/raylib.mj",
+        "ryaneggz/mojo-quickstart",
+        "lyffseba/mlx",
+        "4693887178/hello_mojo",
+        "BatuhanGQskt/chemtensor_mojo",
+        "desessein/animat",
+        "dogdogsecond/VCFForge",
+        "carlca/ca_web_netlify",
+        "koji-m/mojo-parquet",
+        "MoSafi2/BlazeQC",
+        "xupremix/uom",
+        "DivaythFyr/collective_immunity_shapes_aging_in_eusocial_Supplementary",
+        "MoSafi2/hts_mojo",
+        "Yongwoo-Lee-ccl/mojofhe",
+        "NathanSWard/yap",
+        "IbarraSamuel/motoml",
+        "shogo314/ac-library-mojo-test",
+        "thatstoasty/small-time",
+        "Mosaad-M/arrow",
+        "atsentia/mojo-sql",
+        "bradenhelmer/mojo_gpu_puzzles",
+        "IbarraSamuel/moty",
+        "Anibalfermandois/1brc-mojo",
+        "avitkauskas/mojo-datastructs",
+        "atsentia/mojo-time",
+        "Mosaad-M/flatbuffers",
+        "millrace/minja2",
+        "atsentia/mojo-scheduler",
+        "hypno2000/mojo-8086-sim",
+        "atsentia/mojo-msgpack",
+        "CoffeeVampir3/Mojo-Wild-Crash-Repro",
+        "Mosaad-M/pg",
+        "IbarraSamuel/mnist_mojo",
+        "acherm/agentic-chessengine-mojo-codexfailure",
+        "1Meracle1/mojo_xcb_win_manager",
+        "TomLo-FStack/mojo-data-structures-50",
+        "atsentia/mojo-resilience",
+        "jswarup/Trestle",
+        "ShugoYoko/syntax",
+        "LandMineDevelopment/mojo_data_struct_algo",
+        "Mosaad-M/json",
+        "b-price/mojomut",
+        "WolfDan/io_uring-mojo",
+        "LandMineDevelopment/db",
+        "mlange-42/minecs",
+        "Tharun-Kumar-McW/Mojo_Practice",
+        "jswarup/Trellis",
+        "sergey-sonkin/adventofmojo2024",
+        "omarelb/bktree.mojo",
+        "Conobi/re2-mojo",
+        "obust/reactpy_vdom",
+        "lightofbaldr/mojo-stack-demo",
+        "Mosaad-M/cdp",
+        "macaque-suf/sudoku-4x4-symmetry",
+        "gsmyridis/bfc",
+        "dvirarad/mojo-kafka",
+        "sergey-sonkin/huffman",
+        "ExtraMojo/serde-mojo",
+        "Orca-bit/modular-practice",
+        "msaelices/mojo-openai-realtime-api",
+        "govindansriram/mojo_kernels",
+        "nowex35/hotaru",
+        "atsentia/mojo-uuid",
+        "Phelsong/mojo_utils",
+        "mehta302/SimpleNN-V2",
+        "manhld0206/mojo_rtx_4070_mat_mul",
+        "jeremyd85/advent_of_code_2025",
+        "thomas-huegel/mojo-graphmod",
+        "AmanataNayak/mojo_lang",
+        "brod4910/pmpp-mojo",
+        "jaroslav-zukov/rosalind-mojo",
+        "AlistairKeiller/warp_vs_mojo",
+        "sstadick/tachyon",
+        "laboodabedibdab/mojo-evo",
+        "jobtijhuis/adventofcode-2024",
+        "hayduker/automajo",
+        "JoshKarpel/quantumojo",
+        "YichengDWu/slotmap",
+        "rfjaimes/mojo_algorithm_genetic",
+        "cgarciae/aoc-2024",
+        "gerald-scharitzer/tephrite",
+        "dohzya/aoc-2024-mojo",
+        "saviorand/smokio",
+        "lewisfogden/benchmarks",
+        "Hundo1018/inmojomni",
+        "kseuro/AdventofCode2024",
+        "ZVAXEROWS/Ai-Mojo-try",
+        "currybab/mojo-study",
+        "harinibaskar2/Assignment-8",
+        "duet-llc/mojo-uring",
+        "cahya-wirawan/rwkv-tokenizer-mojo",
+        "jamesharden122/simulations",
+        "DSNJTurtle/aoc_2024_mojo",
+        "BudNoise/MojoVM",
+        "mine9607/game_of_life",
+        "praveer-k/datamojo",
+        "bgreni/Canny-MAX",
+        "xentropic-dev/irtac",
+        "gerald-scharitzer/aoc-mojo",
+        "osllogon/advent-2024",
+        "dhnm/hello-mojo",
+        "alejandrodomin/editor",
+        "carlca/ca_mojo_issue",
+        "rcghpge/osrsge",
+        "winding-lines/herringbone",
+        "brookcs3/life",
+        "MoyashiWithDevice/life",
+        "yacoop/parallel_programming",
+        "clipclapclop/nnfs",
+        "Phelsong/hyprmenu",
+        "nathanphoffman/MojoDieRoller",
+        "gabrieldemarmiesse/something",
+        "Zbornak/life",
+        "Hundo1018/ludens-engine",
+        "flusterIO/dg-simulation",
+        "andycancado/hammingcode-mojo",
+        "AmanataNayak/mojo_dsa",
+        "koji-m/pegra",
+        "YichengDWu/drayheap",
+        "christoph-schlumpf/explicit_ref",
+        "jkozdon/mojo_getting_started",
+        "rofaidaezzat/clustring-",
+        "Phelsong/hunter_copy",
+        "yeison/morellamas.mojo",
+        "kaykay28376/Apex",
+        "sansomguy/gpu_programming_puzzles",
+        "sweetpeteza/mongoose-lang",
+        "dominiksakic/conwaysGameOfLife",
+        "naoyaikeda/nqn",
+        "SleepyMiner/Performance-and-Metrics-Analysis-Between-Python3-vs-Mojo",
+        "sstadick/mojopt-demo",
+        "carlosvneves/mojograd",
+        "ezRyder-personal/mojo_test",
+        "MattWill89/my_mojo_project",
+        "codegod100/ptk",
+        "Ruziboyev97/mojo-test",
+        "igochkov/vscode-mojo",
+        "BudNoise/MojoPKG",
+        "dominiwe/mojo-libffi",
+        "Hundo1018/rx-mojo",
+        "Andessonreis/capture-the-flag-mojo",
+        "fadend/mojo_life",
+        "grammeaway/mojo-risc-v-assembly-codegen-project",
+        "HelloWorld-n/fictional-potato",
+        "khooeee/mojo-temperature-analyzer",
+        "emptist/life",
+        "jaques-sam/mojo_bag",
+        "sidecut/life",
+        "sa-/signals.mojo",
+        "jake-danton/mojo_test",
+        "winding-lines/recursive-types",
+        "shahabnajmosadatypy/Mojo-Calculator",
+        "sstadick/ir_utils",
+        "mak8427/Mojo_GPU_Programming",
+        "ivomofor/max",
+        "lxbc135/python-mojo-test",
+        "patrikmc/mojotest",
+        "sstadick/mojo-pixi-tests-git-dep",
+        "gerald-scharitzer/mopro",
+        "FQAlmeida/OCEV-Projeto-Mojo",
+        "Zbornak/bacon",
+        "zsiegel92/repro-mojo-lsp-crash",
+        "jgansl/fine-tuning",
+        "mmkulmala/mojoqrgenerator",
+        "lv416e/project-mojo",
+        "BenCichos/cvqc",
+        "eswat2/hello-mojo",
+        "Guessirin/hello-mojo",
+        "ryouta9121/mojo-project",
+        "CogitatorTech/mojo-plugin-jetbrains"
+      ]
+    },
+    "parsing/regex": {
+      "rating": "nascent",
+      "repos": [
+        "PlanetDestroyyer/Introduction-to-Mojo-Programming-Language",
+        "bdombro/shebangsy",
+        "ParaGroup/MoStream",
+        "gstoner/tessera-mojo",
+        "liuzhishan/mojo-dynamic-dispatch",
+        "Lakshya-GG/Mojo-Programming-language-for-all-of-AI",
+        "gnatnib/mojo-email-validator"
+      ]
+    },
+    "db/storage": {
+      "rating": "toy",
+      "repos": [
+        "rd4com/mojo-relational-objects-exploration",
+        "LandMineDevelopment/Mojo-Database",
+        "tyukei/mojo-db"
+      ]
+    },
+    "CLI": {
+      "rating": "toy",
+      "repos": [
+        "Brian-M-J/sicp_mojo",
+        "dev0x13/gemm-benchmark-2023",
+        "rd4com/mojo_dev_helper",
+        "YoungHaKim7/Modular_Mojo_AI_Dev",
+        "CW-75/mojo-practices",
+        "ChunghanYi/mojo-examples",
+        "EvanWiebe/Weather-Bot",
+        "joelflaig/Nexus-TUI",
+        "annaluizacaraciolo/fine_tuning_for_mojo_gen",
+        "HostServer001/soe",
+        "zqfang/mojo_call_c",
+        "KrzysztofZawisla/BrotliCompressorMojo"
+      ]
+    },
+    "datetime": {
+      "rating": "none",
+      "repos": []
+    },
+    "testing": {
+      "rating": "nascent",
+      "repos": [
+        "ahmetax/Practical-Mojo-Examples",
+        "mikowals/dynamic_vector.mojo",
+        "dimitrilw/toybox",
+        "grayhatdevelopers/mojo-vs-python-benchmarks",
+        "ashiswin/MojoAdderTester",
+        "YuChiang-Chang/mojo-market-types",
+        "atsentia/mojo-result",
+        "rd4com/mojo-small-tests-runner",
+        "musti2023/yapayzeka"
+      ]
+    },
+    "FFI/interop": {
+      "rating": "mature",
+      "repos": [
+        "ihnorton/mojo-ffi",
+        "CoffeeVampir3/Mojo-Linuxperiments",
+        "jackos/mojo-experiments",
+        "Ivo-Balbaert/Mojo_in_Action",
+        "tedneward/Demo-Mojo",
+        "OnlyF0uR/OpenSSL-Mojo"
+      ]
+    },
+    "audio": {
+      "rating": "none",
+      "repos": []
+    },
+    "stdlib-extensions": {
+      "rating": "toy",
+      "repos": [
+        "JakeEBrooks/mojocmath",
+        "sebastian-sz/heapq.mojo",
+        "HaruTzuki/MojoLessons",
+        "sstadick/aoc-2025",
+        "stelmanjones/moglow",
+        "notebook-ai/mojo_training_codes"
+      ]
+    },
+    "language-core/tooling": {
+      "rating": "mature",
+      "repos": [
+        "modular/modular",
+        "py2many/py2many",
+        "ego/awesome-mojo",
+        "CrossGL/crosstl",
+        "modular/mojo-syntax",
+        "mojo-lang/mojo",
+        "modular/modular-community",
+        "TheAlgorithms/Mojo",
+        "julienokumu/100DaysOfGPUProgramming",
+        "bajrangCoder/zed-mojo",
+        "VMois/mojo-gym",
+        "dbusteed/mojolings",
+        "isuckatcs/advent-of-code",
+        "better-mojo/learn-mojo-archived",
+        "franckrasolo/mojo-playground.nix",
+        "seanpm2001/Learn-Mojo",
+        "better-mojo/learn-mojo",
+        "Ivo-Balbaert/The_Way_to_Mojo",
+        "Hammad-hab/USL",
+        "svpino/mojo",
+        "TheAgaveFairy/AoC25Mojo",
+        "pmatos/aoc2023",
+        "RoddyMacintyre/mojo_manual",
+        "thatstoasty/advent-of-code-2025",
+        "coderonion/hello-algo-mojo",
+        "rarebreed/mojo-learn",
+        "Al3xPhys/AOC2015Mojo",
+        "jgsimard/learn_mojo",
+        "tomcotter7/mojchine-learning",
+        "rolkotaki/mojo-advent-of-code",
+        "akneni/advent-of-code-2024",
+        "mando-ai/learn-mojo",
+        "minhtran241/mojo-playground",
+        "nicktalati/learning-mojo",
+        "cyrillzadra/mojo-playground",
+        "AtherNiyargar/Mojo",
+        "jackos/advent-of-code-2024",
+        "tapickell/learn_mojo",
+        "shuwenhe/mojo",
+        "jmirenzi/learning-mojo",
+        "kumatheworld/advent-of-code-2023",
+        "kimjindol2025/mojo-learning",
+        "ANIL80531/mojo",
+        "Gioggio03/Mojo",
+        "Andrea-Ceccherini/MojoTutorial_01",
+        "jacksonkunde/learning-mojo",
+        "msaelices/mojo-playground",
+        "borbert/Mojolings",
+        "rcghpge/advent-of-code",
+        "Jainam1673/mojo",
+        "JohnCSu/mojo_lbm_tutorial",
+        "jmkopper/Advent-of-Code-2024",
+        "JoseRFJuniorLLMs/mojo_full",
+        "lalitsom/mojo",
+        "JeffExec/mojo-learning",
+        "enriquegomeztagle/mojo",
+        "loggar/mojo",
+        "freespirit/aoc24",
+        "Deufel/mojo",
+        "diegopacheco/mojo-playground",
+        "mone27/learn-raytracing",
+        "ikram98ai/mojo",
+        "mircmo/advent-of-code-2024",
+        "kraudy/mojo-learn",
+        "whistlebee/tree-sitter-mojo",
+        "vaibhavg-01/Mojo",
+        "atomicapple0/advent-of-code-2024",
+        "smlobo/mojo",
+        "avidraccoon/LearningMojo",
+        "mbido/advent-of-code-mojo",
+        "AurelienTollard/mojo-playground",
+        "vrinek/learn-mojo",
+        "amenaruya/MojoTutorial",
+        "dimitrilw/mojo-playground",
+        "sagi21805/Mojo",
+        "xentropic-dev/aoc24",
+        "ecetinerdem/Mojo",
+        "Joaquin-Urruti/Mojo",
+        "GamesDoneWr0ng/mojo",
+        "kkr-genweb/mojo-learning",
+        "bgreni/advent-of-code-2024",
+        "davidsenica/Advent-of-Code-2025",
+        "jcshim/mojo",
+        "jdspell/mojo",
+        "jloveric/mojo-playground",
+        "jdupl123/mojo-gpu-learning",
+        "Huvinesh-Rajendran-12/learn-mojo",
+        "anirudhkurnool/mojo",
+        "kaspersgit/mojo",
+        "Anass-23/Mojo-Playground",
+        "x0s/advent-of-code-mojo",
+        "dotnetCarpenter/learning-mojo",
+        "boisgera/mojo",
+        "thirsty-emirate3/mojo",
+        "adlinwiseley01/mojo",
+        "zackrylangford/mojo-game-tutorial",
+        "Soto92/mojo-playground",
+        "CalebFIN/MojoLangLearning",
+        "sdkim96/mojo",
+        "dylan-stark/max-graph-api-playground",
+        "davidsenica/advent-of-code-2024",
+        "calint/mojo-playground",
+        "JoshCLWren/advent-of-code-2025",
+        "whistlebee/zed-mojo",
+        "FarohanID/learning-mojo",
+        "shuklaayush/mojo-playground",
+        "freewind-demos/mojo-hello-world-demo",
+        "sh20raj-dump/mojo",
+        "yash3004/learning-mojo",
+        "rurumimic/mojo",
+        "tramaine-codes/mojo-playground"
+      ]
+    }
+  },
+  "domains": {
+    "ML/DL/tensors": {
+      "rating": "mature",
+      "num_repos": 160,
+      "total_distinct_loc": 3744048,
+      "max_stars": 2124,
+      "repos": [
+        {
+          "repo": "tairov/llama2.mojo",
+          "stars": 2124,
+          "distinct_mojo_loc": 2696,
+          "license": "MIT"
+        },
+        {
+          "repo": "basalt-org/basalt",
+          "stars": 442,
+          "distinct_mojo_loc": 14177,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "dorjeduck/llm.mojo",
+          "stars": 364,
+          "distinct_mojo_loc": 2379,
+          "license": "MIT"
+        },
+        {
+          "repo": "nabla-ml/nabla",
+          "stars": 339,
+          "distinct_mojo_loc": 30,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "modular/mojo-gpu-puzzles",
+          "stars": 337,
+          "distinct_mojo_loc": 17739,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "Mojo-Numerics-and-Algorithms-group/NuMojo",
+          "stars": 217,
+          "distinct_mojo_loc": 48429,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "Benny-Nottonson/voodoo",
+          "stars": 128,
+          "distinct_mojo_loc": 5561,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "automata/mojograd",
+          "stars": 77,
+          "distinct_mojo_loc": 1626,
+          "license": null
+        },
+        {
+          "repo": "yetalit/Mojmelo",
+          "stars": 71,
+          "distinct_mojo_loc": 20822,
+          "license": "BSD-3-Clause"
+        },
+        {
+          "repo": "dorjeduck/momograd",
+          "stars": 65,
+          "distinct_mojo_loc": 1545,
+          "license": "MIT"
+        },
+        {
+          "repo": "lrmantovani10/Stable-Diffusion.mojo",
+          "stars": 56,
+          "distinct_mojo_loc": 3130,
+          "license": "MIT"
+        },
+        {
+          "repo": "tkimingi25-spec/Nairobi_Protocol-GDE-",
+          "stars": 45,
+          "distinct_mojo_loc": 1197,
+          "license": "MIT"
+        }
+      ]
+    },
+    "numerics/linalg": {
+      "rating": "mature",
+      "num_repos": 150,
+      "total_distinct_loc": 1074656,
+      "max_stars": 119,
+      "repos": [
+        {
+          "repo": "gonsolo/Gonzales",
+          "stars": 119,
+          "distinct_mojo_loc": 9282,
+          "license": "GPL-3.0"
+        },
+        {
+          "repo": "MoSafi2/BlazeSeq",
+          "stars": 103,
+          "distinct_mojo_loc": 20653,
+          "license": "MIT"
+        },
+        {
+          "repo": "kszucs/marrow",
+          "stars": 88,
+          "distinct_mojo_loc": 43711,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "BioRadOpenSource/ish",
+          "stars": 62,
+          "distinct_mojo_loc": 14086,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "spluta/MMMAudio",
+          "stars": 59,
+          "distinct_mojo_loc": 19895,
+          "license": "MIT"
+        },
+        {
+          "repo": "f0cii/moxt",
+          "stars": 58,
+          "distinct_mojo_loc": 22888,
+          "license": "MIT"
+        },
+        {
+          "repo": "bgreni/EmberJson",
+          "stars": 57,
+          "distinct_mojo_loc": 16249,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "mzaks/mojo-csv",
+          "stars": 53,
+          "distinct_mojo_loc": 753,
+          "license": "MIT"
+        },
+        {
+          "repo": "forfudan/MojoMiji",
+          "stars": 31,
+          "distinct_mojo_loc": 7,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "Moosems/Mojo-Types",
+          "stars": 28,
+          "distinct_mojo_loc": 627,
+          "license": "MIT"
+        },
+        {
+          "repo": "Benny-Nottonson/Mojo-Marathons",
+          "stars": 27,
+          "distinct_mojo_loc": 1516,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "rd4com/mojo-ui-html",
+          "stars": 27,
+          "distinct_mojo_loc": 879,
+          "license": "MIT"
+        }
+      ]
+    },
+    "GPU/compute": {
+      "rating": "mature",
+      "num_repos": 49,
+      "total_distinct_loc": 321274,
+      "max_stars": 12,
+      "repos": [
+        {
+          "repo": "DataBooth/py-run-mojo",
+          "stars": 12,
+          "distinct_mojo_loc": 624,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "alisterburt/mojo-cryoem-projection",
+          "stars": 11,
+          "distinct_mojo_loc": 432,
+          "license": null
+        },
+        {
+          "repo": "libalpm64/Thistle",
+          "stars": 7,
+          "distinct_mojo_loc": 16650,
+          "license": null
+        },
+        {
+          "repo": "jake-danton/mojo-gb",
+          "stars": 7,
+          "distinct_mojo_loc": 5461,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "aleph-ra/kompass-mojo",
+          "stars": 6,
+          "distinct_mojo_loc": 3658,
+          "license": null
+        },
+        {
+          "repo": "Ryul0rd/vulkan-mojo",
+          "stars": 5,
+          "distinct_mojo_loc": 90592,
+          "license": "MIT"
+        },
+        {
+          "repo": "DataBooth/mojo-toml",
+          "stars": 5,
+          "distinct_mojo_loc": 6562,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "sstadick/mojo-lapper",
+          "stars": 5,
+          "distinct_mojo_loc": 3745,
+          "license": "Unlicense"
+        },
+        {
+          "repo": "DataBooth/mojo-dotenv",
+          "stars": 5,
+          "distinct_mojo_loc": 1234,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "rd4com/live-stats-for-linux-based-operating-systems-in-mojo",
+          "stars": 4,
+          "distinct_mojo_loc": 2678,
+          "license": "MIT"
+        },
+        {
+          "repo": "gonsolo/mojo_gpu_raytracer",
+          "stars": 4,
+          "distinct_mojo_loc": 322,
+          "license": null
+        },
+        {
+          "repo": "Hundo1018/wgpu-mojo",
+          "stars": 3,
+          "distinct_mojo_loc": 11947,
+          "license": "Apache-2.0"
+        }
+      ]
+    },
+    "graphics": {
+      "rating": "mature",
+      "num_repos": 56,
+      "total_distinct_loc": 376846,
+      "max_stars": 57,
+      "repos": [
+        {
+          "repo": "thatstoasty/mog",
+          "stars": 57,
+          "distinct_mojo_loc": 7493,
+          "license": "MIT"
+        },
+        {
+          "repo": "msteele/mojo-sdl",
+          "stars": 27,
+          "distinct_mojo_loc": 725,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "vietanhdev/chess.mojo",
+          "stars": 23,
+          "distinct_mojo_loc": 685,
+          "license": "GPL-3.0"
+        },
+        {
+          "repo": "thatstoasty/mist",
+          "stars": 20,
+          "distinct_mojo_loc": 15310,
+          "license": "MIT"
+        },
+        {
+          "repo": "Hammad-hab/CombustUI",
+          "stars": 16,
+          "distinct_mojo_loc": 685,
+          "license": "MIT"
+        },
+        {
+          "repo": "mlange-42/modo",
+          "stars": 14,
+          "distinct_mojo_loc": 376,
+          "license": "MIT"
+        },
+        {
+          "repo": "rd4com/mojo-new-web-framework",
+          "stars": 13,
+          "distinct_mojo_loc": 789,
+          "license": "MIT"
+        },
+        {
+          "repo": "Ryul0rd/sdl-bindings",
+          "stars": 12,
+          "distinct_mojo_loc": 4379,
+          "license": null
+        },
+        {
+          "repo": "MojoGameDevs/opengl-mojo",
+          "stars": 9,
+          "distinct_mojo_loc": 9490,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "rectalogic/mojo-qt",
+          "stars": 9,
+          "distinct_mojo_loc": 63,
+          "license": null
+        },
+        {
+          "repo": "RyanLeber/fire-physics-engine",
+          "stars": 8,
+          "distinct_mojo_loc": 1700,
+          "license": "MIT"
+        },
+        {
+          "repo": "thatstoasty/banjo",
+          "stars": 7,
+          "distinct_mojo_loc": 925,
+          "license": "MIT"
+        }
+      ]
+    },
+    "web/HTTP": {
+      "rating": "mature",
+      "num_repos": 75,
+      "total_distinct_loc": 577373,
+      "max_stars": 737,
+      "repos": [
+        {
+          "repo": "Lightbug-HQ/lightbug_http",
+          "stars": 737,
+          "distinct_mojo_loc": 13456,
+          "license": "MIT"
+        },
+        {
+          "repo": "Lightbug-HQ/lightbug_api",
+          "stars": 43,
+          "distinct_mojo_loc": 1495,
+          "license": "MIT"
+        },
+        {
+          "repo": "thatstoasty/gojo",
+          "stars": 31,
+          "distinct_mojo_loc": 9295,
+          "license": "MIT"
+        },
+        {
+          "repo": "Jensen-holm/FireTCP",
+          "stars": 29,
+          "distinct_mojo_loc": 503,
+          "license": "MIT"
+        },
+        {
+          "repo": "thatstoasty/floki",
+          "stars": 26,
+          "distinct_mojo_loc": 4925,
+          "license": "MIT"
+        },
+        {
+          "repo": "msaelices/mojo-websockets",
+          "stars": 21,
+          "distinct_mojo_loc": 15197,
+          "license": "MIT"
+        },
+        {
+          "repo": "ehsanmok/flare",
+          "stars": 20,
+          "distinct_mojo_loc": 127372,
+          "license": "MIT"
+        },
+        {
+          "repo": "andresnowak/raylib-mojo",
+          "stars": 11,
+          "distinct_mojo_loc": 12025,
+          "license": "Zlib"
+        },
+        {
+          "repo": "kivicode/mojo-raylib",
+          "stars": 7,
+          "distinct_mojo_loc": 11570,
+          "license": "Zlib"
+        },
+        {
+          "repo": "better-mojo/uuid",
+          "stars": 6,
+          "distinct_mojo_loc": 952,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "Conobi/navette",
+          "stars": 5,
+          "distinct_mojo_loc": 95769,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "Eldergenix/FireClaw",
+          "stars": 5,
+          "distinct_mojo_loc": 11245,
+          "license": "Apache-2.0"
+        }
+      ]
+    },
+    "networking": {
+      "rating": "nascent",
+      "num_repos": 9,
+      "total_distinct_loc": 13464,
+      "max_stars": 34,
+      "repos": [
+        {
+          "repo": "crisadamo/mojo-libc",
+          "stars": 34,
+          "distinct_mojo_loc": 1185,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "zverianskii/mojosiphash",
+          "stars": 2,
+          "distinct_mojo_loc": 123,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "ericwb/mojo-socket",
+          "stars": 1,
+          "distinct_mojo_loc": 588,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "YichengDWu/interface",
+          "stars": 1,
+          "distinct_mojo_loc": 480,
+          "license": "MIT"
+        },
+        {
+          "repo": "taylorpool/libc",
+          "stars": 1,
+          "distinct_mojo_loc": 214,
+          "license": null
+        },
+        {
+          "repo": "rad-roots-labs/hyf",
+          "stars": 0,
+          "distinct_mojo_loc": 8598,
+          "license": "AGPL-3.0"
+        },
+        {
+          "repo": "msaelices/mojo-libc",
+          "stars": 0,
+          "distinct_mojo_loc": 1101,
+          "license": "FILE:LICENSE"
+        },
+        {
+          "repo": "KathiraveluLab/Ararat",
+          "stars": 0,
+          "distinct_mojo_loc": 701,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "Euan-M-Campbell/networkM",
+          "stars": 0,
+          "distinct_mojo_loc": 474,
+          "license": null
+        }
+      ]
+    },
+    "crypto": {
+      "rating": "mature",
+      "num_repos": 19,
+      "total_distinct_loc": 118775,
+      "max_stars": 57,
+      "repos": [
+        {
+          "repo": "gabrieldemarmiesse/mojo-stdlib-extensions",
+          "stars": 57,
+          "distinct_mojo_loc": 5723,
+          "license": "MIT"
+        },
+        {
+          "repo": "mzaks/compact-dict",
+          "stars": 38,
+          "distinct_mojo_loc": 2818,
+          "license": "MIT"
+        },
+        {
+          "repo": "furnace-dev/furnace",
+          "stars": 7,
+          "distinct_mojo_loc": 22612,
+          "license": null
+        },
+        {
+          "repo": "gabrieldemarmiesse/mojo-zlib",
+          "stars": 6,
+          "distinct_mojo_loc": 3460,
+          "license": "MIT"
+        },
+        {
+          "repo": "mewmix/keccak256_mojo",
+          "stars": 3,
+          "distinct_mojo_loc": 893,
+          "license": null
+        },
+        {
+          "repo": "zmalatrax/uint",
+          "stars": 2,
+          "distinct_mojo_loc": 744,
+          "license": null
+        },
+        {
+          "repo": "ByteJoseph/primes",
+          "stars": 2,
+          "distinct_mojo_loc": 42,
+          "license": "MPL-2.0"
+        },
+        {
+          "repo": "eginez/mojo-hamt",
+          "stars": 1,
+          "distinct_mojo_loc": 2175,
+          "license": null
+        },
+        {
+          "repo": "martinvuyk/1brc-mojo",
+          "stars": 1,
+          "distinct_mojo_loc": 126,
+          "license": "MIT"
+        },
+        {
+          "repo": "mewmix/mojo-secp256k1",
+          "stars": 0,
+          "distinct_mojo_loc": 52657,
+          "license": null
+        },
+        {
+          "repo": "f0cii/pure-strat",
+          "stars": 0,
+          "distinct_mojo_loc": 17443,
+          "license": null
+        },
+        {
+          "repo": "atsentia/mojo-redis",
+          "stars": 0,
+          "distinct_mojo_loc": 2937,
+          "license": "Apache-2.0"
+        }
+      ]
+    },
+    "data/serialization": {
+      "rating": "mature",
+      "num_repos": 245,
+      "total_distinct_loc": 860488,
+      "max_stars": 120,
+      "repos": [
+        {
+          "repo": "mojoto/morrow.mojo",
+          "stars": 120,
+          "distinct_mojo_loc": 1348,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "thatstoasty/prism",
+          "stars": 67,
+          "distinct_mojo_loc": 6098,
+          "license": "MIT"
+        },
+        {
+          "repo": "mojo-data/arrow.mojo",
+          "stars": 50,
+          "distinct_mojo_loc": 851,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "guidorice/mojo-pytest",
+          "stars": 50,
+          "distinct_mojo_loc": 84,
+          "license": "MIT"
+        },
+        {
+          "repo": "dmitry-salin/io_uring",
+          "stars": 24,
+          "distinct_mojo_loc": 5687,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "mzaks/mojo-sort",
+          "stars": 24,
+          "distinct_mojo_loc": 3492,
+          "license": "MIT"
+        },
+        {
+          "repo": "better-mojo/mod",
+          "stars": 20,
+          "distinct_mojo_loc": 12,
+          "license": "MIT"
+        },
+        {
+          "repo": "YichengDWu/yoho-legacy",
+          "stars": 17,
+          "distinct_mojo_loc": 3028,
+          "license": "MIT"
+        },
+        {
+          "repo": "thatstoasty/stump",
+          "stars": 16,
+          "distinct_mojo_loc": 11795,
+          "license": "MIT"
+        },
+        {
+          "repo": "forfudan/argmojo",
+          "stars": 14,
+          "distinct_mojo_loc": 25922,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "msaelices/mojo-regex",
+          "stars": 13,
+          "distinct_mojo_loc": 23886,
+          "license": "MIT"
+        },
+        {
+          "repo": "lsh/lsx",
+          "stars": 13,
+          "distinct_mojo_loc": 14940,
+          "license": "MIT"
+        }
+      ]
+    },
+    "parsing/regex": {
+      "rating": "nascent",
+      "num_repos": 7,
+      "total_distinct_loc": 6523,
+      "max_stars": 1,
+      "repos": [
+        {
+          "repo": "PlanetDestroyyer/Introduction-to-Mojo-Programming-Language",
+          "stars": 1,
+          "distinct_mojo_loc": 101,
+          "license": null
+        },
+        {
+          "repo": "bdombro/shebangsy",
+          "stars": 1,
+          "distinct_mojo_loc": 62,
+          "license": "MIT"
+        },
+        {
+          "repo": "ParaGroup/MoStream",
+          "stars": 0,
+          "distinct_mojo_loc": 2687,
+          "license": null
+        },
+        {
+          "repo": "gstoner/tessera-mojo",
+          "stars": 0,
+          "distinct_mojo_loc": 1846,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "liuzhishan/mojo-dynamic-dispatch",
+          "stars": 0,
+          "distinct_mojo_loc": 1054,
+          "license": null
+        },
+        {
+          "repo": "Lakshya-GG/Mojo-Programming-language-for-all-of-AI",
+          "stars": 0,
+          "distinct_mojo_loc": 653,
+          "license": "MPL-2.0"
+        },
+        {
+          "repo": "gnatnib/mojo-email-validator",
+          "stars": 0,
+          "distinct_mojo_loc": 120,
+          "license": null
+        }
+      ]
+    },
+    "db/storage": {
+      "rating": "toy",
+      "num_repos": 3,
+      "total_distinct_loc": 903,
+      "max_stars": 3,
+      "repos": [
+        {
+          "repo": "rd4com/mojo-relational-objects-exploration",
+          "stars": 3,
+          "distinct_mojo_loc": 100,
+          "license": "MIT"
+        },
+        {
+          "repo": "LandMineDevelopment/Mojo-Database",
+          "stars": 1,
+          "distinct_mojo_loc": 663,
+          "license": null
+        },
+        {
+          "repo": "tyukei/mojo-db",
+          "stars": 0,
+          "distinct_mojo_loc": 140,
+          "license": "MIT"
+        }
+      ]
+    },
+    "CLI": {
+      "rating": "toy",
+      "num_repos": 12,
+      "total_distinct_loc": 4792,
+      "max_stars": 4,
+      "repos": [
+        {
+          "repo": "Brian-M-J/sicp_mojo",
+          "stars": 4,
+          "distinct_mojo_loc": 1696,
+          "license": "GPL-3.0"
+        },
+        {
+          "repo": "dev0x13/gemm-benchmark-2023",
+          "stars": 4,
+          "distinct_mojo_loc": 382,
+          "license": "MIT"
+        },
+        {
+          "repo": "rd4com/mojo_dev_helper",
+          "stars": 3,
+          "distinct_mojo_loc": 147,
+          "license": "MIT"
+        },
+        {
+          "repo": "YoungHaKim7/Modular_Mojo_AI_Dev",
+          "stars": 2,
+          "distinct_mojo_loc": 406,
+          "license": null
+        },
+        {
+          "repo": "CW-75/mojo-practices",
+          "stars": 1,
+          "distinct_mojo_loc": 24,
+          "license": null
+        },
+        {
+          "repo": "ChunghanYi/mojo-examples",
+          "stars": 0,
+          "distinct_mojo_loc": 1265,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "EvanWiebe/Weather-Bot",
+          "stars": 0,
+          "distinct_mojo_loc": 345,
+          "license": null
+        },
+        {
+          "repo": "joelflaig/Nexus-TUI",
+          "stars": 0,
+          "distinct_mojo_loc": 260,
+          "license": null
+        },
+        {
+          "repo": "annaluizacaraciolo/fine_tuning_for_mojo_gen",
+          "stars": 0,
+          "distinct_mojo_loc": 172,
+          "license": null
+        },
+        {
+          "repo": "HostServer001/soe",
+          "stars": 0,
+          "distinct_mojo_loc": 44,
+          "license": null
+        },
+        {
+          "repo": "zqfang/mojo_call_c",
+          "stars": 0,
+          "distinct_mojo_loc": 31,
+          "license": null
+        },
+        {
+          "repo": "KrzysztofZawisla/BrotliCompressorMojo",
+          "stars": 0,
+          "distinct_mojo_loc": 20,
+          "license": "MIT"
+        }
+      ]
+    },
+    "datetime": {
+      "rating": "none",
+      "num_repos": 0,
+      "total_distinct_loc": 0,
+      "max_stars": 0,
+      "repos": []
+    },
+    "testing": {
+      "rating": "nascent",
+      "num_repos": 9,
+      "total_distinct_loc": 27149,
+      "max_stars": 16,
+      "repos": [
+        {
+          "repo": "ahmetax/Practical-Mojo-Examples",
+          "stars": 16,
+          "distinct_mojo_loc": 22237,
+          "license": "MIT"
+        },
+        {
+          "repo": "mikowals/dynamic_vector.mojo",
+          "stars": 9,
+          "distinct_mojo_loc": 1423,
+          "license": "MIT"
+        },
+        {
+          "repo": "dimitrilw/toybox",
+          "stars": 2,
+          "distinct_mojo_loc": 743,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "grayhatdevelopers/mojo-vs-python-benchmarks",
+          "stars": 2,
+          "distinct_mojo_loc": 129,
+          "license": null
+        },
+        {
+          "repo": "ashiswin/MojoAdderTester",
+          "stars": 1,
+          "distinct_mojo_loc": 11,
+          "license": null
+        },
+        {
+          "repo": "YuChiang-Chang/mojo-market-types",
+          "stars": 0,
+          "distinct_mojo_loc": 1351,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "atsentia/mojo-result",
+          "stars": 0,
+          "distinct_mojo_loc": 1094,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "rd4com/mojo-small-tests-runner",
+          "stars": 0,
+          "distinct_mojo_loc": 145,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "musti2023/yapayzeka",
+          "stars": 0,
+          "distinct_mojo_loc": 16,
+          "license": null
+        }
+      ]
+    },
+    "FFI/interop": {
+      "rating": "mature",
+      "num_repos": 6,
+      "total_distinct_loc": 72202,
+      "max_stars": 56,
+      "repos": [
+        {
+          "repo": "ihnorton/mojo-ffi",
+          "stars": 56,
+          "distinct_mojo_loc": 55,
+          "license": null
+        },
+        {
+          "repo": "CoffeeVampir3/Mojo-Linuxperiments",
+          "stars": 7,
+          "distinct_mojo_loc": 65077,
+          "license": "MIT"
+        },
+        {
+          "repo": "jackos/mojo-experiments",
+          "stars": 3,
+          "distinct_mojo_loc": 560,
+          "license": null
+        },
+        {
+          "repo": "Ivo-Balbaert/Mojo_in_Action",
+          "stars": 0,
+          "distinct_mojo_loc": 5709,
+          "license": "MIT"
+        },
+        {
+          "repo": "tedneward/Demo-Mojo",
+          "stars": 0,
+          "distinct_mojo_loc": 623,
+          "license": "Unlicense"
+        },
+        {
+          "repo": "OnlyF0uR/OpenSSL-Mojo",
+          "stars": 0,
+          "distinct_mojo_loc": 178,
+          "license": "Apache-2.0"
+        }
+      ]
+    },
+    "audio": {
+      "rating": "none",
+      "num_repos": 0,
+      "total_distinct_loc": 0,
+      "max_stars": 0,
+      "repos": []
+    },
+    "stdlib-extensions": {
+      "rating": "toy",
+      "num_repos": 6,
+      "total_distinct_loc": 4048,
+      "max_stars": 6,
+      "repos": [
+        {
+          "repo": "JakeEBrooks/mojocmath",
+          "stars": 6,
+          "distinct_mojo_loc": 1294,
+          "license": "MIT"
+        },
+        {
+          "repo": "sebastian-sz/heapq.mojo",
+          "stars": 4,
+          "distinct_mojo_loc": 535,
+          "license": "MIT"
+        },
+        {
+          "repo": "HaruTzuki/MojoLessons",
+          "stars": 2,
+          "distinct_mojo_loc": 258,
+          "license": null
+        },
+        {
+          "repo": "sstadick/aoc-2025",
+          "stars": 1,
+          "distinct_mojo_loc": 712,
+          "license": null
+        },
+        {
+          "repo": "stelmanjones/moglow",
+          "stars": 0,
+          "distinct_mojo_loc": 1246,
+          "license": null
+        },
+        {
+          "repo": "notebook-ai/mojo_training_codes",
+          "stars": 0,
+          "distinct_mojo_loc": 3,
+          "license": null
+        }
+      ]
+    },
+    "language-core/tooling": {
+      "rating": "mature",
+      "num_repos": 111,
+      "total_distinct_loc": 1188178,
+      "max_stars": 26312,
+      "repos": [
+        {
+          "repo": "modular/modular",
+          "stars": 26312,
+          "distinct_mojo_loc": 980924,
+          "license": "NOASSERTION"
+        },
+        {
+          "repo": "py2many/py2many",
+          "stars": 1274,
+          "distinct_mojo_loc": 296,
+          "license": "MIT"
+        },
+        {
+          "repo": "ego/awesome-mojo",
+          "stars": 224,
+          "distinct_mojo_loc": 623,
+          "license": null
+        },
+        {
+          "repo": "CrossGL/crosstl",
+          "stars": 199,
+          "distinct_mojo_loc": 1105,
+          "license": "Apache-2.0"
+        },
+        {
+          "repo": "modular/mojo-syntax",
+          "stars": 137,
+          "distinct_mojo_loc": 69,
+          "license": "MIT"
+        },
+        {
+          "repo": "mojo-lang/mojo",
+          "stars": 79,
+          "distinct_mojo_loc": 12340,
+          "license": null
+        },
+        {
+          "repo": "modular/modular-community",
+          "stars": 66,
+          "distinct_mojo_loc": 1327,
+          "license": null
+        },
+        {
+          "repo": "TheAlgorithms/Mojo",
+          "stars": 56,
+          "distinct_mojo_loc": 194,
+          "license": "MIT"
+        },
+        {
+          "repo": "julienokumu/100DaysOfGPUProgramming",
+          "stars": 45,
+          "distinct_mojo_loc": 124,
+          "license": null
+        },
+        {
+          "repo": "bajrangCoder/zed-mojo",
+          "stars": 32,
+          "distinct_mojo_loc": 99,
+          "license": null
+        },
+        {
+          "repo": "VMois/mojo-gym",
+          "stars": 30,
+          "distinct_mojo_loc": 359,
+          "license": "MIT"
+        },
+        {
+          "repo": "dbusteed/mojolings",
+          "stars": 22,
+          "distinct_mojo_loc": 498,
+          "license": null
+        }
+      ]
+    }
+  },
+  "uncategorized_top": [
+    {
+      "repo": "pcaversaccio/meth",
+      "stars": 21,
+      "distinct_mojo_loc": 392,
+      "license": "AGPL-3.0"
+    },
+    {
+      "repo": "lsh/shimmer",
+      "stars": 9,
+      "distinct_mojo_loc": 26171,
+      "license": null
+    },
+    {
+      "repo": "taleblou/momijo",
+      "stars": 8,
+      "distinct_mojo_loc": 115264,
+      "license": "MIT"
+    },
+    {
+      "repo": "mzaks/flatbuffers-mojo",
+      "stars": 6,
+      "distinct_mojo_loc": 4670,
+      "license": "Apache-2.0"
+    },
+    {
+      "repo": "rd4com/mojo-console-style-print",
+      "stars": 4,
+      "distinct_mojo_loc": 105,
+      "license": "MIT"
+    },
+    {
+      "repo": "VMois/1brc-mojo",
+      "stars": 3,
+      "distinct_mojo_loc": 899,
+      "license": "MIT"
+    },
+    {
+      "repo": "bumbii/code",
+      "stars": 3,
+      "distinct_mojo_loc": 805,
+      "license": null
+    },
+    {
+      "repo": "Benny-Nottonson/glibc.mojo",
+      "stars": 3,
+      "distinct_mojo_loc": 675,
+      "license": null
+    },
+    {
+      "repo": "tims457/lambert.mojo",
+      "stars": 3,
+      "distinct_mojo_loc": 499,
+      "license": "MIT"
+    },
+    {
+      "repo": "Ryul0rd/awdy",
+      "stars": 3,
+      "distinct_mojo_loc": 479,
+      "license": "MIT"
+    },
+    {
+      "repo": "cgarciae/aoc-2023",
+      "stars": 3,
+      "distinct_mojo_loc": 138,
+      "license": null
+    },
+    {
+      "repo": "jnsflschr/mojo-binrel-solver",
+      "stars": 2,
+      "distinct_mojo_loc": 967,
+      "license": null
+    },
+    {
+      "repo": "DiyanKalaydzhiev23/Mojo-DEVBG-Examples",
+      "stars": 2,
+      "distinct_mojo_loc": 440,
+      "license": null
+    },
+    {
+      "repo": "tleers/mojo-leetcode",
+      "stars": 2,
+      "distinct_mojo_loc": 142,
+      "license": null
+    },
+    {
+      "repo": "witoldszejgis/mojograd",
+      "stars": 2,
+      "distinct_mojo_loc": 114,
+      "license": null
+    },
+    {
+      "repo": "nikivdev/mojo-test",
+      "stars": 2,
+      "distinct_mojo_loc": 2,
+      "license": null
+    },
+    {
+      "repo": "helehex/unfolder",
+      "stars": 1,
+      "distinct_mojo_loc": 6025,
+      "license": null
+    },
+    {
+      "repo": "Sohoxic/Mojo-Programming",
+      "stars": 1,
+      "distinct_mojo_loc": 1174,
+      "license": null
+    },
+    {
+      "repo": "ormeilu/mojo_zlib_classification",
+      "stars": 1,
+      "distinct_mojo_loc": 1043,
+      "license": null
+    },
+    {
+      "repo": "joelflaig/Nexus-DSA",
+      "stars": 1,
+      "distinct_mojo_loc": 585,
+      "license": "MIT"
+    },
+    {
+      "repo": "coderonion/MIL",
+      "stars": 1,
+      "distinct_mojo_loc": 208,
+      "license": null
+    },
+    {
+      "repo": "holdenb/mojo-modern-robotics",
+      "stars": 1,
+      "distinct_mojo_loc": 178,
+      "license": null
+    },
+    {
+      "repo": "JoshuaRully/mandelbrot_mojo",
+      "stars": 1,
+      "distinct_mojo_loc": 167,
+      "license": null
+    },
+    {
+      "repo": "psypherion/csBasics",
+      "stars": 1,
+      "distinct_mojo_loc": 145,
+      "license": null
+    },
+    {
+      "repo": "Walkeryr/algorithms-mojo",
+      "stars": 1,
+      "distinct_mojo_loc": 120,
+      "license": "GPL-3.0"
+    }
+  ],
+  "noise_examples": [
+    {
+      "repo": "hexsum/Mojo-Webqq",
+      "stars": 1704
+    },
+    {
+      "repo": "hexsum/Mojo-Weixin",
+      "stars": 1250
+    },
+    {
+      "repo": "keyou/chromium_demo",
+      "stars": 416
+    },
+    {
+      "repo": "tomer8007/chromium-ipc-sniffer",
+      "stars": 416
+    },
+    {
+      "repo": "hhstore/blog",
+      "stars": 329
+    },
+    {
+      "repo": "raydac/mvn-golang",
+      "stars": 169
+    },
+    {
+      "repo": "mojodojodev/mojodojo.dev",
+      "stars": 87
+    },
+    {
+      "repo": "shadowqcom/mojo_CN",
+      "stars": 62
+    },
+    {
+      "repo": "coderonion/awesome-mojo-max-mlir",
+      "stars": 43
+    },
+    {
+      "repo": "Drecc/chromium-mojo",
+      "stars": 43
+    },
+    {
+      "repo": "b-data/data-science-devcontainers",
+      "stars": 40
+    },
+    {
+      "repo": "pierrevano/whatson-api",
+      "stars": 37
+    },
+    {
+      "repo": "ovikrai/mojo-syntax",
+      "stars": 16
+    },
+    {
+      "repo": "openSUSE/Mojo-IOLoop-ReadWriteProcess",
+      "stars": 12
+    },
+    {
+      "repo": "mojocss/mojo-intellisense",
+      "stars": 11
+    }
+  ],
+  "gaps": [
+    {
+      "category": "plotting / viz (matplotlib)",
+      "python_cpp_libs": "matplotlib",
+      "best_existing": "DataBooth/mojo-asciichart",
+      "best_stars": 0,
+      "best_loc": 2029,
+      "n_dedicated_repos": 1,
+      "rating": "toy",
+      "priority": "HIGH"
+    },
+    {
+      "category": "templating (jinja2)",
+      "python_cpp_libs": "jinja2",
+      "best_existing": "BradLarson/mojo-operation-template",
+      "best_stars": 1,
+      "best_loc": 512,
+      "n_dedicated_repos": 3,
+      "rating": "toy",
+      "priority": "HIGH"
+    },
+    {
+      "category": "ORM / SQL toolkit (sqlalchemy)",
+      "python_cpp_libs": "sqlalchemy",
+      "best_existing": "ehsanmok/sqlite",
+      "best_stars": 2,
+      "best_loc": 4673,
+      "n_dedicated_repos": 5,
+      "rating": "toy",
+      "priority": "HIGH"
+    },
+    {
+      "category": "database drivers (psycopg / redis)",
+      "python_cpp_libs": "psycopg, redis",
+      "best_existing": "ehsanmok/sqlite",
+      "best_stars": 2,
+      "best_loc": 4673,
+      "n_dedicated_repos": 3,
+      "rating": "toy",
+      "priority": "HIGH"
+    },
+    {
+      "category": "data validation (pydantic)",
+      "python_cpp_libs": "pydantic",
+      "best_existing": "mojo-data/arrow-schema",
+      "best_stars": 4,
+      "best_loc": 3504,
+      "n_dedicated_repos": 2,
+      "rating": "toy",
+      "priority": "HIGH"
+    },
+    {
+      "category": "config / env (python-dotenv)",
+      "python_cpp_libs": "python-dotenv",
+      "best_existing": "DataBooth/mojo-dotenv",
+      "best_stars": 5,
+      "best_loc": 1234,
+      "n_dedicated_repos": 4,
+      "rating": "toy",
+      "priority": "HIGH"
+    },
+    {
+      "category": "testing (pytest)",
+      "python_cpp_libs": "pytest",
+      "best_existing": "mikowals/dynamic_vector.mojo",
+      "best_stars": 9,
+      "best_loc": 1423,
+      "n_dedicated_repos": 3,
+      "rating": "toy",
+      "priority": "HIGH"
+    },
+    {
+      "category": "crypto / hashing (cryptography)",
+      "python_cpp_libs": "cryptography, hashlib",
+      "best_existing": "libalpm64/Thistle",
+      "best_stars": 7,
+      "best_loc": 16650,
+      "n_dedicated_repos": 7,
+      "rating": "nascent",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "compression (zlib / zstd)",
+      "python_cpp_libs": "zlib, zstandard",
+      "best_existing": "konjoai/vectro",
+      "best_stars": 9,
+      "best_loc": 13191,
+      "n_dedicated_repos": 5,
+      "rating": "nascent",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "dataframes (pandas / polars)",
+      "python_cpp_libs": "pandas, polars",
+      "best_existing": "illinoisdata/MojoFrame",
+      "best_stars": 13,
+      "best_loc": 9999,
+      "n_dedicated_repos": 5,
+      "rating": "nascent",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "logging (logging / loguru)",
+      "python_cpp_libs": "loguru",
+      "best_existing": "thatstoasty/stump",
+      "best_stars": 16,
+      "best_loc": 11795,
+      "n_dedicated_repos": 4,
+      "rating": "nascent",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "regex engine (re / re2)",
+      "python_cpp_libs": "re2",
+      "best_existing": "YichengDWu/yoho-legacy",
+      "best_stars": 17,
+      "best_loc": 3028,
+      "n_dedicated_repos": 5,
+      "rating": "nascent",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "image processing (Pillow / OpenCV)",
+      "python_cpp_libs": "Pillow, OpenCV",
+      "best_existing": "fnands/mimage",
+      "best_stars": 20,
+      "best_loc": 787,
+      "n_dedicated_repos": 2,
+      "rating": "nascent",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "async runtime (asyncio / tokio)",
+      "python_cpp_libs": "asyncio, tokio",
+      "best_existing": "dmitry-salin/io_uring",
+      "best_stars": 24,
+      "best_loc": 5687,
+      "n_dedicated_repos": 5,
+      "rating": "nascent",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "scientific computing (scipy)",
+      "python_cpp_libs": "scipy",
+      "best_existing": "leandrolcampos/specials",
+      "best_stars": 36,
+      "best_loc": 9758,
+      "n_dedicated_repos": 8,
+      "rating": "nascent",
+      "priority": "LOW"
+    },
+    {
+      "category": "CLI framework (click / argparse)",
+      "python_cpp_libs": "click, argparse",
+      "best_existing": "thatstoasty/prism",
+      "best_stars": 67,
+      "best_loc": 6098,
+      "n_dedicated_repos": 2,
+      "rating": "nascent",
+      "priority": "LOW"
+    },
+    {
+      "category": "datetime (arrow / pendulum)",
+      "python_cpp_libs": "arrow, pendulum",
+      "best_existing": "mojoto/morrow.mojo",
+      "best_stars": 120,
+      "best_loc": 1348,
+      "n_dedicated_repos": 5,
+      "rating": "nascent",
+      "priority": "LOW"
+    }
+  ],
+  "covered_pillars": [
+    {
+      "category": "numerics / ndarray (numpy)",
+      "python_cpp_libs": "numpy",
+      "best_existing": "Mojo-Numerics-and-Algorithms-group/NuMojo",
+      "best_stars": 217,
+      "best_loc": 48429,
+      "n_dedicated_repos": 4,
+      "rating": "mature"
+    },
+    {
+      "category": "Apache Arrow / columnar",
+      "python_cpp_libs": "pyarrow",
+      "best_existing": "kszucs/marrow",
+      "best_stars": 88,
+      "best_loc": 43711,
+      "n_dedicated_repos": 8,
+      "rating": "mature"
+    },
+    {
+      "category": "HTTP client (requests / httpx)",
+      "python_cpp_libs": "requests, httpx",
+      "best_existing": "Lightbug-HQ/lightbug_http",
+      "best_stars": 737,
+      "best_loc": 13456,
+      "n_dedicated_repos": 8,
+      "rating": "mature"
+    },
+    {
+      "category": "web framework (flask / fastapi)",
+      "python_cpp_libs": "flask, fastapi",
+      "best_existing": "Lightbug-HQ/lightbug_http",
+      "best_stars": 737,
+      "best_loc": 13456,
+      "n_dedicated_repos": 17,
+      "rating": "mature"
+    },
+    {
+      "category": "classical ML (scikit-learn)",
+      "python_cpp_libs": "scikit-learn",
+      "best_existing": "yetalit/Mojmelo",
+      "best_stars": 71,
+      "best_loc": 20822,
+      "n_dedicated_repos": 4,
+      "rating": "mature"
+    },
+    {
+      "category": "deep learning (pytorch / tensorflow)",
+      "python_cpp_libs": "pytorch, tensorflow",
+      "best_existing": "basalt-org/basalt",
+      "best_stars": 442,
+      "best_loc": 14177,
+      "n_dedicated_repos": 15,
+      "rating": "mature"
+    },
+    {
+      "category": "JSON / serialization",
+      "python_cpp_libs": "json, msgpack",
+      "best_existing": "bgreni/EmberJson",
+      "best_stars": 57,
+      "best_loc": 16249,
+      "n_dedicated_repos": 11,
+      "rating": "mature"
+    },
+    {
+      "category": "GPU compute (cupy / numba.cuda)",
+      "python_cpp_libs": "cupy, numba",
+      "best_existing": "modular/mojo-gpu-puzzles",
+      "best_stars": 337,
+      "best_loc": 17739,
+      "n_dedicated_repos": 36,
+      "rating": "mature"
+    }
+  ]
+}
