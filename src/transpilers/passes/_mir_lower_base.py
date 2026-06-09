@@ -26,15 +26,9 @@ from __future__ import annotations
 
 from transpilers.ir import lir, mir
 from transpilers.ir.types import (
-    BoolT,
-    FloatT,
-    IntT,
     ListT,
-    NoneT,
     StrT,
-    StructT,
     Type,
-    UnknownT,
 )
 
 __all__ = [

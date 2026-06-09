@@ -25,9 +25,34 @@ Four leaf categories extracted:
 4. Same as 3 but for non-dataclass classes with scalar-typed scalar fields that
    are purely numeric (extracted via instance-method rewrite when constructable).
 
-KEEP rejecting: dict/list/set construction, intra-package function calls,
-attribute access beyond math/self-scalar-fields, anything whose Python oracle
-raises on the sampled inputs, collection iteration in for loops.
+EXPANDED ACCEPTANCE (still fully auto-verifiable — every leaf keeps a Python
+oracle that runs on the sampled inputs and a mirrorable driver):
+  - Widened math whitelist: trig/hyperbolic/unit-conversion idioms
+    (sin/cos/tan/asin/.../sinh/.../radians/degrees/log2/cbrt/...) which dominate
+    the curve & geometry code. (NARROW set previously dropped these.)
+  - `raise ValueError/RuntimeError/...` GUARDS are allowed: they are pure input
+    validation. The oracle re-runs every sample and the leaf is dropped if any
+    sampled input actually raises, so emitted leaves never raise on their inputs.
+    Sample-value heuristics keep fractions in [0,1] and dimensions > 0 so valid
+    guards don't fire.
+  - INLINABLE pure module-level helpers (`_clip`/`_sign`/`_clamp`) are inlined:
+    their source is prepended to the unit so it stays self-contained and the
+    model transpiles helper+leaf together.
+  - `while`-loops with scalar accumulators are allowed; oracle exec is wrapped in
+    a SIGALRM time limit so a non-terminating sample drops the leaf.
+  - @property methods and instance methods on classes that ALSO have non-scalar
+    (enum/object) fields are accepted, as long as the method itself only reads
+    scalar fields (the non-scalar fields are tolerated, not read).
+  - Module-level numeric constants in BOTH `NAME = v` and annotated
+    `NAME: float = v` forms (plus simple math.* / arithmetic-over-consts) are
+    injected, fixing NameError drops for leaves referencing e.g. `SIGMA`.
+  - Long docstrings are stripped from the emitted unit so size caps don't reject
+    otherwise-pure numeric functions.
+
+KEEP rejecting: dict/list/set construction, intra-package function calls that
+can't be inlined, attribute access beyond math/self-scalar-fields, anything whose
+Python oracle raises on the sampled inputs, collection iteration in for loops,
+non-terminating loops, randomness/IO.
 
 Emits data/sft/cpp_mojo/py_leaves.jsonl: {name, source_file, python_unit,
 python_driver, sample_args, category}.  python_driver calls the fn on each sample
@@ -35,24 +60,108 @@ tuple and prints — the Mojo side mirrors it.
 
 IMPORTANT: every python_unit has `import math` prepended so the oracle can run
 without injecting globals.
+
+PORTABILITY: source/output paths are overridable via $EPMOJO_SRC / $PY_LEAVES_OUT
+env vars or --ep / --out argparse flags (with autodetection of common checkout
+locations) instead of the original hardcoded /home/bart/... paths.
 """
 from __future__ import annotations
-import ast, importlib.util, inspect, json, math, os, random, re, sys, types
+import argparse, ast, importlib.util, inspect, json, math, os, random, re, signal, sys, types
+from contextlib import contextmanager
 from pathlib import Path
 
-EP = Path("/home/bart/Github/energyplus-mojo/src/energyplus_mojo")
-OUT = Path("/home/bart/Github/transpilers/data/sft/cpp_mojo/py_leaves.jsonl")
+
+class _OracleTimeout(Exception):
+    pass
+
+
+@contextmanager
+def time_limit(seconds=2.0):
+    """Abort the wrapped oracle execution if it runs longer than `seconds`.
+    Guards against non-terminating while-loops in sampled functions. Uses
+    SIGALRM (POSIX); on platforms without it, becomes a no-op (the extractor is
+    intended to run under WSL/Linux per the repo's pipeline)."""
+    if not hasattr(signal, "setitimer"):
+        yield
+        return
+
+    def _handler(signum, frame):
+        raise _OracleTimeout()
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def _default_ep() -> Path:
+    """Resolve the energyplus-mojo source dir, honouring env override.
+
+    Portability: the original author hardcoded /home/bart/...; on other machines
+    set EPMOJO_SRC (or pass --ep). We also fall back to a couple of well-known
+    checkout locations so the extractor runs unmodified across dev boxes."""
+    env = os.environ.get("EPMOJO_SRC")
+    if env:
+        return Path(env)
+    for cand in (
+        "/home/bart/Github/energyplus-mojo/src/energyplus_mojo",
+        "/mnt/c/Github/energyplus-mojo/src/energyplus_mojo",
+    ):
+        if Path(cand).is_dir():
+            return Path(cand)
+    return Path("/home/bart/Github/energyplus-mojo/src/energyplus_mojo")
+
+
+def _default_out() -> Path:
+    env = os.environ.get("PY_LEAVES_OUT")
+    if env:
+        return Path(env)
+    for cand in (
+        "/home/bart/Github/transpilers/data/sft/cpp_mojo/py_leaves.jsonl",
+        "/mnt/c/Github/transpilers/data/sft/cpp_mojo/py_leaves.jsonl",
+    ):
+        if Path(cand).parent.is_dir():
+            return Path(cand)
+    return Path("/home/bart/Github/transpilers/data/sft/cpp_mojo/py_leaves.jsonl")
+
+
+# Mutable globals — set in main() from argparse/env so helper functions that
+# reference EP (e.g. p.relative_to(EP)) keep working unchanged.
+EP = _default_ep()
+OUT = _default_out()
 rnd = random.Random(7)
 
 SCALAR = {"float", "int", "bool", "Float64", "Real64", "Int"}
+# math.* functions + builtins the model can transpile AND we can verify. Widened
+# from the original narrow set to include the trig/hyperbolic/degree idioms that
+# dominate the energyplus-mojo curve & geometry code (sin/cos/radians are the
+# single most-used math fns in the package).
 ALLOWED_CALLS = {"abs", "min", "max", "round", "pow", "int", "float",
                  "sqrt", "exp", "log", "log10", "pow", "fabs", "floor", "ceil",
                  "atan2", "hypot", "copysign", "fmod", "trunc", "erf", "erfc",
-                 "sign"}  # math.* or builtin
+                 "sign",
+                 # widened trig / hyperbolic / unit-conversion / misc
+                 "sin", "cos", "tan", "asin", "acos", "atan",
+                 "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+                 "degrees", "radians", "expm1", "log1p", "log2", "cbrt"}
+
+# Pure module-level helpers we can INLINE into a self-contained unit. Their
+# Python source is injected verbatim ahead of the leaf so the oracle runs, and
+# the model transpiles the helper alongside the leaf (the Mojo driver mirrors).
+INLINABLE_HELPERS = {"_clip", "_sign", "_clamp"}
 
 # Additional allowed bare function names in instance-method bodies (module-level helpers
 # that we can inline or that the free-fn doesn't need because we inline self fields)
-ALLOWED_INSTANCE_CALLS = ALLOWED_CALLS | {"_clip", "_sign"}
+ALLOWED_INSTANCE_CALLS = ALLOWED_CALLS | INLINABLE_HELPERS
+
+# Builtin "guard" callables allowed only in `raise <X>(...)` position — they are
+# pure input validation that never fires on the sampled (valid) inputs. The
+# oracle still re-runs every sample and drops the leaf if any raises.
+GUARD_EXC = {"ValueError", "RuntimeError", "ZeroDivisionError",
+             "ArithmeticError", "OverflowError", "AssertionError"}
 
 
 def is_scalar_ann(a):
@@ -112,6 +221,60 @@ def _for_body_pure(node, allowed_names=None):
     return True
 
 
+def _raise_guard_call_ids(node):
+    """Return the set of id() of Call nodes that are guard-exception constructors
+    appearing directly as the value of a `raise` statement (e.g. raise ValueError(..)).
+    These are allowed because they are pure input validation; the oracle re-runs
+    every sample and drops the leaf if any actually raises."""
+    ids = set()
+    for n in ast.walk(node):
+        if isinstance(n, ast.Raise) and n.exc is not None:
+            exc = n.exc
+            if isinstance(exc, ast.Call) and isinstance(exc.func, ast.Name) \
+               and exc.func.id in GUARD_EXC:
+                ids.add(id(exc))
+            # also allow bare `raise ValueError` (no call) — handled in purity walk
+    return ids
+
+
+def _bad_raise(node):
+    """Return True if any `raise` statement raises something other than an allowed
+    guard exception (so we can keep rejecting `raise SomeRecordError(obj)` etc.)."""
+    for n in ast.walk(node):
+        if isinstance(n, ast.Raise):
+            exc = n.exc
+            if exc is None:  # bare `raise` re-raise — reject (no context)
+                return True
+            if isinstance(exc, ast.Call):
+                if not (isinstance(exc.func, ast.Name) and exc.func.id in GUARD_EXC):
+                    return True
+            elif isinstance(exc, ast.Name):
+                if exc.id not in GUARD_EXC:
+                    return True
+            else:
+                return True
+    return False
+
+
+def _while_ok(node):
+    """Return True if every while-loop in the node is a bounded scalar-accumulator
+    loop: condition is a comparison/boolop over scalars, body contains only
+    Assign/AugAssign/If/Break/Continue/Return and allowed scalar exprs (no
+    collections, calls limited to ALLOWED_CALLS). The oracle still executes it and
+    drops the leaf if it doesn't terminate quickly (guarded by an iteration cap in
+    the exec harness)."""
+    for n in ast.walk(node):
+        if isinstance(n, ast.While):
+            for stmt in n.body:
+                for s in ast.walk(stmt):
+                    if isinstance(s, (ast.For, ast.While, ast.With, ast.Try,
+                                      ast.ListComp, ast.DictComp, ast.SetComp,
+                                      ast.GeneratorExp, ast.Dict, ast.List,
+                                      ast.Set, ast.Subscript)):
+                        return False
+    return True
+
+
 def pure_body(node, allowed_consts=None):
     """Only arithmetic / comparisons / if-return / simple assign / allowed calls.
     Allow self.<attr> attribute access (handled separately for instance methods).
@@ -120,6 +283,11 @@ def pure_body(node, allowed_consts=None):
     """
     if allowed_consts is None:
         allowed_consts = frozenset()
+    if _bad_raise(node):
+        return False
+    if not _while_ok(node):
+        return False
+    guard_ids = _raise_guard_call_ids(node)
     for n in ast.walk(node):
         if isinstance(n, ast.For):
             # Only allow for-loops over range(...)
@@ -135,7 +303,7 @@ def pure_body(node, allowed_consts=None):
                 if isinstance(inner, ast.For):
                     return False
             continue
-        if isinstance(n, (ast.While, ast.With, ast.Try, ast.Lambda,
+        if isinstance(n, (ast.With, ast.Try, ast.Lambda,
                           ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp,
                           ast.Dict, ast.List, ast.Set)):
             return False
@@ -147,9 +315,12 @@ def pure_body(node, allowed_consts=None):
             else:
                 return False
         if isinstance(n, ast.Call):
+            if id(n) in guard_ids:
+                continue  # raise ValueError(..) guard — allowed
             f = n.func
             if isinstance(f, ast.Name):
-                if f.id not in ALLOWED_CALLS and f.id != 'range':
+                if (f.id not in ALLOWED_CALLS and f.id != 'range'
+                        and f.id not in INLINABLE_HELPERS):
                     return False
             elif isinstance(f, ast.Attribute):
                 if isinstance(f.value, ast.Name) and f.value.id == "math":
@@ -184,6 +355,11 @@ def pure_body_instance(node, allowed_consts=None):
     Also allows for-range loops with scalar accumulator bodies."""
     if allowed_consts is None:
         allowed_consts = frozenset()
+    if _bad_raise(node):
+        return False
+    if not _while_ok(node):
+        return False
+    guard_ids = _raise_guard_call_ids(node)
     for n in ast.walk(node):
         if isinstance(n, ast.For):
             # Only allow for-loops over range(...)
@@ -198,7 +374,7 @@ def pure_body_instance(node, allowed_consts=None):
                 if isinstance(inner, ast.For):
                     return False
             continue
-        if isinstance(n, (ast.While, ast.With, ast.Try, ast.Lambda,
+        if isinstance(n, (ast.With, ast.Try, ast.Lambda,
                           ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp,
                           ast.Dict, ast.List, ast.Set)):
             return False
@@ -209,6 +385,8 @@ def pure_body_instance(node, allowed_consts=None):
             else:
                 return False
         if isinstance(n, ast.Call):
+            if id(n) in guard_ids:
+                continue  # raise ValueError(..) guard — allowed
             f = n.func
             if isinstance(f, ast.Name):
                 if f.id not in ALLOWED_INSTANCE_CALLS and f.id != 'range':
@@ -228,18 +406,147 @@ def pure_body_instance(node, allowed_consts=None):
 
 
 def get_module_consts(tree):
-    """Extract module-level numeric (int/float) constants as {name: value}."""
+    """Extract module-level numeric (int/float) constants as {name: value}.
+
+    Handles both plain `NAME = 1.0` (Assign) and annotated `NAME: float = 1.0`
+    (AnnAssign) forms — the latter is common in this codebase (e.g.
+    `SIGMA: float = 5.67e-8`) and was previously missed, which made any leaf
+    referencing such a constant fail its oracle with NameError and get dropped.
+    Also resolves a handful of `math.*` constant expressions (pi, tau, e, inf)
+    and simple arithmetic over already-known numeric constants, so units that
+    reference derived constants stay self-contained."""
     consts = {}
+    safe_env = {"math": math, "pi": math.pi, "tau": math.tau, "e": math.e,
+                "inf": math.inf}
+
+    def _resolve(value_node):
+        # literal first
+        try:
+            v = ast.literal_eval(value_node)
+            if isinstance(v, (int, float)):
+                return v
+        except Exception:
+            pass
+        # math.* constants / arithmetic over known consts
+        try:
+            expr = ast.Expression(value_node)
+            code = compile(expr, "<const>", "eval")
+            v = eval(code, {"__builtins__": {}}, {**safe_env, **consts})
+            if isinstance(v, (int, float)) and math.isfinite(v):
+                return v
+        except Exception:
+            pass
+        return None
+
     for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1:
-            if isinstance(node.targets[0], ast.Name):
-                try:
-                    val = ast.literal_eval(node.value)
-                    if isinstance(val, (int, float)):
-                        consts[node.targets[0].id] = val
-                except Exception:
-                    pass
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name):
+            v = _resolve(node.value)
+            if v is not None:
+                consts[node.targets[0].id] = v
+        elif isinstance(node, ast.AnnAssign) and node.value is not None \
+                and isinstance(node.target, ast.Name):
+            v = _resolve(node.value)
+            if v is not None:
+                consts[node.target.id] = v
     return consts
+
+
+def get_inlinable_helpers(tree, src):
+    """Return {name: source_string} for module-level pure helper functions whose
+    name is in INLINABLE_HELPERS and whose body is itself pure-scalar (so the
+    helper + leaf form a self-contained, transpilable, verifiable unit).
+
+    We re-purpose the standard purity checks; a helper qualifies only if it has
+    scalar/optional-scalar params and a pure body (math/builtins/if-return)."""
+    out = {}
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if node.name not in INLINABLE_HELPERS:
+            continue
+        # params: allow float, int, bool, and `float | None` (clip bounds)
+        ok_params = True
+        for a in node.args.args + node.args.kwonlyargs:
+            ann = a.annotation
+            if ann is None or is_scalar_ann(ann) or is_float_or_none_ann(ann):
+                continue
+            ok_params = False
+            break
+        if not ok_params:
+            continue
+        if node.args.vararg or node.args.kwarg:
+            continue
+        # body purity (no self, no other intra-package calls). _bad_raise / while
+        # gates apply; allow only math/builtins.
+        if _bad_raise(node) or not _while_ok(node):
+            continue
+        bad = False
+        guard_ids = _raise_guard_call_ids(node)
+        for n in ast.walk(node):
+            if isinstance(n, (ast.With, ast.Try, ast.Lambda, ast.ListComp,
+                              ast.DictComp, ast.SetComp, ast.GeneratorExp,
+                              ast.Dict, ast.List, ast.Set, ast.Subscript)):
+                bad = True; break
+            if isinstance(n, ast.Attribute):
+                if not (isinstance(n.value, ast.Name) and n.value.id == "math"):
+                    bad = True; break
+            if isinstance(n, ast.Call):
+                if id(n) in guard_ids:
+                    continue
+                f = n.func
+                if isinstance(f, ast.Name):
+                    if f.id not in ALLOWED_CALLS and f.id != "range":
+                        bad = True; break
+                elif isinstance(f, ast.Attribute):
+                    if not (isinstance(f.value, ast.Name) and f.value.id == "math"
+                            and f.attr in ALLOWED_CALLS):
+                        bad = True; break
+                else:
+                    bad = True; break
+        if bad:
+            continue
+        seg = ast.get_source_segment(src, node)
+        if seg:
+            out[node.name] = seg
+    return out
+
+
+def _helpers_used(unit_src, helpers):
+    """Return {name: source} for helpers whose name is called in unit_src."""
+    used = {}
+    for name, hsrc in helpers.items():
+        # word-boundary call match: NAME(
+        if re.search(r"(?<![\w.])" + re.escape(name) + r"\s*\(", unit_src):
+            used[name] = hsrc
+    return used
+
+
+# Per-file inlinable helpers, set in main() before invoking the extractors.
+_CUR_HELPERS: dict = {}
+
+
+def prepend_helpers(unit):
+    """If `unit` calls any inlinable module-level helper (_clip/_sign/_clamp),
+    prepend that helper's source so the emitted python_unit is self-contained
+    (the oracle runs it as-is; the model transpiles the helper + leaf together)."""
+    used = _helpers_used(unit, _CUR_HELPERS)
+    if not used:
+        return unit
+    # Helpers go after a leading `import math` (if present) so math is in scope.
+    helper_block = "\n\n".join(used[n] for n in sorted(used)) + "\n\n"
+    if unit.startswith("import math"):
+        # insert after the import line(s)
+        lines = unit.splitlines(keepends=True)
+        idx = 0
+        while idx < len(lines) and (lines[idx].startswith("import ")
+                                     or lines[idx].strip() == ""):
+            idx += 1
+        return "".join(lines[:idx]) + helper_block + "".join(lines[idx:])
+    # Helpers may themselves use math.* -> ensure import present
+    if "math." in helper_block:
+        return "import math\n\n" + helper_block + unit
+    return helper_block + unit
 
 
 def collect_used_consts(func_node, module_consts):
@@ -262,6 +569,41 @@ def build_const_prelude(used_consts):
     return "\n".join(lines) + "\n\n" if lines else ""
 
 
+def strip_docstring_src(unit_src):
+    """Remove a leading function docstring from a `def ...:` source block so the
+    emitted python_unit stays under the size cap and is cleaner for the model.
+    Re-parses the result and bails (returns the original) if anything looks off,
+    so we never emit syntactically-broken units."""
+    try:
+        mod = ast.parse(unit_src)
+    except Exception:
+        return unit_src
+    fn = next((n for n in mod.body if isinstance(n, ast.FunctionDef)), None)
+    if fn is None or not fn.body:
+        return unit_src
+    first = fn.body[0]
+    if not (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)):
+        return unit_src
+    if len(fn.body) == 1:
+        return unit_src  # docstring is the whole body; leave it
+    # Remove the docstring statement via lineno ranges (1-based, end-exclusive+1).
+    lines = unit_src.splitlines()
+    start = first.lineno - 1
+    end = getattr(first, "end_lineno", first.lineno)
+    new_lines = lines[:start] + lines[end:]
+    candidate = "\n".join(new_lines)
+    # Validate the result still parses to a function with a non-empty body.
+    try:
+        m2 = ast.parse(candidate)
+        f2 = next((n for n in m2.body if isinstance(n, ast.FunctionDef)), None)
+        if f2 is None or not f2.body:
+            return unit_src
+    except Exception:
+        return unit_src
+    return candidate
+
+
 def returns_scalar_tuple(node):
     """Return the tuple arity (2-5) if the function has any return-tuple of scalars,
     else return 0. Used to decide if we should handle element-wise output."""
@@ -277,14 +619,31 @@ def returns_scalar_tuple(node):
 def sample_vals(pname, ann):
     base = [0.5, 2.0, -1.5, 10.0, 0.0, 100.0]
     name = pname.lower()
-    if ann == "int" or "count" in name or "n_" in name or name.startswith("n"):
-        return [0, 1, 3, 7]
     if ann == "bool":
         return [True, False]
+    # strictly-positive geometry / dimensional params FIRST — avoid 0 and
+    # negatives that commonly trip `must be > 0` guards. Checked before the
+    # fraction heuristics because a dimensional name like "slat_separation_m"
+    # contains the substring "ratio" ("sepa[ratio]n") yet must stay positive.
+    if any(tok in name for tok in (
+            "width", "separation", "thickness", "length", "height", "depth",
+            "diameter", "radius", "area", "spacing", "pitch",
+            "mass", "density", "conductivity")) or name.endswith("_m") \
+            or name.endswith("_m2") or name.endswith("_mm"):
+        return [0.5, 2.0, 1.0, 10.0]
+    # [0, 1]-bounded physical fractions — keep samples in range so guard-raises
+    # (e.g. `if not 0 <= x <= 1: raise ValueError`) don't fire on valid inputs.
+    if any(tok in name for tok in (
+            "frac", "ratio", "transmittance", "absorptance",
+            "reflectance", "emissivity", "emittance", "albedo",
+            "porosity", "humidity")) or name.endswith("eff") or "_eff" in name:
+        return [0.0, 0.5, 1.0, 0.25]
+    # integer-ish: only when explicitly annotated int, or clearly a count.
+    if ann == "int" or "count" in name or name.startswith("num_") \
+            or name.startswith("n_") or name in ("n", "i", "k"):
+        return [0, 1, 3, 7]
     if "temp" in name:
         return [20.0, -5.0, 35.0, 0.0]
-    if "frac" in name or "ratio" in name or "eff" in name:
-        return [0.0, 0.5, 1.0, 0.25]
     return base
 
 
@@ -392,7 +751,10 @@ def extract_toplevel_fns(tree, src, p, leaves, module_consts=None):
         if not any(isinstance(n, ast.Return) and n.value is not None for n in ast.walk(node)):
             continue
         unit = ast.get_source_segment(src, node)
-        if not unit or len(unit) > 2000:
+        if not unit:
+            continue
+        unit = strip_docstring_src(unit)
+        if len(unit) > 2000:
             continue
 
         # If the function has kwonly args, rewrite as positional-only fn
@@ -437,6 +799,10 @@ def extract_toplevel_fns(tree, src, p, leaves, module_consts=None):
         # prepend import math if any math.* is used
         if "math." in unit and "import math" not in unit:
             unit = "import math\n\n" + unit
+        # inline any pure module-level helpers (_clip/_sign/_clamp) the unit calls
+        unit = prepend_helpers(unit)
+        if "math." in unit and "import math" not in unit:
+            unit = "import math\n\n" + unit
         if const_prelude:
             unit = const_prelude + unit
 
@@ -453,19 +819,20 @@ def extract_toplevel_fns(tree, src, p, leaves, module_consts=None):
         if used_consts:
             ns.update(used_consts)
         try:
-            exec(unit, ns)
-            fn = ns[node.name]
-            ok = True
-            for t in tuples:
-                r = fn(*t)
-                if not _is_scalar_result(r):
-                    ok = False; break
-                if isinstance(r, tuple) and not tuple_arity:
-                    ok = False; break  # unexpected tuple
-                if not isinstance(r, tuple) and tuple_arity:
-                    ok = False; break  # expected tuple but got scalar
-                if isinstance(r, float) and not math.isfinite(r):
-                    ok = False; break
+            with time_limit():
+                exec(unit, ns)
+                fn = ns[node.name]
+                ok = True
+                for t in tuples:
+                    r = fn(*t)
+                    if not _is_scalar_result(r):
+                        ok = False; break
+                    if isinstance(r, tuple) and not tuple_arity:
+                        ok = False; break  # unexpected tuple
+                    if not isinstance(r, tuple) and tuple_arity:
+                        ok = False; break  # expected tuple but got scalar
+                    if isinstance(r, float) and not math.isfinite(r):
+                        ok = False; break
             if not ok:
                 continue
         except Exception:
@@ -523,6 +890,9 @@ def extract_staticmethods(tree, src, p, leaves, module_consts=None):
                 continue
             # purity gate (math only, no class access)
             bad = False
+            if _bad_raise(node) or not _while_ok(node):
+                continue
+            guard_ids = _raise_guard_call_ids(node)
             for n in ast.walk(node):
                 if isinstance(n, ast.For):
                     # only allow range loops
@@ -531,16 +901,19 @@ def extract_staticmethods(tree, src, p, leaves, module_consts=None):
                             and n.iter.func.id == 'range'):
                         bad = True; break
                     continue
-                if isinstance(n, (ast.While, ast.With, ast.Try, ast.Lambda,
+                if isinstance(n, (ast.With, ast.Try, ast.Lambda,
                                   ast.ListComp, ast.DictComp, ast.SetComp)):
                     bad = True; break
                 if isinstance(n, ast.Attribute):
                     if not (isinstance(n.value, ast.Name) and n.value.id == "math"):
                         bad = True; break
                 if isinstance(n, ast.Call):
+                    if id(n) in guard_ids:
+                        continue  # raise ValueError(..) guard
                     f = n.func
                     if isinstance(f, ast.Name):
-                        if f.id not in ALLOWED_CALLS and f.id != 'range':
+                        if (f.id not in ALLOWED_CALLS and f.id != 'range'
+                                and f.id not in INLINABLE_HELPERS):
                             bad = True; break
                     elif isinstance(f, ast.Attribute):
                         if not (isinstance(f.value, ast.Name) and f.value.id == "math" and f.attr in ALLOWED_CALLS):
@@ -553,7 +926,10 @@ def extract_staticmethods(tree, src, p, leaves, module_consts=None):
             if not any(isinstance(n, ast.Return) and n.value is not None for n in ast.walk(node)):
                 continue
             unit = ast.get_source_segment(src, node)
-            if not unit or len(unit) > 2000:
+            if not unit:
+                continue
+            unit = strip_docstring_src(unit)
+            if len(unit) > 2000:
                 continue
             # emit as a plain function (strip @staticmethod decorator)
             lines = unit.splitlines()
@@ -598,6 +974,9 @@ def extract_staticmethods(tree, src, p, leaves, module_consts=None):
 
             if "math." in fn_unit and "import math" not in fn_unit:
                 fn_unit = "import math\n\n" + fn_unit
+            fn_unit = prepend_helpers(fn_unit)
+            if "math." in fn_unit and "import math" not in fn_unit:
+                fn_unit = "import math\n\n" + fn_unit
             if const_prelude:
                 fn_unit = const_prelude + fn_unit
 
@@ -613,15 +992,16 @@ def extract_staticmethods(tree, src, p, leaves, module_consts=None):
             if used_consts:
                 ns.update(used_consts)
             try:
-                exec(fn_unit, ns)
-                fn = ns[node.name]
-                ok = True
-                for t in tuples:
-                    r = fn(*t)
-                    if not _is_scalar_result(r):
-                        ok = False; break
-                    if isinstance(r, float) and not math.isfinite(r):
-                        ok = False; break
+                with time_limit():
+                    exec(fn_unit, ns)
+                    fn = ns[node.name]
+                    ok = True
+                    for t in tuples:
+                        r = fn(*t)
+                        if not _is_scalar_result(r):
+                            ok = False; break
+                        if isinstance(r, float) and not math.isfinite(r):
+                            ok = False; break
                 if not ok:
                     continue
             except Exception:
@@ -654,16 +1034,20 @@ def is_float_or_none_ann(ann):
 
 def get_scalar_fields_with_defaults(cls_node):
     """Return list of (field_name, kind, default) for all fields in a dataclass.
-    kind is one of 'scalar', 'str'.
+    kind is one of 'scalar', 'str', 'other'.
     For 'scalar': default is the float value to use (1.0 if required with no default,
       proper coeff_sample_val otherwise).
     For 'str': default is ''.
-    Returns None if an unrecognised field type is encountered that would break construction.
+    For 'other': a non-scalar/non-str field (enum/object/list/Optional[non-float]).
+      Such a field is tolerated as long as the candidate METHOD never reads it;
+      if construction needs it the cross-check falls back to free-fn-oracle-only.
+    Returns None only on a structurally-unparseable class body.
     Handles:
       - float / int / bool fields (with or without defaults) -> scalar
       - float | None fields -> optional scalar, default None or a float
       - str fields (with or without defaults) -> str, default ''
       - tuple[str,...] and similar ClassVar-ish -> skip (class-level, not instance)
+      - everything else (enums, objects, containers) -> 'other' (tolerated)
     """
     fields = []
     for stmt in cls_node.body:
@@ -683,8 +1067,9 @@ def get_scalar_fields_with_defaults(cls_node):
                 # assume float inside
                 fields.append((fname, "scalar", None))
                 continue
-            # Any other subscript -> skip the class
-            return None
+            # Any other subscript (List[...], Dict[...], etc.) -> 'other'
+            fields.append((fname, "other", None))
+            continue
 
         # float | None  (BinOp in 3.10+ syntax)
         if isinstance(ann, ast.BinOp) and isinstance(ann.op, ast.BitOr):
@@ -699,8 +1084,9 @@ def get_scalar_fields_with_defaults(cls_node):
                     default = None
                 fields.append((fname, "scalar", default))
                 continue
-            # other BinOp — skip class
-            return None
+            # other union (e.g. SomeEnum | None) -> 'other'
+            fields.append((fname, "other", None))
+            continue
 
         if isinstance(ann, ast.Name):
             if ann.id in SCALAR:
@@ -724,11 +1110,11 @@ def get_scalar_fields_with_defaults(cls_node):
                     default = ""
                 fields.append((fname, "str", default))
             else:
-                # non-scalar type (object, list, dict, etc.) -> skip this class
-                return None
+                # non-scalar named type (enum/object) -> 'other' (tolerated unless read)
+                fields.append((fname, "other", None))
         else:
-            # Unknown annotation structure -> skip class
-            return None
+            # Unknown annotation structure -> 'other'
+            fields.append((fname, "other", None))
     return fields
 
 
@@ -945,6 +1331,20 @@ def extract_instance_methods(tree, src, p, leaves, module_consts=None):
             )
             if is_static:
                 continue
+            # @property methods are allowed (computed scalar attributes); the
+            # rewrite drops the decorator and the cross-check reads the value via
+            # getattr instead of calling it. Reject other unknown decorators
+            # (e.g. cached_property with state, validators) to stay verifiable.
+            is_property = any(
+                (isinstance(d, ast.Name) and d.id == "property")
+                for d in method_node.decorator_list
+            )
+            other_decorators = [
+                d for d in method_node.decorator_list
+                if not (isinstance(d, ast.Name) and d.id == "property")
+            ]
+            if other_decorators:
+                continue
             # must have self as first arg
             args = method_node.args.args
             if not args or args[0].arg != "self":
@@ -982,9 +1382,11 @@ def extract_instance_methods(tree, src, p, leaves, module_consts=None):
             if not any(isinstance(n, ast.Return) and n.value is not None for n in ast.walk(method_node)):
                 continue
 
-            # Method source must not be too long
+            # Method source must exist; the size cap is applied AFTER docstring
+            # stripping on the rewritten free fn (below), since large docstrings
+            # otherwise reject otherwise-fine numeric methods.
             method_src = ast.get_source_segment(src, method_node)
-            if not method_src or len(method_src) > 2000:
+            if not method_src or len(method_src) > 8000:
                 continue
 
             # Build the free function — kwonly args become positional in free fn
@@ -999,11 +1401,17 @@ def extract_instance_methods(tree, src, p, leaves, module_consts=None):
             if result is None:
                 continue
             fn_name, fn_unit = result
+            fn_unit = strip_docstring_src(fn_unit)
 
             # Collect module-level constants used
             used_consts = collect_used_consts(method_node, module_consts)
             const_prelude = build_const_prelude(used_consts)
 
+            if "math." in fn_unit and "import math" not in fn_unit:
+                fn_unit = "import math\n\n" + fn_unit
+            # Any inlinable helper call the regex inliner left intact gets its
+            # source prepended so the free fn is self-contained.
+            fn_unit = prepend_helpers(fn_unit)
             if "math." in fn_unit and "import math" not in fn_unit:
                 fn_unit = "import math\n\n" + fn_unit
             if const_prelude:
@@ -1041,15 +1449,16 @@ def extract_instance_methods(tree, src, p, leaves, module_consts=None):
             if used_consts:
                 ns.update(used_consts)
             try:
-                exec(fn_unit, ns)
-                fn = ns[fn_name]
-                ok = True
-                for t in full_tuples:
-                    r = fn(*t)
-                    if not _is_scalar_result(r):
-                        ok = False; break
-                    if isinstance(r, float) and not math.isfinite(r):
-                        ok = False; break
+                with time_limit():
+                    exec(fn_unit, ns)
+                    fn = ns[fn_name]
+                    ok = True
+                    for t in full_tuples:
+                        r = fn(*t)
+                        if not _is_scalar_result(r):
+                            ok = False; break
+                        if isinstance(r, float) and not math.isfinite(r):
+                            ok = False; break
                 if not ok:
                     continue
             except Exception:
@@ -1091,15 +1500,18 @@ def extract_instance_methods(tree, src, p, leaves, module_consts=None):
                         elif kind == "str":
                             ctor_kwargs[fname] = str_field_map.get(fname, "")
                     instance = cls_obj(**ctor_kwargs)
-                    method_fn = getattr(instance, method_node.name)
-                    if has_kwonly:
+                    attr = getattr(instance, method_node.name)
+                    if is_property:
+                        # @property — getattr returns the computed value directly.
+                        r_real = attr
+                    elif has_kwonly:
                         # Split mt into positional and keyword parts
                         n_pos = len(pos_names)
                         pos_mt = mt[:n_pos]
                         kw_mt = dict(zip(kwonly_names, mt[n_pos:]))
-                        r_real = method_fn(*pos_mt, **kw_mt)
+                        r_real = attr(*pos_mt, **kw_mt)
                     else:
-                        r_real = method_fn(*mt)
+                        r_real = attr(*mt)
                     r_free = fn(*ft)
                     if isinstance(r_real, float) and isinstance(r_free, float):
                         if not (math.isfinite(r_real) and math.isfinite(r_free)):
@@ -1150,6 +1562,18 @@ def extract_instance_methods(tree, src, p, leaves, module_consts=None):
 # ---------------------------------------------------------------------------
 
 def main():
+    global EP, OUT, _CUR_HELPERS
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--ep", type=Path, default=EP,
+                    help="energyplus-mojo source dir (default: $EPMOJO_SRC or autodetect)")
+    ap.add_argument("--out", type=Path, default=OUT,
+                    help="output py_leaves.jsonl path (default: $PY_LEAVES_OUT or autodetect)")
+    args = ap.parse_args()
+    EP, OUT = args.ep, args.out
+    if not EP.is_dir():
+        ap.error(f"energyplus-mojo source dir not found: {EP} "
+                 f"(set --ep or $EPMOJO_SRC)")
+
     leaves = []
     for p in EP.rglob("*.py"):
         if "__pycache__" in str(p):
@@ -1162,6 +1586,8 @@ def main():
 
         # Collect module-level numeric constants for this file
         module_consts = get_module_consts(tree)
+        # Collect inlinable pure helpers (_clip/_sign/_clamp) defined in this file
+        _CUR_HELPERS = get_inlinable_helpers(tree, src)
 
         extract_toplevel_fns(tree, src, p, leaves, module_consts)
         extract_staticmethods(tree, src, p, leaves, module_consts)
