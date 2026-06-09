@@ -2,7 +2,8 @@
 
 Usage:
     transpile <source> [--source python|c] [--target rust|zig]
-                       [--verify] [--infer-with-llm]
+                       [--verify] [--fidelity structural|idiomatic]
+                       [--infer-with-llm]
 
 Source language is inferred from the file extension (.py, .c) unless --source
 is given. Target defaults to rust.
@@ -14,97 +15,16 @@ import argparse
 import sys
 from pathlib import Path
 
-from transpilers.backends.c import emit_c
-from transpilers.backends.fortran import emit_fortran
-from transpilers.backends.go import emit_go
-from transpilers.backends.mojo import emit_mojo
-from transpilers.backends.python import emit_python
-from transpilers.backends.rust import emit_rust
-from transpilers.backends.zig import emit_zig
-from transpilers.frontends.asm import parse_asm
-from transpilers.frontends.c import parse_c
-from transpilers.frontends.cpp import parse_cpp
-from transpilers.frontends.csharp import parse_csharp
-from transpilers.frontends.fortran import parse_fortran
-from transpilers.frontends.go import parse_go
-from transpilers.frontends.java import parse_java
-from transpilers.frontends.javascript import parse_javascript
-from transpilers.frontends.python import parse_python
-from transpilers.frontends.typescript import parse_typescript
-from transpilers.frontends.vb import parse_vb
 from transpilers.llm import LlmClient, make_llm_inferencer, make_llm_renamer
-from transpilers.passes import (
-    hir_to_mir,
-    infer_types,
-    llm_rename,
-    mir_to_c_lir,
-    mir_to_fortran_lir,
-    mir_to_go_lir,
-    mir_to_mojo_lir,
-    mir_to_python_lir,
-    mir_to_rust_lir,
-    mir_to_zig_lir,
+
+# Canonical registries live in the stage-decomposed pipeline; re-exported here
+# because tests and scripts import them from this module.
+from transpilers.pipeline.stages import (  # noqa: F401  (re-exports)
+    EXT_TO_SOURCE,
+    FRONTENDS,
+    TARGETS,
+    run_stages,
 )
-from transpilers.verify import (
-    c_compiles,
-    fortran_compiles,
-    go_compiles,
-    mojo_compiles,
-    python_compiles,
-    rust_compiles,
-    zig_compiles,
-)
-
-
-FRONTENDS = {
-    "python": parse_python,
-    "c": parse_c,
-    "cpp": parse_cpp,
-    "java": parse_java,
-    "csharp": parse_csharp,
-    "typescript": parse_typescript,
-    "javascript": parse_javascript,
-    "fortran": parse_fortran,
-    "go": parse_go,
-    "vb": parse_vb,
-    "asm": parse_asm,
-}
-
-EXT_TO_SOURCE = {
-    ".py": "python",
-    ".c": "c",
-    ".h": "c",
-    ".cpp": "cpp",
-    ".cc": "cpp",
-    ".cxx": "cpp",
-    ".hpp": "cpp",
-    ".hh": "cpp",
-    ".java": "java",
-    ".cs": "csharp",
-    ".ts": "typescript",
-    ".js": "javascript",
-    ".mjs": "javascript",
-    ".f90": "fortran",
-    ".f95": "fortran",
-    ".f03": "fortran",
-    ".f": "fortran",
-    ".go": "go",
-    ".vb": "vb",
-    ".vbs": "vb",
-    ".asm": "asm",
-    ".s": "asm",
-    ".S": "asm",
-}
-
-TARGETS = {
-    "rust": (mir_to_rust_lir, emit_rust, rust_compiles),
-    "zig": (mir_to_zig_lir, emit_zig, zig_compiles),
-    "c": (mir_to_c_lir, emit_c, c_compiles),
-    "mojo": (mir_to_mojo_lir, emit_mojo, mojo_compiles),
-    "go": (mir_to_go_lir, emit_go, go_compiles),
-    "python": (mir_to_python_lir, emit_python, python_compiles),
-    "fortran": (mir_to_fortran_lir, emit_fortran, fortran_compiles),
-}
 
 
 def transpile(
@@ -116,14 +36,14 @@ def transpile(
     llm_rename_fill=None,
     ir_hints=None,
 ) -> str:
-    parse = FRONTENDS[source_lang]
-    lower, emit, _ = TARGETS[target]
-    hir_mod = parse(source)
-    mir_mod = hir_to_mir(hir_mod)
-    infer_types(mir_mod, llm_fill=llm_fill, ir_hints=ir_hints)
-    if llm_rename_fill is not None:
-        llm_rename(mir_mod, llm_fill=llm_rename_fill)
-    return emit(lower(mir_mod))
+    return run_stages(
+        source,
+        source_lang=source_lang,
+        target=target,
+        llm_fill=llm_fill,
+        llm_rename_fill=llm_rename_fill,
+        ir_hints=ir_hints,
+    ).output
 
 
 # Convenience wrappers — kept stable for tests and external callers.
@@ -250,6 +170,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--fidelity",
+        choices=["structural", "idiomatic"],
+        default="structural",
+        help=(
+            "structural (default): with --verify, additionally check that the output's "
+            "module/function/control-flow skeleton is isomorphic to the source's; "
+            "idiomatic: skip the skeleton gate, allowing parent-level rewrites. "
+            "Applies to the direct path only."
+        ),
+    )
+    parser.add_argument(
         "--path",
         choices=["direct", "python_pivot"],
         default="direct",
@@ -335,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     # ------------------------------------------------------------------
     # Default direct path
     # ------------------------------------------------------------------
-    out = transpile(
+    trace = run_stages(
         src_input,
         source_lang=source_lang,
         target=args.target,
@@ -343,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
         llm_rename_fill=rename_fill,
         ir_hints=ir_hints,
     )
+    out = trace.output
     sys.stdout.write(out)
 
     if args.verify:
@@ -352,6 +284,14 @@ def main(argv: list[str] | None = None) -> int:
             sys.stderr.write(f"\n--- {args.target} compiler rejected emitted code ---\n")
             sys.stderr.write(result.stderr)
             return 1
+        if args.fidelity == "structural":
+            from transpilers.verify.structural import check_structural_fidelity
+
+            report = check_structural_fidelity(trace.hir, trace.lir)
+            if not report.ok:
+                sys.stderr.write("\n--- structural fidelity check failed ---\n")
+                sys.stderr.write(report.summary() + "\n")
+                return 1
         sys.stderr.write("\n[verify] ok\n")
     return 0
 

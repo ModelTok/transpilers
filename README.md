@@ -103,6 +103,18 @@ uv run python scripts/run_matrix.py examples/algorithms
 uv run python scripts/transpile_matrix.py examples/samples/Python rust   # transpile only
 ```
 
+## Fidelity dial
+
+`transpile --fidelity {structural|idiomatic}` (default `structural`) controls
+how faithful the output must be to the source's architecture. Under
+`structural`, `--verify` additionally runs the **structural-fidelity
+verifier**: the output's module/function/struct skeleton and control-flow
+nesting must be isomorphic to the source's (idiom mapping is allowed only at
+the statement/expression level — e.g. foreach→indexed loop, Rust's
+struct+impl split, Fortran methods as free functions). Added, dropped, merged
+or renamed functions and flattened control flow fail the gate. `idiomatic`
+skips the skeleton gate, permitting parent-level rewrites.
+
 Fine-tuning the Mojo translator adapter is documented in `RUN.md` (local
 ROCm/WSL) and `tools/cloud/` (RunPod).
 
