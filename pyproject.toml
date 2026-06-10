@@ -22,6 +22,7 @@ dependencies = [
 [project.scripts]
 transpile = "transpilers.cli.main:main"
 transpile-levels = "transpilers.levels:main"
+transpile-api = "transpilers.api.server:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -34,6 +35,15 @@ packages = ["src/transpilers"]
 dev = [
     "pytest>=8",
     "ruff>=0.7",
+    "httpx>=0.27",  # for TestClient in API tests
+]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+]
+runpod = [
+    "runpod>=1.7",
 ]
 # Install PyTorch separately with the ROCm build matching your GPU/driver — NOT pinned here
 # because the wheel index is hardware-specific. For AMD RX 7700 XT (RDNA3, gfx1101), ROCm >= 6.2:
