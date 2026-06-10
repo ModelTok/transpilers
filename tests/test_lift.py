@@ -223,6 +223,61 @@ def test_lift_prefix_deref_dropped():
     assert "(* " not in out and "(*xs)" not in out
 
 
+def test_lift_parenthesized_subexpr_keeps_grouping():
+    # #58: `(Tamb - Tsurf) * cosTilt` lost its parens (PAREN_EXPR unwrapping)
+    # and silently rebound as `tamb - (tsurf * cos_tilt)`.
+    out, _ = lift_source(
+        "double f(double Tamb, double Tsurf, double cosTilt){ "
+        "  double DeltaTempCosTilt = (Tamb - Tsurf) * cosTilt; "
+        "  return DeltaTempCosTilt / (Tamb + Tsurf); }")
+    assert _compiles(out)
+    assert "(tamb - tsurf) * cos_tilt" in out
+    assert "delta_temp_cos_tilt / (tamb + tsurf)" in out
+
+
+def test_lift_precedence_right_operand_keeps_grouping():
+    # Right operands at equal precedence only exist via explicit source parens
+    # (`a - (b - c)`, `a / (b * c)`) — they must keep them.
+    out, _ = lift_source(
+        "double f(double a, double b, double c){ return a - (b - c) + a / (b * c); }")
+    assert _compiles(out)
+    assert "a - (b - c)" in out
+    assert "a / (b * c)" in out
+
+
+def test_lift_unary_minus_on_parenthesized_sum():
+    # `-(a + b) * c` must not emit `(-a + b) * c`.
+    out, _ = lift_source(
+        "double f(double a, double b, double c){ return -(a + b) * c; }")
+    assert _compiles(out)
+    assert "(-(a + b)) * c" in out
+
+
+def test_lift_logical_grouping_kept():
+    # `(a || b) && c` must not emit `a or b and c` (binds as a or (b and c)).
+    out, _ = lift_source(
+        "bool f(bool a, bool b, bool c){ return (a || b) && c; }")
+    assert _compiles(out)
+    assert "(a or b) and c" in out
+
+
+def test_lift_condition_logical_grouping_kept():
+    # Same grouping bug through the if-condition (_hoist_cond rewrite) path.
+    out, _ = lift_source(
+        "void f(bool a, bool b, bool c){ if ((a || b) && c) { return; } }")
+    assert _compiles(out)
+    assert "if (a or b) and c:" in out
+
+
+def test_lift_comparison_child_of_comparison_wrapped():
+    # C++ nests comparisons left-to-right; Python CHAINS them. `a < b == c`
+    # (C++: `(a < b) == c`) must emit the parens explicitly.
+    out, _ = lift_source(
+        "bool f(double a, double b, bool c){ return a < b == c; }")
+    assert _compiles(out)
+    assert "(a < b) == c" in out
+
+
 def test_levels_lift_engine(tmp_path):
     f = tmp_path / "k.cpp"
     f.write_text("double sq(double x){ return x*x; }")

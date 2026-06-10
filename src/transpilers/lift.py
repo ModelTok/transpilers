@@ -96,6 +96,77 @@ _PY_BINOPS = {"+", "-", "*", "/", "%", "//", "**", "==", "!=", "<", "<=",
               ">", ">=", "and", "or", "&", "|", "^", "<<", ">>"}
 
 
+# Python binary-operator precedence (higher binds tighter). Emission decisions
+# use PYTHON's table (not C++'s): clang already resolved the C++ parse into the
+# AST shape; what matters is how the emitted text re-parses in Python.
+_PY_PREC = {
+    "or": 1, "and": 2,
+    "==": 4, "!=": 4, "<": 4, "<=": 4, ">": 4, ">=": 4, "in": 4, "is": 4,
+    "|": 5, "^": 6, "&": 7,
+    "<<": 8, ">>": 8,
+    "+": 9, "-": 9,
+    "*": 10, "/": 10, "//": 10, "%": 10,
+    "**": 12,
+}
+_CMP_PREC = 4          # Python CHAINS comparisons; C++ nests them left-to-right
+_UNARY_MINUS_PREC = 11  # binds tighter than every binary operator except **
+
+
+def _min_top_prec(s: str):
+    """Lowest precedence of any binary operator at paren/bracket/quote depth 0
+    of an emitted Python expression (the lifter emits binary operators
+    space-delimited), or None if the expression is atomic at the top level."""
+    best = None
+    depth, quote, i, n = 0, "", 0, len(s)
+    while i < n:
+        ch = s[i]
+        if quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif depth == 0 and ch == " ":
+            j = s.find(" ", i + 1)
+            p = _PY_PREC.get(s[i + 1:j]) if j != -1 else None
+            if p is not None and (best is None or p < best):
+                best = p
+        i += 1
+    if s.startswith("not ") and (best is None or best > 3):
+        best = 3
+    if s.startswith("lambda "):
+        best = 0
+    return best
+
+
+def _paren_operand(s: str, parent_op: str, right: bool = False) -> str:
+    """Re-parenthesize an emitted operand whose top-level operator binds looser
+    than `parent_op` — restores the grouping dropped when PAREN_EXPR nodes are
+    unwrapped (#58: `(Tamb - Tsurf) * cosTilt` must not become
+    `tamb - tsurf * cos_tilt`).
+
+    Equal precedence: a LEFT operand reproduces C++'s left-associative parse
+    unparenthesized, but a RIGHT operand at equal precedence only exists
+    because the source had explicit parens (`a - (b - c)`, `a / (b * c)`), so
+    it keeps them; and comparisons chain in Python where C++ nests, so a
+    comparison child of a comparison parent is always wrapped."""
+    pp = _PY_PREC.get(parent_op)
+    if pp is None:
+        return s
+    cp = _min_top_prec(s)
+    if cp is None:
+        return s
+    if cp < pp or (cp == pp and (right or pp == _CMP_PREC)):
+        return f"({s})"
+    return s
+
+
 _CAST_NAMES = {"static_cast", "dynamic_cast", "reinterpret_cast", "const_cast"}
 _PRIM_TYPES = {"int", "long", "short", "char", "double", "float", "bool",
                "unsigned", "signed", "size_t", "void", "const",
@@ -320,7 +391,9 @@ class _Lifter:
             if len(kids) == 2:
                 op = self._binop(c)
                 if op in _PY_BINOPS:
-                    return f"{self.e(kids[0])} {op} {self.e(kids[1])}"
+                    lhs = _paren_operand(self.e(kids[0]), op)
+                    rhs = _paren_operand(self.e(kids[1]), op, right=True)
+                    return f"{lhs} {op} {rhs}"
                 # degraded operator (e.g. macro expansion gives `)`): don't emit
                 # garbage like `nsides ) 0` — recover from tokens or TODO.
                 return self._tok_fallback(c)
@@ -328,7 +401,13 @@ class _Lifter:
             kids = list(c.get_children()); op = (toks(c) or ["?"])[0]
             inner = self.e(kids[0]) if kids else "None"
             if op == "!": return f"(not {inner})"
-            if op == "-": return f"(-{inner})"
+            if op == "-":
+                # `-(a + b)` must not emit `(-a + b)`: unary minus binds
+                # tighter than the unwrapped binary, so re-wrap the operand.
+                cp = _min_top_prec(inner)
+                if cp is not None and cp < _UNARY_MINUS_PREC:
+                    inner = f"({inner})"
+                return f"(-{inner})"
             return inner
         if k == K.CONDITIONAL_OPERATOR:
             kids = list(c.get_children())
@@ -396,7 +475,9 @@ class _Lifter:
                     return f"{base}({', '.join(self.e(a) for a in rest)})"
                 return self._tok_fallback(c)
             if op in ("+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=") and len(rest) == 2:
-                return f"{self.e(rest[0])} {op} {self.e(rest[1])}"
+                lhs = _paren_operand(self.e(rest[0]), op)
+                rhs = _paren_operand(self.e(rest[1]), op, right=True)
+                return f"{lhs} {op} {rhs}"
             return self.e(rest[-1]) if rest else "None"
         if argl and argl[0].kind == K.MEMBER_REF_EXPR:
             recv = argl[0]; meth = snake(recv.spelling)
@@ -541,7 +622,9 @@ class _Lifter:
                         pre.append(f"{p}{lhs} = {self.e(kids[1])}")
                         return lhs
                     if op in ("and", "or", "==", "!=", "<", "<=", ">", ">="):
-                        return f"{rewrite(kids[0])} {op} {rewrite(kids[1])}"
+                        lhs = _paren_operand(rewrite(kids[0]), op)
+                        rhs = _paren_operand(rewrite(kids[1]), op, right=True)
+                        return f"{lhs} {op} {rhs}"
             return self.e(cur)
 
         cond = rewrite(c)
@@ -582,7 +665,7 @@ class _Lifter:
         if body is None or cond is None:
             self.todo += 1
             return [f"{p}pass  # TODO[lift]: SWITCH_STMT :: {' '.join(src(c).split())[:60]}"]
-        subj = self.e(cond)
+        subj = _paren_operand(self.e(cond), "==")  # subject feeds `subj == v` tests
         items = []
         for ch in body.get_children():
             self._flatten_switch(ch, items)
