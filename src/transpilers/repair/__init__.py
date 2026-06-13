@@ -1,5 +1,57 @@
-"""Iterative compile-and-repair loop for transpiled code."""
+"""Iterative compile-and-repair loop for transpiled code.
 
+Two repair surfaces live here:
+
+* :mod:`transpilers.repair.repair` — the legacy one-shot repair loop
+  (preserved for API backward compatibility; the FastAPI ``/transpile/repair``
+  endpoint wraps it).
+* :mod:`transpilers.repair.loop` — the new verification-driven repair
+  loop with escalating model tiers (issue #47). The CLI
+  ``--escalating-repair`` flag and the FastAPI
+  ``/transpile/escalating-repair`` endpoint wrap it.
+
+The signal helper (:mod:`transpilers.repair.signal`) and the flywheel
+recorder (:mod:`transpilers.repair.flywheel`) are shared between both.
+"""
+
+from .flywheel import Flywheel, FlywheelRecord, merge_dedup, read_flywheel
+from .loop import (
+    EscalatingRepairAttempt,
+    EscalatingRepairResult,
+    VerificationOutcome,
+    Verifier,
+    escalating_repair,
+)
 from .repair import RepairPass, RepairResult, repair
+from .signal import (
+    RepairSignal,
+    signal_from_compile,
+    signal_from_hole,
+    signal_from_internal,
+    signal_from_run,
+    signal_from_structural,
+)
 
-__all__ = ["repair", "RepairResult", "RepairPass"]
+__all__ = [
+    # legacy
+    "repair",
+    "RepairResult",
+    "RepairPass",
+    # new (issue #47)
+    "escalating_repair",
+    "EscalatingRepairResult",
+    "EscalatingRepairAttempt",
+    "VerificationOutcome",
+    "Verifier",
+    # shared
+    "RepairSignal",
+    "signal_from_compile",
+    "signal_from_hole",
+    "signal_from_internal",
+    "signal_from_run",
+    "signal_from_structural",
+    "Flywheel",
+    "FlywheelRecord",
+    "read_flywheel",
+    "merge_dedup",
+]
