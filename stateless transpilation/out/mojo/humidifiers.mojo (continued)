@@ -1,0 +1,110 @@
+        if l_alpha_blanks[6]:
+            humidifier.InletWaterTempOption = InletWaterTemp.Fixed
+        else:
+            humidifier.InletWaterTempOption = InletWaterTemp(getEnumValue(INLET_WATER_TEMPS_UC, alphas[6]))
+
+    for hum_num in range(num_humidifiers):
+        var humidifier = state.dataHumidifiers.Humidifier[hum_num]
+        if humidifier.SuppliedByWaterSystem:
+            SetupOutputVariable(state, "Humidifier Water Volume Flow Rate", state.Constant.Units.m3_s,
+                              humidifier.WaterConsRate, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Average, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier Water Volume", state.Constant.Units.m3,
+                              humidifier.WaterCons, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier Storage Tank Water Volume Flow Rate", state.Constant.Units.m3_s,
+                              humidifier.TankSupplyVdot, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Average, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier Storage Tank Water Volume", state.Constant.Units.m3,
+                              humidifier.TankSupplyVol, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name, state.Constant.eResource.Water,
+                              state.OutputProcessor.Group.HVAC, state.OutputProcessor.EndUseCat.Humidification)
+            SetupOutputVariable(state, "Humidifier Starved Storage Tank Water Volume Flow Rate", state.Constant.Units.m3_s,
+                              humidifier.StarvedSupplyVdot, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Average, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier Starved Storage Tank Water Volume", state.Constant.Units.m3,
+                              humidifier.StarvedSupplyVol, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name, state.Constant.eResource.Water,
+                              state.OutputProcessor.Group.HVAC, state.OutputProcessor.EndUseCat.Humidification)
+            SetupOutputVariable(state, "Humidifier Mains Water Volume", state.Constant.Units.m3,
+                              humidifier.StarvedSupplyVol, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name, state.Constant.eResource.MainsWater,
+                              state.OutputProcessor.Group.HVAC, state.OutputProcessor.EndUseCat.Humidification)
+        else:
+            SetupOutputVariable(state, "Humidifier Water Volume Flow Rate", state.Constant.Units.m3_s,
+                              humidifier.WaterConsRate, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Average, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier Water Volume", state.Constant.Units.m3,
+                              humidifier.WaterCons, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name, state.Constant.eResource.Water,
+                              state.OutputProcessor.Group.HVAC, state.OutputProcessor.EndUseCat.Humidification)
+            SetupOutputVariable(state, "Humidifier Mains Water Volume", state.Constant.Units.m3,
+                              humidifier.WaterCons, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name, state.Constant.eResource.MainsWater,
+                              state.OutputProcessor.Group.HVAC, state.OutputProcessor.EndUseCat.Humidification)
+
+        if humidifier.HumType == HumidType.Electric:
+            SetupOutputVariable(state, "Humidifier Electricity Rate", state.Constant.Units.W,
+                              humidifier.ElecUseRate, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Average, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier Electricity Energy", state.Constant.Units.J,
+                              humidifier.ElecUseEnergy, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name, state.Constant.eResource.Electricity,
+                              state.OutputProcessor.Group.HVAC, state.OutputProcessor.EndUseCat.Humidification)
+        elif humidifier.HumType == HumidType.Gas:
+            SetupOutputVariable(state, "Humidifier NaturalGas Use Thermal Efficiency", state.Constant.Units.None,
+                              humidifier.ThermalEff, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Average, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier NaturalGas Rate", state.Constant.Units.W,
+                              humidifier.GasUseRate, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Average, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier NaturalGas Energy", state.Constant.Units.J,
+                              humidifier.GasUseEnergy, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name, state.Constant.eResource.NaturalGas,
+                              state.OutputProcessor.Group.HVAC, state.OutputProcessor.EndUseCat.Humidification)
+            SetupOutputVariable(state, "Humidifier Auxiliary Electricity Rate", state.Constant.Units.W,
+                              humidifier.AuxElecUseRate, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Average, humidifier.Name)
+            SetupOutputVariable(state, "Humidifier Auxiliary Electricity Energy", state.Constant.Units.J,
+                              humidifier.AuxElecUseEnergy, state.OutputProcessor.TimeStepType.System,
+                              state.OutputProcessor.StoreType.Sum, humidifier.Name, state.Constant.eResource.Electricity,
+                              state.OutputProcessor.Group.HVAC, state.OutputProcessor.EndUseCat.Humidification)
+
+    if errors_found:
+        ShowFatalError(state, "GetHumidifierInputs: Errors found in input.")
+
+
+fn GetAirInletNodeNum(state: UnsafeMutablePointer[Void], humidifier_name: String, errors_found_ref: UnsafeMutablePointer[Bool]) -> Int32:
+    if state.dataHumidifiers.GetInputFlag:
+        GetHumidifierInput(state)
+        state.dataHumidifiers.GetInputFlag = False
+
+    var which_humidifier = Util.FindItemInList(humidifier_name, state.dataHumidifiers.Humidifier)
+    if which_humidifier != 0:
+        return state.dataHumidifiers.Humidifier[which_humidifier - 1].AirInNode
+    else:
+        ShowSevereError(state, "GetAirInletNodeNum: Could not find Humidifier = \"" + humidifier_name + "\"")
+        errors_found_ref[] = True
+        return 0
+
+
+fn GetAirOutletNodeNum(state: UnsafeMutablePointer[Void], humidifier_name: String, errors_found_ref: UnsafeMutablePointer[Bool]) -> Int32:
+    if state.dataHumidifiers.GetInputFlag:
+        GetHumidifierInput(state)
+        state.dataHumidifiers.GetInputFlag = False
+
+    var which_humidifier = Util.FindItemInList(humidifier_name, state.dataHumidifiers.Humidifier)
+    if which_humidifier != 0:
+        return state.dataHumidifiers.Humidifier[which_humidifier - 1].AirOutNode
+    else:
+        ShowSevereError(state, "GetAirInletNodeNum: Could not find Humidifier = \"" + humidifier_name + "\"")
+        errors_found_ref[] = True
+        return 0
+
+
+fn getEnumValue(enum_list: InlineArray[StringLiteral, 2], value_str: String) -> Int32:
+    var value_upper = value_str.upper()
+    for i in range(2):
+        if enum_list[i] == value_upper:
+            return Int32(i)
+    return -1

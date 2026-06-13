@@ -1,0 +1,116 @@
+coil:
+                            self.auto_sized_value = self.zone_eq_sizing[self.cur_zone_eq_num - 1].air_vol_flow
+                        elif self.zone_heating_only_fan:
+                            self.auto_sized_value = self.final_zone_sizing[self.cur_zone_eq_num - 1].des_heat_vol_flow
+                        else:
+                            self.auto_sized_value = max(self.final_zone_sizing[self.cur_zone_eq_num - 1].des_cool_vol_flow, self.final_zone_sizing[self.cur_zone_eq_num - 1].des_heat_vol_flow)
+            elif self.cur_sys_num > 0:
+                if not self.was_auto_sized and not self.sizing_des_run_this_air_sys:
+                    self.auto_sized_value = original_value
+                    if Util.same_string(self.comp_type, "Coil:Cooling:DX:TwoStageWithHumidityControlMode"):
+                        self.auto_sized_value /= (1.0 - self.data_bypass_frac)
+                        self.original_value /= (1.0 - self.data_bypass_frac)
+                else:
+                    if self.cur_oas_ys_num > 0:
+                        if self.oa_sys_eq_sizing[self.cur_oas_ys_num - 1].air_flow:
+                            self.auto_sized_value = self.oa_sys_eq_sizing[self.cur_oas_ys_num - 1].air_vol_flow
+                        elif self.oa_sys_eq_sizing[self.cur_oas_ys_num - 1].cooling_air_flow:
+                            self.auto_sized_value = self.oa_sys_eq_sizing[self.cur_oas_ys_num - 1].cooling_air_vol_flow
+                        elif outside_air_sys(self.cur_oas_ys_num).air_loop_doas_num > -1:
+                            self.auto_sized_value = self.airloop_doas[outside_air_sys(self.cur_oas_ys_num).air_loop_doas_num].sizing_mass_flow / state.data_envrn.std_rho_air
+                        else:
+                            self.auto_sized_value = self.final_sys_sizing[self.cur_sys_num - 1].des_out_air_vol_flow
+                    elif self.data_air_flow_used_for_sizing > 0.0:
+                        self.auto_sized_value = self.data_air_flow_used_for_sizing
+                    else:
+                        if self.unitary_sys_eq_sizing[self.cur_sys_num - 1].air_flow:
+                            self.auto_sized_value = self.unitary_sys_eq_sizing[self.cur_sys_num - 1].air_vol_flow
+                        elif self.unitary_sys_eq_sizing[self.cur_sys_num - 1].cooling_air_flow:
+                            self.auto_sized_value = self.unitary_sys_eq_sizing[self.cur_sys_num - 1].cooling_air_vol_flow
+                        else:
+                            if self.cur_duct_type == HVAC.AirDuctType.Main:
+                                self.auto_sized_value = self.final_sys_sizing[self.cur_sys_num - 1].des_main_vol_flow
+                            elif self.cur_duct_type == HVAC.AirDuctType.Cooling:
+                                self.auto_sized_value = self.final_sys_sizing[self.cur_sys_num - 1].des_cool_vol_flow
+                            elif self.cur_duct_type == HVAC.AirDuctType.Heating:
+                                self.auto_sized_value = self.final_sys_sizing[self.cur_sys_num - 1].des_heat_vol_flow
+                            elif self.cur_duct_type == HVAC.AirDuctType.Other:
+                                self.auto_sized_value = self.final_sys_sizing[self.cur_sys_num - 1].des_main_vol_flow
+                            else:
+                                self.auto_sized_value = self.final_sys_sizing[self.cur_sys_num - 1].des_main_vol_flow
+            elif self.data_non_zone_non_airloop_value > 0:
+                self.auto_sized_value = self.data_non_zone_non_airloop_value
+            elif not self.was_auto_sized:
+                self.auto_sized_value = self.original_value
+            else:
+                var msg = f"{self.calling_routine} {self.comp_type} {self.comp_name}, Developer Error: Component sizing incomplete."
+                ShowSevereError(state, msg)
+                self.add_error_message(msg)
+                msg = f"SizingString = {self.sizing_string}, SizingResult = {self.auto_sized_value:.1f}"
+                ShowContinueError(state, msg)
+                self.add_error_message(msg)
+                errors_found = True
+            
+            if self.override_size_string:
+                if Util.same_string(self.comp_type, "ZoneHVAC:FourPipeFanCoil"):
+                    self.sizing_string = "Maximum Supply Air Flow Rate [m3/s]"
+                elif self.coil_type == HVAC.CoilType.CoolingDXTwoSpeed:
+                    if self.data_dx_speed_num == 1:
+                        self.sizing_string = "High Speed Rated Air Flow Rate [m3/s]"
+                    elif self.data_dx_speed_num == 2:
+                        self.sizing_string = "Low Speed Rated Air Flow Rate [m3/s]"
+                elif self.is_ep_json:
+                    self.sizing_string = "Cooling Supply Air Flow Rate [m3/s]"
+            
+            if self.data_scalable_sizing_on:
+                if self.zone_air_flow_siz_method == DataSizing.SupplyAirFlowRate or self.zone_air_flow_siz_method == DataSizing.None_:
+                    self.sizing_string_scalable = "(scaled by flow / zone) "
+                elif self.zone_air_flow_siz_method == DataSizing.FlowPerFloorArea:
+                    self.sizing_string_scalable = "(scaled by flow / area) "
+                elif self.zone_air_flow_siz_method == DataSizing.FractionOfAutosizedCoolingAirflow or self.zone_air_flow_siz_method == DataSizing.FractionOfAutosizedHeatingAirflow:
+                    self.sizing_string_scalable = "(scaled by fractional multiplier) "
+                elif self.zone_air_flow_siz_method == DataSizing.FlowPerCoolingCapacity or self.zone_air_flow_siz_method == DataSizing.FlowPerHeatingCapacity:
+                    self.sizing_string_scalable = "(scaled by flow / capacity) "
+        
+        if self.data_dx_cools_low_speeds_autosized:
+            self.auto_sized_value *= self.data_fraction_used_for_sizing
+        
+        self.select_2_stg_dx_hum_ctrl_sizer_output(state, errors_found)
+        
+        if self.is_coil_report_object:
+            ReportCoilSelection.set_coil_air_flow(state, self.coil_report_num, self.auto_sized_value, self.was_auto_sized)
+        
+        if self.is_fan_report_object:
+            var dd_name_fan_peak = ""
+            var date_time_fan_peak = ""
+            
+            if self.data_scalable_sizing_on:
+                dd_name_fan_peak = "Scaled size, not from any peak"
+                date_time_fan_peak = "Scaled size, not from any peak"
+            else:
+                if cooling_flow:
+                    if (self.final_zone_sizing[self.cur_zone_eq_num - 1].cool_dd_num > 0 and
+                        self.final_zone_sizing[self.cur_zone_eq_num - 1].cool_dd_num <= state.data_envrn.tot_des_days):
+                        dd_name_fan_peak = state.data_weather.des_day_input[self.final_zone_sizing[self.cur_zone_eq_num - 1].cool_dd_num - 1].title
+                        date_time_fan_peak = (
+                            f"{state.data_weather.des_day_input[self.final_zone_sizing[self.cur_zone_eq_num - 1].cool_dd_num - 1].month}/"
+                            f"{state.data_weather.des_day_input[self.final_zone_sizing[self.cur_zone_eq_num - 1].cool_dd_num - 1].day_of_month} "
+                            f"{ReportCoilSelection.get_time_text(state, self.final_zone_sizing[self.cur_zone_eq_num - 1].time_step_num_at_cool_max)}"
+                        )
+                elif heating_flow:
+                    if (self.final_zone_sizing[self.cur_zone_eq_num - 1].heat_dd_num > 0 and
+                        self.final_zone_sizing[self.cur_zone_eq_num - 1].heat_dd_num <= state.data_envrn.tot_des_days):
+                        dd_name_fan_peak = state.data_weather.des_day_input[self.final_zone_sizing[self.cur_zone_eq_num - 1].heat_dd_num - 1].title
+                        date_time_fan_peak = (
+                            f"{state.data_weather.des_day_input[self.final_zone_sizing[self.cur_zone_eq_num - 1].heat_dd_num - 1].month}/"
+                            f"{state.data_weather.des_day_input[self.final_zone_sizing[self.cur_zone_eq_num - 1].heat_dd_num - 1].day_of_month} "
+                            f"{ReportCoilSelection.get_time_text(state, self.final_zone_sizing[self.cur_zone_eq_num - 1].time_step_num_at_heat_max)}"
+                        )
+            
+            OutputReportPredefined.pre_def_table_entry(state, state.data_out_rpt_predefined.pdch_fan_des_day, self.comp_name, dd_name_fan_peak)
+            OutputReportPredefined.pre_def_table_entry(state, state.data_out_rpt_predefined.pdch_fan_pk_time, self.comp_name, date_time_fan_peak)
+        
+        return self.auto_sized_value
+    
+    fn clear_state(inout self):
+        super().clear_state()

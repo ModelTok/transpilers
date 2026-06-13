@@ -1,0 +1,593 @@
+            state.dataDispVentMgr.HA_MX += surf.Area * state.dataRoomAir.HCeiling[ctd]
+            state.dataRoomAir.DispVent3NodeHcIn[surf_num] = state.dataRoomAir.HCeiling[ctd]
+
+        # FLOOR calculation
+        for ctd in range(state.dataRoomAir.PosZ_Floor[zone_num].beg, state.dataRoomAir.PosZ_Floor[zone_num].end + 1):
+            let surf_num = state.dataRoomAir.APos_Floor[ctd]
+            if surf_num == 0:
+                continue
+
+            let surf = state.dataSurface.Surface[surf_num]
+            state.dataSurface.SurfTAirRef[surf_num] = 1
+            state.dataSurface.SurfTAirRefRpt[surf_num] = state.dataSurface.SurfTAirRefReportVals[state.dataSurface.SurfTAirRef[surf_num]]
+            state.dataHeatBal.SurfTempEffBulkAir[surf_num] = state.dataRoomAir.ZTFloor[zone_num]
+            CalcDetailedHcInForDVModel(state, surf_num, surf_temp_in, state.dataRoomAir.DispVent3NodeHcIn)
+            state.dataRoomAir.HFloor[ctd] = state.dataRoomAir.DispVent3NodeHcIn[surf_num]
+            state.dataDispVentMgr.HAT_FLOOR += surf.Area * surf_temp_in[surf_num] * state.dataRoomAir.HFloor[ctd]
+            state.dataDispVentMgr.HA_FLOOR += surf.Area * state.dataRoomAir.HFloor[ctd]
+            state.dataHeatBal.SurfTempEffBulkAir[surf_num] = state.dataRoomAir.ZTFloor[zone_num]
+            state.dataRoomAir.DispVent3NodeHcIn[surf_num] = state.dataRoomAir.HFloor[ctd]
+
+
+fn calculate_third_order_floor_temperature(
+    temperature_history_term: Float64,
+    hat_floor: Float64,
+    ha_floor: Float64,
+    mcpt_total: Float64,
+    mcp_total: Float64,
+    occupied_temp: Float64,
+    non_air_system_response: Float64,
+    zone_multiplier: Float64,
+    air_cap: Float64,
+) -> Float64:
+    let eleven_over_six = 11.0 / 6.0
+    return (
+        temperature_history_term + hat_floor + mcpt_total + 0.6 * occupied_temp * mcp_total + non_air_system_response / zone_multiplier
+    ) / (eleven_over_six * air_cap + ha_floor + 1.6 * mcp_total)
+
+
+fn calc_disp_vent_3node(state: EnergyPlusData, zone_num: Int32) -> None:
+    let time_step_sys = state.dataHVACGlobal.TimeStepSys
+    let time_step_sys_sec = state.dataHVACGlobal.TimeStepSysSec
+
+    let one_third = 1.0 / 3.0
+    let min_flow_pow_fac = pow(1.0 / 24.55 * 1.0, 1.0 / 0.6)
+
+    let zone = state.dataHeatBal.Zone[zone_num]
+    let this_zone_hb = state.dataZoneTempPredictorCorrector.zoneHeatBalance[zone_num]
+
+    if state.dataHeatBal.ZoneAirSolutionAlgo != 2:
+        if state.dataHVACGlobal.ShortenTimeStepSysRoomAir and time_step_sys < state.dataGlobal.TimeStepZone:
+            if state.dataHVACGlobal.PreviousTimeStep < state.dataGlobal.TimeStepZone:
+                state.dataRoomAir.Zone1Floor[zone_num] = state.dataRoomAir.ZoneM2Floor[zone_num]
+                state.dataRoomAir.Zone1OC[zone_num] = state.dataRoomAir.ZoneM2OC[zone_num]
+                state.dataRoomAir.Zone1MX[zone_num] = state.dataRoomAir.ZoneM2MX[zone_num]
+            else:
+                state.dataRoomAir.Zone1Floor[zone_num] = state.dataRoomAir.ZoneMXFloor[zone_num]
+                state.dataRoomAir.Zone1OC[zone_num] = state.dataRoomAir.ZoneMXOC[zone_num]
+                state.dataRoomAir.Zone1MX[zone_num] = state.dataRoomAir.ZoneMXMX[zone_num]
+        else:
+            state.dataRoomAir.Zone1Floor[zone_num] = state.dataRoomAir.ZTFloor[zone_num]
+            state.dataRoomAir.Zone1OC[zone_num] = state.dataRoomAir.ZTOC[zone_num]
+            state.dataRoomAir.Zone1MX[zone_num] = state.dataRoomAir.ZTMX[zone_num]
+
+    var mix_flag: Bool = False
+    var flag_apertures: Int32 = 1
+    state.dataRoomAir.DispVent3NodeHcIn = state.dataHeatBalSurf.SurfHConvInt
+    let ceiling_height = state.dataRoomAir.ZoneCeilingHeight2[zone_num] - state.dataRoomAir.ZoneCeilingHeight1[zone_num]
+    let zone_mult = zone.Multiplier * zone.ListMultiplier
+
+    var gains_frac: Float64 = 0.0
+    var num_plpp: Float64 = 0.0
+    var height_thermostat: Float64 = 0.0
+    var height_comfort: Float64 = 0.0
+    var temp_diff_crit_rep: Float64 = 0.0
+
+    for ctd in range(state.dataRoomAir.TotDispVent3Node):
+        let zone_dv_3n = state.dataRoomAir.ZoneDispVent3Node[ctd]
+        if zone_num == zone_dv_3n.ZonePtr:
+            gains_frac = zone_dv_3n.gainsSched.getCurrentVal()
+            num_plpp = zone_dv_3n.NumPlumesPerOcc
+            height_thermostat = zone_dv_3n.ThermostatHeight
+            height_comfort = zone_dv_3n.ComfortHeight
+            temp_diff_crit_rep = zone_dv_3n.TempTrigger
+
+    let conv_gains_occupied_subzone = SumInternalConvectionGainsByTypes(state, zone_num, INT_GAIN_TYPES_OCCUPIED)
+    var conv_gains_occ_sub = conv_gains_occupied_subzone + 0.5 * this_zone_hb.SysDepZoneLoadsLagged
+
+    var ret_air_gain: Float64 = 0.0
+    if zone.NoHeatToReturnAir:
+        ret_air_gain = SumReturnAirConvectionGainsByTypes(state, zone_num, INT_GAIN_TYPES_OCCUPIED)
+        conv_gains_occ_sub += ret_air_gain
+
+    let conv_gains_mixed_subzone = SumInternalConvectionGainsByTypes(state, zone_num, INT_GAIN_TYPES_MIXED_SUBZONE)
+    var conv_gains_mix_sub = (
+        conv_gains_mixed_subzone
+        + state.dataHeatBalFanSys.SumConvHTRadSys[zone_num]
+        + state.dataHeatBalFanSys.SumConvPool[zone_num]
+        + 0.5 * this_zone_hb.SysDepZoneLoadsLagged
+    )
+    if zone.NoHeatToReturnAir:
+        ret_air_gain = SumReturnAirConvectionGainsByTypes(state, zone_num, INT_GAIN_TYPES_MIXED_SUBZONE)
+        conv_gains_mix_sub += ret_air_gain
+
+    let conv_gains = conv_gains_occ_sub + conv_gains_mix_sub
+
+    var sum_sys_mcp: Float64 = 0.0
+    var sum_sys_mcpt: Float64 = 0.0
+    let zone_equip_config_num = zone_num
+    if state.dataZoneEquip.ZoneEquipConfig[zone_equip_config_num].IsControlled:
+        for node_num in range(state.dataZoneEquip.ZoneEquipConfig[zone_equip_config_num].NumInletNodes):
+            let node_temp = state.dataLoopNodes.Node[state.dataZoneEquip.ZoneEquipConfig[zone_equip_config_num].InletNode[node_num]].Temp
+            let mass_flow_rate = state.dataLoopNodes.Node[state.dataZoneEquip.ZoneEquipConfig[zone_equip_config_num].InletNode[node_num]].MassFlowRate
+            let cp_air = PsyCpAirFnW(this_zone_hb.airHumRat)
+            sum_sys_mcp += mass_flow_rate * cp_air
+            sum_sys_mcpt += mass_flow_rate * cp_air * node_temp
+
+    let sum_mcp = (
+        this_zone_hb.MCPI
+        + this_zone_hb.MCPV
+        + this_zone_hb.MCPM
+        + this_zone_hb.MCPE
+        + this_zone_hb.MCPC
+        + this_zone_hb.MDotCPOA
+    )
+    let sum_mcpt = (
+        this_zone_hb.MCPTI
+        + this_zone_hb.MCPTV
+        + this_zone_hb.MCPTM
+        + this_zone_hb.MCPTE
+        + this_zone_hb.MCPTC
+        + this_zone_hb.MDotCPOA * zone.OutDryBulbTemp
+    )
+
+    var mcp_total: Float64
+    var mcpt_total: Float64
+    if state.afn.simulation_control.type == 0:
+        mcp_total = (
+            state.afn.exchangeData[zone_num].SumMCp
+            + state.afn.exchangeData[zone_num].SumMVCp
+            + state.afn.exchangeData[zone_num].SumMMCp
+        )
+        mcpt_total = (
+            state.afn.exchangeData[zone_num].SumMCpT
+            + state.afn.exchangeData[zone_num].SumMVCpT
+            + state.afn.exchangeData[zone_num].SumMMCpT
+        )
+    else:
+        mcp_total = sum_mcp + sum_sys_mcp
+        mcpt_total = sum_mcpt + sum_sys_mcpt
+
+    var number_of_plumes: Float64
+    var power_in_plumes: Float64
+    var power_per_plume: Float64
+    if state.dataHeatBal.TotPeople > 0:
+        var number_of_occupants: Int32 = 0
+        number_of_plumes = 0.0
+        for ctd in range(state.dataHeatBal.TotPeople):
+            if state.dataHeatBal.People[ctd].ZonePtr == zone_num:
+                number_of_occupants += state.dataHeatBal.People[ctd].NumberOfPeople
+                number_of_plumes = number_of_occupants * num_plpp
+        if number_of_plumes == 0.0:
+            number_of_plumes = 1.0
+        power_in_plumes = (1.0 - gains_frac) * conv_gains_occ_sub
+        power_per_plume = power_in_plumes / number_of_plumes
+    else:
+        number_of_plumes = 1.0
+        power_in_plumes = (1.0 - gains_frac) * conv_gains_occ_sub
+        power_per_plume = power_in_plumes / number_of_plumes
+
+    flag_apertures = 1
+    if state.afn.NumOfLinksMultiZone > 0:
+        for loop in range(1, state.dataRoomAir.AFNSurfaceCrossVent[0, zone_num] + 1):
+            let afn_surf_num = state.dataRoomAir.AFNSurfaceCrossVent[loop, zone_num]
+            let surf_params = state.dataRoomAir.SurfParametersCrossDispVent[afn_surf_num]
+            let afn_link_simu = state.afn.AirflowNetworkLinkSimu[afn_surf_num]
+            let afn_mz_surf_data = state.afn.MultizoneSurfaceData[afn_surf_num]
+            let afn_mz_surf = state.dataSurface.Surface[afn_mz_surf_data.SurfNum]
+
+            if afn_mz_surf.Zone == zone_num:
+                if surf_params.Zmax < 0.8 and afn_link_simu.VolFLOW > 0:
+                    flag_apertures = 0
+                    break
+                if surf_params.Zmin > 1.8 and afn_link_simu.VolFLOW2 > 0:
+                    flag_apertures = 0
+                    break
+                if (surf_params.Zmin > 0.8 and surf_params.Zmin < 1.8) or (surf_params.Zmax > 0.8 and surf_params.Zmax < 1.8):
+                    flag_apertures = 0
+                    break
+            else:
+                let afn_zone = state.dataHeatBal.Zone[afn_mz_surf.Zone]
+                if surf_params.Zmax + afn_zone.OriginZ - zone.OriginZ < 0.8 and afn_link_simu.VolFLOW2 > 0:
+                    flag_apertures = 0
+                    break
+                if surf_params.Zmin + afn_zone.OriginZ - zone.OriginZ > 1.8 and afn_link_simu.VolFLOW > 0:
+                    flag_apertures = 0
+                    break
+                if (
+                    (surf_params.Zmin + afn_zone.OriginZ - zone.OriginZ > 0.8
+                     and surf_params.Zmin + afn_zone.OriginZ - zone.OriginZ < 1.8)
+                    or (surf_params.Zmax + afn_zone.OriginZ - zone.OriginZ > 0.8
+                        and surf_params.Zmax + afn_zone.OriginZ - zone.OriginZ < 1.8)
+                ):
+                    flag_apertures = 0
+                    break
+
+    var height_frac: Float64
+    if power_in_plumes == 0.0 or mcpt_total == 0.0 or flag_apertures == 0:
+        height_frac = 0.0
+    else:
+        let plume_fac = number_of_plumes * pow(power_per_plume, one_third)
+        height_frac = math_min(24.55 * pow(mcp_total * 0.000833 / plume_fac, 0.6) / ceiling_height, 1.0)
+
+        for ctd in range(4):
+            hc_disp_vent_3node(state, zone_num, height_frac)
+            state.dataRoomAir.HeightTransition[zone_num] = height_frac * ceiling_height
+            state.dataRoomAir.AIRRATFloor[zone_num] = (
+                zone.Volume
+                * math_min(state.dataRoomAir.HeightTransition[zone_num], state.dataDispVentMgr.HeightFloorSubzoneTop)
+                / ceiling_height
+                * zone.ZoneVolCapMultpSens
+                * PsyRhoAirFnPbTdbW(state, state.dataEnvrn.OutBaroPress, state.dataRoomAir.MATFloor[zone_num], this_zone_hb.airHumRat)
+                * PsyCpAirFnW(this_zone_hb.airHumRat)
+                / time_step_sys_sec
+            )
+            state.dataRoomAir.AIRRATOC[zone_num] = (
+                zone.Volume
+                * (
+                    state.dataRoomAir.HeightTransition[zone_num]
+                    - math_min(state.dataRoomAir.HeightTransition[zone_num], 0.2)
+                )
+                / ceiling_height
+                * zone.ZoneVolCapMultpSens
+                * PsyRhoAirFnPbTdbW(state, state.dataEnvrn.OutBaroPress, state.dataRoomAir.MATOC[zone_num], this_zone_hb.airHumRat)
+                * PsyCpAirFnW(this_zone_hb.airHumRat)
+                / time_step_sys_sec
+            )
+            state.dataRoomAir.AIRRATMX[zone_num] = (
+                zone.Volume
+                * (ceiling_height - state.dataRoomAir.HeightTransition[zone_num])
+                / ceiling_height
+                * zone.ZoneVolCapMultpSens
+                * PsyRhoAirFnPbTdbW(state, state.dataEnvrn.OutBaroPress, state.dataRoomAir.MATMX[zone_num], this_zone_hb.airHumRat)
+                * PsyCpAirFnW(this_zone_hb.airHumRat)
+                / time_step_sys_sec
+            )
+
+            if state.dataHVACGlobal.UseZoneTimeStepHistory:
+                state.dataRoomAir.ZTMFloor[zone_num][2] = state.dataRoomAir.XMATFloor[zone_num][2]
+                state.dataRoomAir.ZTMFloor[zone_num][1] = state.dataRoomAir.XMATFloor[zone_num][1]
+                state.dataRoomAir.ZTMFloor[zone_num][0] = state.dataRoomAir.XMATFloor[zone_num][0]
+                state.dataRoomAir.ZTMOC[zone_num][2] = state.dataRoomAir.XMATOC[zone_num][2]
+                state.dataRoomAir.ZTMOC[zone_num][1] = state.dataRoomAir.XMATOC[zone_num][1]
+                state.dataRoomAir.ZTMOC[zone_num][0] = state.dataRoomAir.XMATOC[zone_num][0]
+                state.dataRoomAir.ZTMMX[zone_num][2] = state.dataRoomAir.XMATMX[zone_num][2]
+                state.dataRoomAir.ZTMMX[zone_num][1] = state.dataRoomAir.XMATMX[zone_num][1]
+                state.dataRoomAir.ZTMMX[zone_num][0] = state.dataRoomAir.XMATMX[zone_num][0]
+            else:
+                state.dataRoomAir.ZTMFloor[zone_num][2] = state.dataRoomAir.DSXMATFloor[zone_num][2]
+                state.dataRoomAir.ZTMFloor[zone_num][1] = state.dataRoomAir.DSXMATFloor[zone_num][1]
+                state.dataRoomAir.ZTMFloor[zone_num][0] = state.dataRoomAir.DSXMATFloor[zone_num][0]
+                state.dataRoomAir.ZTMOC[zone_num][2] = state.dataRoomAir.DSXMATOC[zone_num][2]
+                state.dataRoomAir.ZTMOC[zone_num][1] = state.dataRoomAir.DSXMATOC[zone_num][1]
+                state.dataRoomAir.ZTMOC[zone_num][0] = state.dataRoomAir.DSXMATOC[zone_num][0]
+                state.dataRoomAir.ZTMMX[zone_num][2] = state.dataRoomAir.DSXMATMX[zone_num][2]
+                state.dataRoomAir.ZTMMX[zone_num][1] = state.dataRoomAir.DSXMATMX[zone_num][1]
+                state.dataRoomAir.ZTMMX[zone_num][0] = state.dataRoomAir.DSXMATMX[zone_num][0]
+
+            var air_cap = state.dataRoomAir.AIRRATFloor[zone_num]
+            let temp_hist_term = air_cap * (
+                3.0 * state.dataRoomAir.ZTMFloor[zone_num][0]
+                - 1.5 * state.dataRoomAir.ZTMFloor[zone_num][1]
+                + one_third * state.dataRoomAir.ZTMFloor[zone_num][2]
+            )
+            var temp_dep_coef = state.dataDispVentMgr.HA_FLOOR + mcp_total
+            var temp_ind_coef = state.dataDispVentMgr.HAT_FLOOR + mcpt_total + this_zone_hb.NonAirSystemResponse / zone_mult
+
+            if state.dataHeatBal.ZoneAirSolutionAlgo == 2:
+                state.dataRoomAir.ZTFloor[zone_num] = calculate_third_order_floor_temperature(
+                    temp_hist_term,
+                    state.dataDispVentMgr.HAT_FLOOR,
+                    state.dataDispVentMgr.HA_FLOOR,
+                    mcpt_total,
+                    mcp_total,
+                    state.dataRoomAir.ZTOC[zone_num],
+                    this_zone_hb.NonAirSystemResponse,
+                    zone_mult,
+                    air_cap,
+                )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 1:
+                if temp_dep_coef == 0.0:
+                    state.dataRoomAir.ZTFloor[zone_num] = state.dataRoomAir.Zone1Floor[zone_num] + temp_ind_coef / air_cap
+                else:
+                    state.dataRoomAir.ZTFloor[zone_num] = (
+                        (state.dataRoomAir.Zone1Floor[zone_num] - temp_ind_coef / temp_dep_coef)
+                        * exp(math_min(700.0, -temp_dep_coef / air_cap))
+                        + temp_ind_coef / temp_dep_coef
+                    )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 0:
+                state.dataRoomAir.ZTFloor[zone_num] = (
+                    air_cap * state.dataRoomAir.Zone1Floor[zone_num] + temp_ind_coef
+                ) / (air_cap + temp_dep_coef)
+
+            air_cap = state.dataRoomAir.AIRRATOC[zone_num]
+            let temp_hist_term_oc = air_cap * (
+                3.0 * state.dataRoomAir.ZTMOC[zone_num][0]
+                - 1.5 * state.dataRoomAir.ZTMOC[zone_num][1]
+                + one_third * state.dataRoomAir.ZTMOC[zone_num][2]
+            )
+            temp_dep_coef = state.dataDispVentMgr.HA_OC + mcp_total
+            temp_ind_coef = (
+                conv_gains_occ_sub * gains_frac
+                + state.dataDispVentMgr.HAT_OC
+                + state.dataRoomAir.ZTFloor[zone_num] * mcp_total
+            )
+
+            if state.dataHeatBal.ZoneAirSolutionAlgo == 2:
+                state.dataRoomAir.ZTOC[zone_num] = (
+                    temp_hist_term_oc
+                    + conv_gains_occ_sub * gains_frac
+                    + state.dataDispVentMgr.HAT_OC
+                    + 1.6 * state.dataRoomAir.ZTFloor[zone_num] * mcp_total
+                ) / (
+                    (11.0 / 6.0) * air_cap + state.dataDispVentMgr.HA_OC + 1.6 * mcp_total
+                )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 1:
+                if temp_dep_coef == 0.0:
+                    state.dataRoomAir.ZTOC[zone_num] = state.dataRoomAir.Zone1OC[zone_num] + temp_ind_coef / air_cap
+                else:
+                    if air_cap == 0.0:
+                        state.dataRoomAir.ZTOC[zone_num] = temp_ind_coef / temp_dep_coef
+                    else:
+                        state.dataRoomAir.ZTOC[zone_num] = (
+                            (state.dataRoomAir.Zone1OC[zone_num] - temp_ind_coef / temp_dep_coef)
+                            * exp(math_min(700.0, -temp_dep_coef / air_cap))
+                            + temp_ind_coef / temp_dep_coef
+                        )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 0:
+                state.dataRoomAir.ZTOC[zone_num] = (
+                    air_cap * state.dataRoomAir.Zone1OC[zone_num] + temp_ind_coef
+                ) / (air_cap + temp_dep_coef)
+
+            air_cap = state.dataRoomAir.AIRRATMX[zone_num]
+            let temp_hist_term_mx = air_cap * (
+                3.0 * state.dataRoomAir.ZTMMX[zone_num][0]
+                - 1.5 * state.dataRoomAir.ZTMMX[zone_num][1]
+                + one_third * state.dataRoomAir.ZTMMX[zone_num][2]
+            )
+            temp_dep_coef = state.dataDispVentMgr.HA_MX + mcp_total
+            temp_ind_coef = (
+                conv_gains_occ_sub * (1.0 - gains_frac)
+                + conv_gains_mix_sub
+                + state.dataDispVentMgr.HAT_MX
+                + state.dataRoomAir.ZTOC[zone_num] * mcp_total
+            )
+
+            if state.dataHeatBal.ZoneAirSolutionAlgo == 2:
+                state.dataRoomAir.ZTMX[zone_num] = (
+                    temp_hist_term_mx
+                    + conv_gains_occ_sub * (1.0 - gains_frac)
+                    + conv_gains_mix_sub
+                    + state.dataDispVentMgr.HAT_MX
+                    + state.dataRoomAir.ZTOC[zone_num] * mcp_total
+                ) / (
+                    (11.0 / 6.0) * air_cap + state.dataDispVentMgr.HA_MX + mcp_total
+                )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 1:
+                if temp_dep_coef == 0.0:
+                    state.dataRoomAir.ZTMX[zone_num] = state.dataRoomAir.Zone1MX[zone_num] + temp_ind_coef / air_cap
+                else:
+                    if air_cap == 0.0:
+                        state.dataRoomAir.ZTMX[zone_num] = temp_ind_coef / temp_dep_coef
+                    else:
+                        state.dataRoomAir.ZTMX[zone_num] = (
+                            (state.dataRoomAir.Zone1MX[zone_num] - temp_ind_coef / temp_dep_coef)
+                            * exp(math_min(700.0, -temp_dep_coef / air_cap))
+                            + temp_ind_coef / temp_dep_coef
+                        )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 0:
+                state.dataRoomAir.ZTMX[zone_num] = (
+                    air_cap * state.dataRoomAir.Zone1MX[zone_num] + temp_ind_coef
+                ) / (air_cap + temp_dep_coef)
+
+        let min_flow = min_flow_pow_fac * (number_of_plumes * pow(power_per_plume, one_third))
+        if min_flow != 0.0:
+            state.dataRoomAir.FracMinFlow[zone_num] = mcp_total * 0.000833 / min_flow
+        else:
+            state.dataRoomAir.FracMinFlow[zone_num] = 9.999
+        state.dataRoomAir.AirModel[zone_num].SimAirModel = True
+
+    var zt_averaged: Float64
+    if (
+        state.dataRoomAir.ZTMX[zone_num] < state.dataRoomAir.ZTOC[zone_num]
+        or mcp_total <= 0.0
+        or height_frac * ceiling_height
+        < (state.dataDispVentMgr.HeightFloorSubzoneTop + state.dataDispVentMgr.ThickOccupiedSubzoneMin)
+    ):
+        mix_flag = True
+        height_frac = 0.0
+        state.dataRoomAir.AvgTempGrad[zone_num] = 0.0
+        state.dataRoomAir.MaxTempGrad[zone_num] = 0.0
+        state.dataRoomAir.AirModel[zone_num].SimAirModel = False
+        let this_zone_t1 = this_zone_hb.T1
+        var air_cap = this_zone_hb.AirPowerCap
+        let temp_hist_term = air_cap * (
+            3.0 * this_zone_hb.ZTM[0]
+            - 1.5 * this_zone_hb.ZTM[1]
+            + one_third * this_zone_hb.ZTM[2]
+        )
+
+        for ctd in range(3):
+            var temp_dep_coef = (
+                state.dataDispVentMgr.HA_MX
+                + state.dataDispVentMgr.HA_OC
+                + state.dataDispVentMgr.HA_FLOOR
+                + mcp_total
+            )
+            var temp_ind_coef = (
+                conv_gains
+                + state.dataDispVentMgr.HAT_MX
+                + state.dataDispVentMgr.HAT_OC
+                + state.dataDispVentMgr.HAT_FLOOR
+                + mcpt_total
+            )
+
+            if state.dataHeatBal.ZoneAirSolutionAlgo == 2:
+                zt_averaged = (
+                    temp_hist_term
+                    + conv_gains
+                    + state.dataDispVentMgr.HAT_MX
+                    + state.dataDispVentMgr.HAT_OC
+                    + state.dataDispVentMgr.HAT_FLOOR
+                    + mcpt_total
+                ) / (
+                    (11.0 / 6.0) * air_cap
+                    + state.dataDispVentMgr.HA_MX
+                    + state.dataDispVentMgr.HA_OC
+                    + state.dataDispVentMgr.HA_FLOOR
+                    + mcp_total
+                )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 1:
+                if temp_dep_coef == 0.0:
+                    zt_averaged = this_zone_t1 + temp_ind_coef / air_cap
+                else:
+                    zt_averaged = (
+                        (this_zone_t1 - temp_ind_coef / temp_dep_coef)
+                        * exp(math_min(700.0, -temp_dep_coef / air_cap))
+                        + temp_ind_coef / temp_dep_coef
+                    )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 0:
+                zt_averaged = (air_cap * this_zone_t1 + temp_ind_coef) / (air_cap + temp_dep_coef)
+
+            state.dataRoomAir.ZTOC[zone_num] = zt_averaged
+            state.dataRoomAir.ZTMX[zone_num] = zt_averaged
+            state.dataRoomAir.ZTFloor[zone_num] = zt_averaged
+            hc_disp_vent_3node(state, zone_num, height_frac)
+            temp_dep_coef = (
+                state.dataDispVentMgr.HA_MX
+                + state.dataDispVentMgr.HA_OC
+                + state.dataDispVentMgr.HA_FLOOR
+                + mcp_total
+            )
+            temp_ind_coef = (
+                conv_gains
+                + state.dataDispVentMgr.HAT_MX
+                + state.dataDispVentMgr.HAT_OC
+                + state.dataDispVentMgr.HAT_FLOOR
+                + mcpt_total
+            )
+
+            if state.dataHeatBal.ZoneAirSolutionAlgo == 2:
+                zt_averaged = (
+                    temp_hist_term
+                    + conv_gains
+                    + state.dataDispVentMgr.HAT_MX
+                    + state.dataDispVentMgr.HAT_OC
+                    + state.dataDispVentMgr.HAT_FLOOR
+                    + mcpt_total
+                ) / (
+                    (11.0 / 6.0) * air_cap
+                    + state.dataDispVentMgr.HA_MX
+                    + state.dataDispVentMgr.HA_OC
+                    + state.dataDispVentMgr.HA_FLOOR
+                    + mcp_total
+                )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 1:
+                if temp_dep_coef == 0.0:
+                    zt_averaged = this_zone_t1 + temp_ind_coef / air_cap
+                else:
+                    zt_averaged = (
+                        (this_zone_t1 - temp_ind_coef / temp_dep_coef)
+                        * exp(math_min(700.0, -temp_dep_coef / air_cap))
+                        + temp_ind_coef / temp_dep_coef
+                    )
+            elif state.dataHeatBal.ZoneAirSolutionAlgo == 0:
+                zt_averaged = (air_cap * this_zone_t1 + temp_ind_coef) / (air_cap + temp_dep_coef)
+
+            state.dataRoomAir.ZTOC[zone_num] = zt_averaged
+            state.dataRoomAir.ZTMX[zone_num] = zt_averaged
+            state.dataRoomAir.ZTFloor[zone_num] = zt_averaged
+
+    state.dataRoomAir.HeightTransition[zone_num] = height_frac * ceiling_height
+    let height_mixed_subzone_ave = (ceiling_height + state.dataRoomAir.HeightTransition[zone_num]) / 2.0
+    let height_occupied_subzone_ave = (
+        state.dataDispVentMgr.HeightFloorSubzoneTop + state.dataRoomAir.HeightTransition[zone_num]
+    ) / 2.0
+    let height_floor_subzone_ave = state.dataDispVentMgr.HeightFloorSubzoneTop / 2.0
+
+    if mix_flag:
+        state.dataRoomAir.TCMF[zone_num] = zt_averaged
+    else:
+        if height_comfort >= 0.0 and height_comfort < height_floor_subzone_ave:
+            ShowWarningError(state, "Displacement ventilation comfort height is in floor subzone in Zone: " + zone.Name)
+            state.dataRoomAir.TCMF[zone_num] = state.dataRoomAir.ZTFloor[zone_num]
+        elif height_comfort >= height_floor_subzone_ave and height_comfort < height_occupied_subzone_ave:
+            state.dataRoomAir.TCMF[zone_num] = (
+                state.dataRoomAir.ZTFloor[zone_num] * (height_occupied_subzone_ave - height_comfort)
+                + state.dataRoomAir.ZTOC[zone_num] * (height_comfort - height_floor_subzone_ave)
+            ) / (height_occupied_subzone_ave - height_floor_subzone_ave)
+        elif height_comfort >= height_occupied_subzone_ave and height_comfort < height_mixed_subzone_ave:
+            state.dataRoomAir.TCMF[zone_num] = (
+                state.dataRoomAir.ZTOC[zone_num] * (height_mixed_subzone_ave - height_comfort)
+                + state.dataRoomAir.ZTMX[zone_num] * (height_comfort - height_occupied_subzone_ave)
+            ) / (height_mixed_subzone_ave - height_occupied_subzone_ave)
+        elif height_comfort >= height_mixed_subzone_ave and height_comfort <= ceiling_height:
+            state.dataRoomAir.TCMF[zone_num] = state.dataRoomAir.ZTMX[zone_num]
+        else:
+            ShowFatalError(state, "Displacement ventilation comfort height is above ceiling or below floor in Zone: " + zone.Name)
+
+    if mix_flag:
+        state.dataHeatBalFanSys.TempTstatAir[zone_num] = zt_averaged
+    else:
+        if height_thermostat >= 0.0 and height_thermostat < height_floor_subzone_ave:
+            ShowWarningError(state, "Displacement thermostat is in floor subzone in Zone: " + zone.Name)
+            state.dataHeatBalFanSys.TempTstatAir[zone_num] = state.dataRoomAir.ZTFloor[zone_num]
+        elif height_thermostat >= height_floor_subzone_ave and height_thermostat < height_occupied_subzone_ave:
+            state.dataHeatBalFanSys.TempTstatAir[zone_num] = (
+                state.dataRoomAir.ZTFloor[zone_num] * (height_occupied_subzone_ave - height_thermostat)
+                + state.dataRoomAir.ZTOC[zone_num] * (height_thermostat - height_floor_subzone_ave)
+            ) / (height_occupied_subzone_ave - height_floor_subzone_ave)
+        elif height_thermostat >= height_occupied_subzone_ave and height_thermostat < height_mixed_subzone_ave:
+            state.dataHeatBalFanSys.TempTstatAir[zone_num] = (
+                state.dataRoomAir.ZTOC[zone_num] * (height_mixed_subzone_ave - height_thermostat)
+                + state.dataRoomAir.ZTMX[zone_num] * (height_thermostat - height_occupied_subzone_ave)
+            ) / (height_mixed_subzone_ave - height_occupied_subzone_ave)
+        elif height_thermostat >= height_mixed_subzone_ave and height_thermostat <= ceiling_height:
+            state.dataHeatBalFanSys.TempTstatAir[zone_num] = state.dataRoomAir.ZTMX[zone_num]
+        else:
+            ShowFatalError(state, "Displacement ventilation thermostat height is above ceiling or below floor in Zone: " + zone.Name)
+
+    if (height_mixed_subzone_ave - height_floor_subzone_ave) > 0.1:
+        state.dataRoomAir.AvgTempGrad[zone_num] = (
+            state.dataRoomAir.ZTMX[zone_num] - state.dataRoomAir.ZTFloor[zone_num]
+        ) / (height_mixed_subzone_ave - height_floor_subzone_ave)
+    else:
+        state.dataRoomAir.AvgTempGrad[zone_num] = -9.999
+
+    if (height_occupied_subzone_ave - height_floor_subzone_ave) > 0.1:
+        state.dataRoomAir.MaxTempGrad[zone_num] = (
+            state.dataRoomAir.ZTOC[zone_num] - state.dataRoomAir.ZTFloor[zone_num]
+        ) / (height_occupied_subzone_ave - height_floor_subzone_ave)
+    else:
+        state.dataRoomAir.MaxTempGrad[zone_num] = -9.999
+
+    var mtgaux: Float64
+    if (height_mixed_subzone_ave - height_occupied_subzone_ave) > 0.1:
+        mtgaux = (
+            state.dataRoomAir.ZTMX[zone_num] - state.dataRoomAir.ZTOC[zone_num]
+        ) / (height_mixed_subzone_ave - height_occupied_subzone_ave)
+    else:
+        mtgaux = -9.999
+
+    if mtgaux > state.dataRoomAir.MaxTempGrad[zone_num]:
+        state.dataRoomAir.MaxTempGrad[zone_num] = mtgaux
+
+    if mix_flag:
+        state.dataRoomAir.ZoneDispVent3NodeMixedFlag[zone_num] = 1
+        state.dataRoomAir.AirModel[zone_num].SimAirModel = False
+    else:
+        state.dataRoomAir.ZoneDispVent3NodeMixedFlag[zone_num] = 0
+        state.dataRoomAir.AirModel[zone_num].SimAirModel = True
+
+    if state.dataZoneEquip.ZoneEquipConfig[zone_num].IsControlled:
+        let zone_node_num = zone.SystemZoneNodeNumber
+        state.dataLoopNodes.Node[zone_node_num].Temp = state.dataRoomAir.ZTMX[zone_num]
+
+    if mix_flag or (state.dataRoomAir.ZTMX[zone_num] - state.dataRoomAir.ZTOC[zone_num] < temp_diff_crit_rep):
+        state.dataRoomAir.ZoneDispVent3NodeMixedFlagRep[zone_num] = 1.0
+        state.dataRoomAir.FracMinFlow[zone_num] = -1.0
+        state.dataRoomAir.HeightTransition[zone_num] = -9.999
+        state.dataRoomAir.AvgTempGrad[zone_num] = -9.999
+        state.dataRoomAir.MaxTempGrad[zone_num] = -9.999
+    else:
+        state.dataRoomAir.ZoneDispVent3NodeMixedFlagRep[zone_num] = 0.0

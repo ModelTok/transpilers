@@ -1,0 +1,727 @@
+                                if PltSizNum > 0:
+                                    if state.dataSize.PlantSizData[PltSizNum].LoopType == state.TypeOfPlantLoop_Cooling:
+                                        innerNumSearchResults = 0
+                                        compLoc, errFlag1, innerNumSearchResults = PlantUtilities_ScanPlantLoopsForObject(
+                                            state, this_equip.Name, Type, errFlag1, innerNumSearchResults, LoopNum)
+                                        if innerNumSearchResults == 1:
+                                            this_equip.LoopNumPtr = compLoc.loopNum
+                                            this_equip.LoopSideNumPtr = compLoc.loopSideNum
+                                            this_equip.BranchNumPtr = compLoc.branchNum
+                                            this_equip.CompNumPtr = compLoc.compNum
+                                            foundit = True
+                                            break
+                        if not foundit:
+                            ShowSevereError(
+                                state,
+                                f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" "
+                                f"component \"{this_equip.Name}\" was not found on a cooling plant loop.")
+                    elif NumSearchResults == 0:
+                        ShowSevereError(
+                            state,
+                            f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" "
+                            f"component \"{this_equip.Name}\" was not found on a plant loop.")
+                    
+                    inletNode = state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].NodeNumIn
+                    outletNode = state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].NodeNumOut
+                    this_equip.DemandNodeNum = inletNode
+                    this_equip.SetPointNodeNum = outletNode
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].OpScheme.allocate(1)
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].OpScheme[0].OpSchemePtr = 1
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].CurOpSchemeType = self.Type
+
+        if self.PlantOps.NumHeatingOnlyEquipLists > 0:
+            for equipListNum in range(self.PlantOps.NumHeatingOnlyEquipLists):
+                NumComps = self.HeatingOnlyEquipList[equipListNum].NumComps
+                for compNum in range(NumComps):
+                    this_equip = self.HeatingOnlyEquipList[equipListNum].Comp[compNum]
+                    Type = state.getEnumValue(state.PlantEquipTypeNamesUC, state.makeUPPER(this_equip.TypeOf))
+                    errFlag1 = False
+                    NumSearchResults = 0
+                    compLoc, errFlag1, NumSearchResults = PlantUtilities_ScanPlantLoopsForObject(
+                        state, this_equip.Name, Type, errFlag1, NumSearchResults)
+                    if NumSearchResults == 1:
+                        this_equip.LoopNumPtr = compLoc.loopNum
+                        this_equip.LoopSideNumPtr = compLoc.loopSideNum
+                        this_equip.BranchNumPtr = compLoc.branchNum
+                        this_equip.CompNumPtr = compLoc.compNum
+                        self.PlantOps.PrimaryHWLoopIndex = compLoc.loopNum
+                    elif NumSearchResults > 1:
+                        foundit = False
+                        for LoopNum in range(state.dataPlnt.TotNumLoops):
+                            if self.PlantLoopIndicesBeingSupervised[LoopNum] > 0:
+                                PltSizNum = state.dataPlnt.PlantLoop[LoopNum].PlantSizNum
+                                if PltSizNum > 0:
+                                    if state.dataSize.PlantSizData[PltSizNum].LoopType == state.TypeOfPlantLoop_Heating:
+                                        innerNumSearchResults = 0
+                                        compLoc, errFlag1, innerNumSearchResults = PlantUtilities_ScanPlantLoopsForObject(
+                                            state, this_equip.Name, Type, errFlag1, innerNumSearchResults, LoopNum)
+                                        if innerNumSearchResults == 1:
+                                            this_equip.LoopNumPtr = compLoc.loopNum
+                                            this_equip.LoopSideNumPtr = compLoc.loopSideNum
+                                            this_equip.BranchNumPtr = compLoc.branchNum
+                                            this_equip.CompNumPtr = compLoc.compNum
+                                            foundit = True
+                                            break
+                        if not foundit:
+                            ShowSevereError(
+                                state,
+                                f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" "
+                                f"component \"{this_equip.Name}\" was not found on a heating plant loop.")
+                    elif NumSearchResults == 0:
+                        ShowSevereError(
+                            state,
+                            f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" "
+                            f"component \"{this_equip.Name}\" was not found on a plant loop.")
+                    
+                    inletNode = state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].NodeNumIn
+                    outletNode = state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].NodeNumOut
+                    this_equip.DemandNodeNum = inletNode
+                    this_equip.SetPointNodeNum = outletNode
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].OpScheme.allocate(1)
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].OpScheme[0].OpSchemePtr = 1
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].CurOpSchemeType = self.Type
+
+        if self.PlantOps.NumSimultHeatCoolCoolingEquipLists > 0:
+            for equipListNum in range(self.PlantOps.NumSimultHeatCoolCoolingEquipLists):
+                NumComps = self.SimultHeatCoolCoolingEquipList[equipListNum].NumComps
+                for compNum in range(NumComps):
+                    this_equip = self.SimultHeatCoolCoolingEquipList[equipListNum].Comp[compNum]
+                    Type = state.getEnumValue(state.PlantEquipTypeNamesUC, state.makeUPPER(this_equip.TypeOf))
+                    errFlag1 = False
+                    NumSearchResults = 0
+                    compLoc, errFlag1, NumSearchResults = PlantUtilities_ScanPlantLoopsForObject(
+                        state, this_equip.Name, Type, errFlag1, NumSearchResults)
+                    if NumSearchResults == 1:
+                        this_equip.LoopNumPtr = compLoc.loopNum
+                        this_equip.LoopSideNumPtr = compLoc.loopSideNum
+                        this_equip.BranchNumPtr = compLoc.branchNum
+                        this_equip.CompNumPtr = compLoc.compNum
+                    elif NumSearchResults > 1:
+                        foundit = False
+                        for LoopNum in range(state.dataPlnt.TotNumLoops):
+                            if self.PlantLoopIndicesBeingSupervised[LoopNum] > 0:
+                                PltSizNum = state.dataPlnt.PlantLoop[LoopNum].PlantSizNum
+                                if PltSizNum > 0:
+                                    if state.dataSize.PlantSizData[PltSizNum].LoopType == state.TypeOfPlantLoop_Cooling:
+                                        innerNumSearchResults = 0
+                                        compLoc, errFlag1, innerNumSearchResults = PlantUtilities_ScanPlantLoopsForObject(
+                                            state, this_equip.Name, Type, errFlag1, innerNumSearchResults, LoopNum)
+                                        if innerNumSearchResults == 1:
+                                            this_equip.LoopNumPtr = compLoc.loopNum
+                                            this_equip.LoopSideNumPtr = compLoc.loopSideNum
+                                            this_equip.BranchNumPtr = compLoc.branchNum
+                                            this_equip.CompNumPtr = compLoc.compNum
+                                            foundit = True
+                                            break
+                        if not foundit:
+                            ShowSevereError(
+                                state,
+                                f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" "
+                                f"component \"{this_equip.Name}\" was not found on a cooling plant loop.")
+                    elif NumSearchResults == 0:
+                        ShowSevereError(
+                            state,
+                            f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" "
+                            f"component \"{this_equip.Name}\" was not found on a plant loop.")
+                    
+                    inletNode = state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].NodeNumIn
+                    outletNode = state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].NodeNumOut
+                    this_equip.DemandNodeNum = inletNode
+                    this_equip.SetPointNodeNum = outletNode
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].OpScheme.allocate(1)
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].OpScheme[0].OpSchemePtr = 1
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].CurOpSchemeType = self.Type
+
+        if self.PlantOps.NumSimultHeatCoolHeatingEquipLists > 0:
+            for equipListNum in range(self.PlantOps.NumSimultHeatCoolHeatingEquipLists):
+                NumComps = self.SimultHeatCoolHeatingEquipList[equipListNum].NumComps
+                for compNum in range(NumComps):
+                    this_equip = self.SimultHeatCoolHeatingEquipList[equipListNum].Comp[compNum]
+                    Type = state.getEnumValue(state.PlantEquipTypeNamesUC, state.makeUPPER(this_equip.TypeOf))
+                    errFlag1 = False
+                    NumSearchResults = 0
+                    compLoc, errFlag1, NumSearchResults = PlantUtilities_ScanPlantLoopsForObject(
+                        state, this_equip.Name, Type, errFlag1, NumSearchResults)
+                    if NumSearchResults == 1:
+                        this_equip.LoopNumPtr = compLoc.loopNum
+                        this_equip.LoopSideNumPtr = compLoc.loopSideNum
+                        this_equip.BranchNumPtr = compLoc.branchNum
+                        this_equip.CompNumPtr = compLoc.compNum
+                    elif NumSearchResults > 1:
+                        foundit = False
+                        for LoopNum in range(state.dataPlnt.TotNumLoops):
+                            if self.PlantLoopIndicesBeingSupervised[LoopNum] > 0:
+                                PltSizNum = state.dataPlnt.PlantLoop[LoopNum].PlantSizNum
+                                if PltSizNum > 0:
+                                    if state.dataSize.PlantSizData[PltSizNum].LoopType == state.TypeOfPlantLoop_Heating:
+                                        innerNumSearchResults = 0
+                                        compLoc, errFlag1, innerNumSearchResults = PlantUtilities_ScanPlantLoopsForObject(
+                                            state, this_equip.Name, Type, errFlag1, innerNumSearchResults, LoopNum)
+                                        if innerNumSearchResults == 1:
+                                            this_equip.LoopNumPtr = compLoc.loopNum
+                                            this_equip.LoopSideNumPtr = compLoc.loopSideNum
+                                            this_equip.BranchNumPtr = compLoc.branchNum
+                                            this_equip.CompNumPtr = compLoc.compNum
+                                            foundit = True
+                                            break
+                        if not foundit:
+                            ShowSevereError(
+                                state,
+                                f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" "
+                                f"component \"{this_equip.Name}\" was not found on a heating plant loop.")
+                    elif NumSearchResults == 0:
+                        ShowSevereError(
+                            state,
+                            f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" "
+                            f"component \"{this_equip.Name}\" was not found on a plant loop.")
+                    
+                    inletNode = state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].NodeNumIn
+                    outletNode = state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].NodeNumOut
+                    this_equip.DemandNodeNum = inletNode
+                    this_equip.SetPointNodeNum = outletNode
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].OpScheme.allocate(1)
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].OpScheme[0].OpSchemePtr = 1
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].CurOpSchemeType = self.Type
+
+        if self.PlantOps.PrimaryChWLoopIndex > 0:
+            self.PlantOps.PrimaryChWLoopSupInletNode = state.dataPlnt.PlantLoop[self.PlantOps.PrimaryChWLoopIndex].LoopSide[state.LoopSideLocation_Supply].Branch[0].NodeNumIn
+            for numComps in range(state.dataPlnt.PlantLoop[self.PlantOps.PrimaryChWLoopIndex].LoopSide[state.LoopSideLocation_Supply].Branch[0].TotalComponents):
+                this_Comp = state.dataPlnt.PlantLoop[self.PlantOps.PrimaryChWLoopIndex].LoopSide[state.LoopSideLocation_Supply].Branch[0].Comp[numComps]
+                if this_Comp.Type == state.PlantEquipmentType_ChilledWaterTankMixed or this_Comp.Type == state.PlantEquipmentType_ChilledWaterTankStratified:
+                    self.PlantOps.PrimaryChWLoopSupInletNode = this_Comp.NodeNumOut
+
+        if self.PlantOps.PrimaryHWLoopIndex > 0:
+            self.PlantOps.PrimaryHWLoopSupInletNode = state.dataPlnt.PlantLoop[self.PlantOps.PrimaryHWLoopIndex].LoopSide[state.LoopSideLocation_Supply].Branch[0].NodeNumIn
+
+        if self.PlantOps.DedicatedHR_ChWRetControl_Input and self.PlantOps.DedicatedHR_HWRetControl_Input:
+            founditCooling = False
+            founditHeating = False
+            for thisHP in state.dataEIRPlantLoopHeatPump.heatPumps:
+                thisPLHPName = state.makeUPPER(thisHP.name)
+                targetDedHRCoolName = state.makeUPPER(self.DedicatedHR_ChWRetControl_Name)
+                if thisPLHPName == targetDedHRCoolName:
+                    self.DedicatedHR_CoolingPLHP = thisHP
+                    founditCooling = True
+                    pltSizNum = self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.loop.PlantSizNum
+                    self.PlantOps.DedicatedHR_SecChW_DesignCapacity = state.dataSize.PlantSizData[pltSizNum].DesCapacity
+                    self.PlantOps.SecondaryChWLoopIndex = self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.loopNum
+                    self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.OpScheme.allocate(1)
+                    self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.OpScheme[0].OpSchemePtr = 1
+                    self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.CurOpSchemeType = self.Type
+                    self.DedicatedHR_CoolingPLHP.sourceSidePlantLoc.comp.OpScheme.allocate(1)
+                    self.DedicatedHR_CoolingPLHP.sourceSidePlantLoc.comp.OpScheme[0].OpSchemePtr = 1
+                    self.DedicatedHR_CoolingPLHP.sourceSidePlantLoc.comp.CurOpSchemeType = self.Type
+
+                targetDedHRHeatName = state.makeUPPER(self.DedicatedHR_HWRetControl_Name)
+                if thisPLHPName == targetDedHRHeatName:
+                    self.DedicatedHR_HeatingPLHP = thisHP
+                    founditHeating = True
+                    pltSizNum = self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.loop.PlantSizNum
+                    self.PlantOps.DedicatedHR_SecHW_DesignCapacity = state.dataSize.PlantSizData[pltSizNum].DesCapacity
+                    self.PlantOps.SecondaryHWLoopIndex = self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.loopNum
+                    self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.OpScheme.allocate(1)
+                    self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.OpScheme[0].OpSchemePtr = 1
+                    self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.CurOpSchemeType = self.Type
+                    self.DedicatedHR_HeatingPLHP.sourceSidePlantLoc.comp.OpScheme.allocate(1)
+                    self.DedicatedHR_HeatingPLHP.sourceSidePlantLoc.comp.OpScheme[0].OpSchemePtr = 1
+                    self.DedicatedHR_HeatingPLHP.sourceSidePlantLoc.comp.CurOpSchemeType = self.Type
+
+            if not founditCooling:
+                ShowSevereError(
+                    state,
+                    f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" component "
+                    f"\"{self.DedicatedHR_ChWRetControl_Name}\" was not found on a cooling plant loop.")
+            if not founditHeating:
+                ShowSevereError(
+                    state,
+                    f"ChillerHeaterSupervisoryOperationData::OneTimeInitChillerHeaterChangeoverOpScheme problem=\"{self.Name}\" component "
+                    f"\"{self.DedicatedHR_ChWRetControl_Name}\" was not found on a heating plant loop.")
+            if founditCooling and founditHeating:
+                self.PlantOps.DedicatedHR_Present = True
+                SetupOutputVariable(state,
+                                    "Supervisory Plant Heat Recovery Operation Mode",
+                                    state.constant_units_unknown,
+                                    self.Report,
+                                    "DedicHR_OpMode",
+                                    state.OutputProcessor_TimeStepType_System,
+                                    state.OutputProcessor_StoreType_Average,
+                                    self.Name)
+                SetupOutputVariable(state,
+                                    "Supervisory Plant Operation Secondary Plant Heating Load",
+                                    state.constant_units_W,
+                                    self.Report,
+                                    "SecondaryPlantHeatingLoad",
+                                    state.OutputProcessor_TimeStepType_System,
+                                    state.OutputProcessor_StoreType_Average,
+                                    self.Name)
+                SetupOutputVariable(state,
+                                    "Supervisory Plant Operation Secondary Plant Cooling Load",
+                                    state.constant_units_W,
+                                    self.Report,
+                                    "SecondaryPlantCoolingLoad",
+                                    state.OutputProcessor_TimeStepType_System,
+                                    state.OutputProcessor_StoreType_Average,
+                                    self.Name)
+
+        self.oneTimeSetupComplete = True
+
+    fn EvaluateChillerHeaterChangeoverOpScheme(inout self, state: AnyType) -> None:
+        self.DetermineCurrentBuildingLoads(state)
+        self.DetermineCurrentPlantLoads(state)
+        self.ProcessSupervisoryControlLogicForAirSourcePlants(state)
+        self.InitAirSourcePlantEquipmentOff(state)
+        self.ProcessAndSetAirSourcePlantEquipLists(state)
+        self.ProcessAndSetDedicatedHeatRecovWWHP(state)
+        self.ProcessAndSetAuxilBoiler(state)
+
+    fn DetermineCurrentBuildingLoads(inout self, state: AnyType) -> None:
+        var sumZonePredictedHeatingLoad: Float64 = 0.0
+        var sumZonePredictedCoolingLoad: Float64 = 0.0
+        for zoneIndexinList in range(self.PlantOps.NumOfZones):
+            var thisZoneIndex: Int = self.ZonePtrs[zoneIndexinList]
+            var ZoneMult: Float64 = state.dataHeatBal.Zone[thisZoneIndex].Multiplier * state.dataHeatBal.Zone[thisZoneIndex].ListMultiplier
+            sumZonePredictedCoolingLoad += min(0.0, state.dataZoneEnergyDemand.ZoneSysEnergyDemand[thisZoneIndex].OutputRequiredToCoolingSP * ZoneMult)
+            sumZonePredictedHeatingLoad += max(0.0, state.dataZoneEnergyDemand.ZoneSysEnergyDemand[thisZoneIndex].OutputRequiredToHeatingSP * ZoneMult)
+
+        var sumAirSysVentHeatingLoad: Float64 = 0.0
+        var sumAirSysVentCoolingLoad: Float64 = 0.0
+
+        for airLoopsServedIndex in range(self.PlantOps.NumOfAirLoops):
+            var AirLoopNum: Int = self.AirLoopPtrs[airLoopsServedIndex]
+            var outAir_H: Float64 = state.dataEnvrn.OutEnthalpy
+            var outAirMdot: Float64 = state.dataAirLoop.AirLoopFlow[AirLoopNum].OAFlow
+            var retAir_Tdb: Float64 = state.dataLoopNodes.Node[state.dataAirLoop.AirToZoneNodeInfo[AirLoopNum].AirLoopReturnNodeNum[0]].Temp
+            var retAir_w: Float64 = state.dataLoopNodes.Node[state.dataAirLoop.AirToZoneNodeInfo[AirLoopNum].AirLoopReturnNodeNum[0]].HumRat
+            var ventLoad: Float64 = outAirMdot * (state.Psychrometrics_PsyHFnTdbW(retAir_Tdb, retAir_w) - outAir_H)
+            if ventLoad > state.HVAC_SmallLoad:
+                sumAirSysVentHeatingLoad += ventLoad
+            elif ventLoad < state.constant_minusone * state.HVAC_SmallLoad:
+                sumAirSysVentCoolingLoad += ventLoad
+
+        var sumLoadProfileHeatingLoad: Float64 = 0.0
+        var sumLoadProfileCoolingLoad: Float64 = 0.0
+        for NumProcLoad in range(self.PlantOps.numPlantLoadProfiles):
+            var load: Float64 = 0.0
+            var comp: AnyType = state.CompData_getPlantComponent(state, self.PlantLoadProfileComps[NumProcLoad]).compPtr
+            comp.getCurrentPower(state, load)
+            if load > 0.0:
+                sumLoadProfileHeatingLoad += load
+            else:
+                sumLoadProfileCoolingLoad += load
+
+        self.Report.BuildingPolledCoolingLoad = sumZonePredictedCoolingLoad + sumAirSysVentCoolingLoad + sumLoadProfileCoolingLoad
+        self.Report.BuildingPolledHeatingLoad = sumZonePredictedHeatingLoad + sumAirSysVentHeatingLoad + sumLoadProfileHeatingLoad
+
+    fn DetermineCurrentPlantLoads(inout self, state: AnyType) -> None:
+        var CW_RetMdot: Float64 = state.dataLoopNodes.Node[self.PlantOps.PrimaryChWLoopSupInletNode].MassFlowRate
+        var CpCW: Float64 = state.dataPlnt.PlantLoop[self.PlantOps.PrimaryChWLoopIndex].glycol.getSpecificHeat(
+            state, state.dataLoopNodes.Node[self.PlantOps.PrimaryChWLoopSupInletNode].Temp, "DetermineCurrentPlantLoads")
+        var CW_Qdot: Float64 = min(0.0, CW_RetMdot * CpCW * (self.Setpoint.PrimCW - state.dataLoopNodes.Node[self.PlantOps.PrimaryChWLoopSupInletNode].Temp))
+        self.Report.PrimaryPlantCoolingLoad = CW_Qdot
+
+        var HW_RetMdot: Float64 = state.dataLoopNodes.Node[self.PlantOps.PrimaryHWLoopSupInletNode].MassFlowRate
+        var CpHW: Float64 = state.dataPlnt.PlantLoop[self.PlantOps.PrimaryHWLoopIndex].glycol.getSpecificHeat(
+            state, state.dataLoopNodes.Node[self.PlantOps.PrimaryHWLoopSupInletNode].Temp, "DetermineCurrentPlantLoads")
+        var HW_Qdot: Float64 = max(0.0, HW_RetMdot * CpHW * (self.DetermineHWSetpointOARest(state) - state.dataLoopNodes.Node[self.PlantOps.PrimaryHWLoopSupInletNode].Temp))
+        self.Report.PrimaryPlantHeatingLoad = HW_Qdot
+
+    fn ProcessSupervisoryControlLogicForAirSourcePlants(inout self, state: AnyType) -> None:
+        self.PlantOps.AirSourcePlantCoolingOnly = False
+        self.PlantOps.AirSourcePlantHeatingOnly = False
+        self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = False
+        self.PlantOps.SimultaneousHeatingCoolingWithCoolingDominant = False
+        self.PlantOps.SimultaneousHeatingCoolingWithHeatingDominant = False
+
+        if self.Report.BuildingPolledHeatingLoad < state.HVAC_SmallLoad and self.Report.BuildingPolledCoolingLoad < state.constant_minusone * state.HVAC_SmallLoad:
+            self.PlantOps.AirSourcePlantCoolingOnly = True
+        elif self.Report.BuildingPolledCoolingLoad > state.constant_minusone * state.HVAC_SmallLoad and self.Report.BuildingPolledHeatingLoad > state.HVAC_SmallLoad:
+            self.PlantOps.AirSourcePlantHeatingOnly = True
+            if state.dataEnvrn.OutDryBulbTemp < self.TempReset.LowOutdoorTemp:
+                self.PlantOps.AirSourcePlantHeatingOnly = False
+        elif self.Report.BuildingPolledCoolingLoad < state.constant_minusone * state.HVAC_SmallLoad and self.Report.BuildingPolledHeatingLoad > state.HVAC_SmallLoad:
+            self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = True
+            if self.Report.BuildingPolledHeatingLoad > abs(self.Report.BuildingPolledCoolingLoad):
+                self.PlantOps.SimultaneousHeatingCoolingWithHeatingDominant = True
+                if self.PlantOps.SimultHeatCoolOpAvailable:
+                    self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = True
+                else:
+                    self.PlantOps.AirSourcePlantHeatingOnly = True
+                    self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = False
+            elif abs(self.Report.BuildingPolledCoolingLoad) > self.Report.BuildingPolledHeatingLoad:
+                self.PlantOps.SimultaneousHeatingCoolingWithCoolingDominant = True
+                if self.PlantOps.SimultHeatCoolOpAvailable:
+                    self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = True
+                else:
+                    self.PlantOps.AirSourcePlantCoolingOnly = True
+                    self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = False
+            if state.dataEnvrn.OutDryBulbTemp < self.TempReset.LowOutdoorTemp:
+                self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = False
+                self.PlantOps.AirSourcePlantCoolingOnly = True
+
+        if self.PlantOps.AirSourcePlantHeatingOnly and self.Report.PrimaryPlantCoolingLoad < state.constant_minusone * state.HVAC_SmallLoad:
+            if self.PlantOps.SimultHeatCoolOpAvailable:
+                self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = True
+                self.PlantOps.SimultaneousHeatingCoolingWithHeatingDominant = True
+                self.PlantOps.AirSourcePlantHeatingOnly = False
+
+        if self.PlantOps.AirSourcePlantCoolingOnly and self.Report.PrimaryPlantHeatingLoad > state.HVAC_SmallLoad and state.dataEnvrn.OutDryBulbTemp >= self.TempReset.LowOutdoorTemp:
+            if self.PlantOps.SimultHeatCoolOpAvailable:
+                self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling = True
+                self.PlantOps.SimultaneousHeatingCoolingWithCoolingDominant = True
+                self.PlantOps.AirSourcePlantCoolingOnly = False
+
+        if not self.PlantOps.AirSourcePlantCoolingOnly and not self.PlantOps.AirSourcePlantHeatingOnly and not self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling:
+            if self.Report.PrimaryPlantCoolingLoad < state.constant_minusone * state.HVAC_SmallLoad:
+                self.PlantOps.AirSourcePlantCoolingOnly = True
+
+        if not self.PlantOps.AirSourcePlantCoolingOnly and self.PlantOps.AirSourcePlantHeatingOnly and not self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling:
+            if abs(self.Report.PrimaryPlantCoolingLoad) > self.Report.PrimaryPlantHeatingLoad and self.Report.PrimaryPlantHeatingLoad < state.HVAC_SmallLoad:
+                self.PlantOps.AirSourcePlantCoolingOnly = True
+                self.PlantOps.AirSourcePlantHeatingOnly = False
+
+        if self.PlantOps.AirSourcePlantCoolingOnly and not self.PlantOps.AirSourcePlantHeatingOnly and not self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling:
+            if self.Report.PrimaryPlantHeatingLoad > abs(self.Report.PrimaryPlantCoolingLoad) and self.Report.PrimaryPlantCoolingLoad > state.constant_minusone * state.HVAC_SmallLoad:
+                self.PlantOps.AirSourcePlantHeatingOnly = True
+                self.PlantOps.AirSourcePlantCoolingOnly = False
+
+        if not self.PlantOps.AirSourcePlantCoolingOnly and not self.PlantOps.AirSourcePlantHeatingOnly and not self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling:
+            if self.Report.PrimaryPlantHeatingLoad > state.HVAC_SmallLoad and state.dataEnvrn.OutDryBulbTemp >= self.TempReset.LowOutdoorTemp:
+                self.PlantOps.AirSourcePlantHeatingOnly = True
+
+        if self.PlantOps.AirSourcePlantHeatingOnly:
+            self.Report.AirSourcePlant_OpMode = 1
+        elif self.PlantOps.AirSourcePlantCoolingOnly:
+            self.Report.AirSourcePlant_OpMode = 2
+        elif self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling:
+            self.Report.AirSourcePlant_OpMode = 3
+        else:
+            self.Report.AirSourcePlant_OpMode = 0
+
+    fn InitAirSourcePlantEquipmentOff(inout self, state: AnyType) -> None:
+        if self.PlantOps.NumCoolingOnlyEquipLists > 0:
+            for equipListNum in range(self.PlantOps.NumCoolingOnlyEquipLists):
+                var NumComps: Int = self.CoolingOnlyEquipList[equipListNum].NumComps
+                for compNum in range(NumComps):
+                    var this_equip: EquipListCompData = self.CoolingOnlyEquipList[equipListNum].Comp[compNum]
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].Available = False
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].ON = False
+
+        if self.PlantOps.NumHeatingOnlyEquipLists > 0:
+            for equipListNum in range(self.PlantOps.NumHeatingOnlyEquipLists):
+                var NumComps: Int = self.HeatingOnlyEquipList[equipListNum].NumComps
+                for compNum in range(NumComps):
+                    var this_equip: EquipListCompData = self.HeatingOnlyEquipList[equipListNum].Comp[compNum]
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].Available = False
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].ON = False
+
+        if self.PlantOps.NumSimultHeatCoolCoolingEquipLists > 0:
+            for equipListNum in range(self.PlantOps.NumSimultHeatCoolCoolingEquipLists):
+                var NumComps: Int = self.SimultHeatCoolCoolingEquipList[equipListNum].NumComps
+                for compNum in range(NumComps):
+                    var this_equip: EquipListCompData = self.SimultHeatCoolCoolingEquipList[equipListNum].Comp[compNum]
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].Available = False
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].ON = False
+
+        if self.PlantOps.NumSimultHeatCoolHeatingEquipLists > 0:
+            for equipListNum in range(self.PlantOps.NumSimultHeatCoolHeatingEquipLists):
+                var NumComps: Int = self.SimultHeatCoolHeatingEquipList[equipListNum].NumComps
+                for compNum in range(NumComps):
+                    var this_equip: EquipListCompData = self.SimultHeatCoolHeatingEquipList[equipListNum].Comp[compNum]
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].Available = False
+                    state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].ON = False
+
+    fn ProcessAndSetAirSourcePlantEquipLists(inout self, state: AnyType) -> None:
+        var CoolingLoadSignal: Float64 = self.Report.PrimaryPlantCoolingLoad
+        var HeatingLoadSignal: Float64 = self.Report.PrimaryPlantHeatingLoad
+
+        if self.PlantOps.AirSourcePlantCoolingOnly:
+            for equipListNum in range(self.PlantOps.NumCoolingOnlyEquipLists):
+                if (CoolingLoadSignal * state.constant_minusone > self.CoolingOnlyEquipList[equipListNum].RangeLowerLimit and
+                    self.CoolingOnlyEquipList[equipListNum].RangeUpperLimit > CoolingLoadSignal * state.constant_minusone):
+                    var NumComps: Int = self.CoolingOnlyEquipList[equipListNum].NumComps
+                    for compNum in range(NumComps):
+                        var this_equip: EquipListCompData = self.CoolingOnlyEquipList[equipListNum].Comp[compNum]
+                        state.dataLoopNodes.Node[this_equip.SetPointNodeNum].TempSetPoint = self.Setpoint.PrimCW
+                        state.dataLoopNodes.Node[state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].TempSetPointNodeNum].TempSetPoint = self.Setpoint.PrimCW
+                        if state.dataLoopNodes.Node[this_equip.DemandNodeNum].Temp > self.Setpoint.PrimCW:
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].Available = True
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].ON = True
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].CurOpSchemeType = self.Type
+
+        if self.PlantOps.AirSourcePlantHeatingOnly:
+            var HWsetpt: Float64 = self.DetermineHWSetpointOARest(state)
+            for equipListNum in range(self.PlantOps.NumHeatingOnlyEquipLists):
+                if HeatingLoadSignal > self.HeatingOnlyEquipList[equipListNum].RangeLowerLimit and self.HeatingOnlyEquipList[equipListNum].RangeUpperLimit > HeatingLoadSignal:
+                    var NumComps: Int = self.HeatingOnlyEquipList[equipListNum].NumComps
+                    for compNum in range(NumComps):
+                        var this_equip: EquipListCompData = self.HeatingOnlyEquipList[equipListNum].Comp[compNum]
+                        state.dataLoopNodes.Node[this_equip.SetPointNodeNum].TempSetPoint = HWsetpt
+                        state.dataLoopNodes.Node[state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].TempSetPointNodeNum].TempSetPoint = HWsetpt
+                        if state.dataLoopNodes.Node[this_equip.DemandNodeNum].Temp < HWsetpt:
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].Available = True
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].ON = True
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].CurOpSchemeType = self.Type
+
+        if self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling:
+            for equipListNum in range(self.PlantOps.NumSimultHeatCoolCoolingEquipLists):
+                if (CoolingLoadSignal * state.constant_minusone > self.SimultHeatCoolCoolingEquipList[equipListNum].RangeLowerLimit and
+                    self.SimultHeatCoolCoolingEquipList[equipListNum].RangeUpperLimit > CoolingLoadSignal * state.constant_minusone):
+                    var NumComps: Int = self.SimultHeatCoolCoolingEquipList[equipListNum].NumComps
+                    for compNum in range(NumComps):
+                        var this_equip: EquipListCompData = self.SimultHeatCoolCoolingEquipList[equipListNum].Comp[compNum]
+                        state.dataLoopNodes.Node[this_equip.SetPointNodeNum].TempSetPoint = self.Setpoint.PrimCW
+                        state.dataLoopNodes.Node[state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].TempSetPointNodeNum].TempSetPoint = self.Setpoint.PrimCW
+                        if state.dataLoopNodes.Node[this_equip.DemandNodeNum].Temp > self.Setpoint.PrimCW:
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].Available = True
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].ON = True
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].CurOpSchemeType = self.Type
+
+            var HWsetpt: Float64 = self.DetermineHWSetpointOARest(state)
+            for equipListNum in range(self.PlantOps.NumSimultHeatCoolHeatingEquipLists):
+                if HeatingLoadSignal > self.SimultHeatCoolHeatingEquipList[equipListNum].RangeLowerLimit and self.SimultHeatCoolHeatingEquipList[equipListNum].RangeUpperLimit > HeatingLoadSignal:
+                    var NumComps: Int = self.SimultHeatCoolHeatingEquipList[equipListNum].NumComps
+                    for compNum in range(NumComps):
+                        var this_equip: EquipListCompData = self.SimultHeatCoolHeatingEquipList[equipListNum].Comp[compNum]
+                        state.dataLoopNodes.Node[this_equip.SetPointNodeNum].TempSetPoint = HWsetpt
+                        state.dataLoopNodes.Node[state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].TempSetPointNodeNum].TempSetPoint = HWsetpt
+                        if state.dataLoopNodes.Node[this_equip.DemandNodeNum].Temp < HWsetpt:
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].Available = True
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].ON = True
+                            state.dataPlnt.PlantLoop[this_equip.LoopNumPtr].LoopSide[this_equip.LoopSideNumPtr].Branch[this_equip.BranchNumPtr].Comp[this_equip.CompNumPtr].CurOpSchemeType = self.Type
+
+    fn ProcessAndSetDedicatedHeatRecovWWHP(inout self, state: AnyType) -> None:
+        if not self.PlantOps.DedicatedHR_Present:
+            return
+
+        self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.Available = False
+        self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.ON = False
+        self.DedicatedHR_CoolingPLHP.sourceSidePlantLoc.comp.Available = False
+        self.DedicatedHR_CoolingPLHP.sourceSidePlantLoc.comp.ON = False
+
+        self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.Available = False
+        self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.ON = False
+        self.DedicatedHR_HeatingPLHP.sourceSidePlantLoc.comp.Available = False
+        self.DedicatedHR_HeatingPLHP.sourceSidePlantLoc.comp.ON = False
+
+        var inletChWReturnNodeNum: Int = self.DedicatedHR_HeatingPLHP.sourceSidePlantLoc.comp.NodeNumIn
+        var inletHWReturnNodeNum: Int = self.DedicatedHR_CoolingPLHP.sourceSidePlantLoc.comp.NodeNumIn
+
+        var CW_RetMdot: Float64 = state.dataLoopNodes.Node[inletChWReturnNodeNum].MassFlowRate
+        var HW_RetMdot: Float64 = state.dataLoopNodes.Node[inletHWReturnNodeNum].MassFlowRate
+
+        var flowInEach: Bool = False
+        if CW_RetMdot <= state.HVAC_SmallWaterVolFlow or HW_RetMdot <= state.HVAC_SmallWaterVolFlow:
+            flowInEach = False
+        else:
+            flowInEach = True
+
+        var CpCW: Float64 = self.DedicatedHR_HeatingPLHP.sourceSidePlantLoc.loop.glycol.getSpecificHeat(
+            state, state.dataLoopNodes.Node[inletChWReturnNodeNum].Temp, "EvaluateChillerHeaterChangeoverOpScheme")
+        var CW_Qdot: Float64 = CW_RetMdot * CpCW * (self.Setpoint.SecCW - state.dataLoopNodes.Node[inletChWReturnNodeNum].Temp)
+        var CpHW: Float64 = self.DedicatedHR_CoolingPLHP.sourceSidePlantLoc.loop.glycol.getSpecificHeat(
+            state, state.dataLoopNodes.Node[inletHWReturnNodeNum].Temp, "EvaluateChillerHeaterChangeoverOpScheme")
+        var HW_Qdot: Float64 = HW_RetMdot * CpHW * (self.Setpoint.SecHW - state.dataLoopNodes.Node[inletHWReturnNodeNum].Temp)
+
+        self.Report.SecondaryPlantCoolingLoad = CW_Qdot
+        self.Report.SecondaryPlantHeatingLoad = HW_Qdot
+
+        var CoolLedNeed: Bool = False
+        var HeatLedNeed: Bool = False
+
+        if self.PlantOps.AirSourcePlantHeatingOnly and (CW_Qdot < state.constant_minusone * state.HVAC_SmallLoad) and flowInEach:
+            CoolLedNeed = True
+
+        if self.PlantOps.AirSourcePlantCoolingOnly and (HW_Qdot > state.HVAC_SmallLoad) and flowInEach:
+            HeatLedNeed = True
+
+        if self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling and self.PlantOps.SimultaneousHeatingCoolingWithHeatingDominant and flowInEach:
+            HeatLedNeed = True
+
+        if self.PlantOps.AirSourcePlantSimultaneousHeatingAndCooling and self.PlantOps.SimultaneousHeatingCoolingWithCoolingDominant and flowInEach:
+            CoolLedNeed = True
+
+        self.Report.DedicHR_OpMode = 0
+        if CoolLedNeed:
+            self.Report.DedicHR_OpMode = 2
+            self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.Available = True
+            self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.ON = True
+            self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.CurOpSchemeType = self.Type
+            self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.MyLoad = CW_Qdot
+
+            var OutletChWReturnNodeNum: Int = self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.comp.NodeNumOut
+            state.dataLoopNodes.Node[OutletChWReturnNodeNum].TempSetPoint = self.Setpoint.SecCW
+            state.dataLoopNodes.Node[self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.loop.TempSetPointNodeNum].TempSetPoint = self.Setpoint.SecCW
+
+            if self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.loopNum == self.SecondaryPlantLoopIndicesBeingSupervised[self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.loopNum]:
+                for HXnum in range(self.PlantOps.numPlantHXs):
+                    if self.PlantHXComps[HXnum].loopNum == self.DedicatedHR_CoolingPLHP.loadSidePlantLoc.loopNum:
+                        var outletnode: Int = state.dataPlnt.PlantLoop[self.PlantHXComps[HXnum].loopNum].LoopSide[self.PlantHXComps[HXnum].loopSideNum].Branch[self.PlantHXComps[HXnum].branchNum].Comp[self.PlantHXComps[HXnum].compNum].NodeNumOut
+                        state.dataLoopNodes.Node[outletnode].TempSetPoint = self.Setpoint.SecCW
+
+        elif HeatLedNeed:
+            self.Report.DedicHR_OpMode = 1
+            self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.Available = True
+            self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.ON = True
+            self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.CurOpSchemeType = self.Type
+            self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.MyLoad = HW_Qdot
+
+            var OutletHWReturnNodeNum: Int = self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.comp.NodeNumOut
+            state.dataLoopNodes.Node[OutletHWReturnNodeNum].TempSetPoint = self.Setpoint.SecHW
+            state.dataLoopNodes.Node[self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.loop.TempSetPointNodeNum].TempSetPoint = self.Setpoint.SecHW
+
+            if self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.loopNum == self.SecondaryPlantLoopIndicesBeingSupervised[self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.loopNum]:
+                for HXnum in range(self.PlantOps.numPlantHXs):
+                    if self.PlantHXComps[HXnum].loopNum == self.DedicatedHR_HeatingPLHP.loadSidePlantLoc.loopNum:
+                        var outletnode: Int = self.PlantHXComps[HXnum].comp.NodeNumOut
+                        state.dataLoopNodes.Node[outletnode].TempSetPoint = min(self.Setpoint.SecHW, self.DetermineHWSetpointOARest(state))
+
+    fn ProcessAndSetAuxilBoiler(inout self, state: AnyType) -> None:
+        self.Report.BoilerAux_OpMode = 0
+        if self.PlantOps.numBoilers <= 0:
+            return
+
+        if self.PlantOps.numBoilers > 0:
+            for BoilerNum in range(self.PlantOps.numBoilers):
+                self.PlantBoilerComps[BoilerNum].comp.Available = False
+                self.PlantBoilerComps[BoilerNum].comp.ON = False
+                self.PlantBoilerComps[BoilerNum].comp.MyLoad = 0.0
+
+        if self.PlantOps.numBoilers > 0:
+            var LowOAAuxiliaryNeeded: Bool = False
+            if state.dataEnvrn.OutDryBulbTemp < self.TempReset.LowOutdoorTemp:
+                LowOAAuxiliaryNeeded = True
+            for BoilerNum in range(self.PlantOps.numBoilers):
+                var HWsetpt: Float64 = 0.0
+                if self.SecondaryPlantLoopIndicesBeingSupervised[self.PlantBoilerComps[BoilerNum].loopNum] > 0:
+                    HWsetpt = min(self.Setpoint.SecHW, self.DetermineHWSetpointOARest(state))
+                else:
+                    HWsetpt = self.DetermineHWSetpointOARest(state)
+
+                HWsetpt = HWsetpt - self.TempReset.BoilerTemperatureOffset
+
+                var inletBoilerNodeNum: Int = self.PlantBoilerComps[BoilerNum].comp.NodeNumIn
+                var Tin: Float64 = state.dataLoopNodes.Node[inletBoilerNodeNum].Temp
+                var Mdot: Float64 = state.dataLoopNodes.Node[inletBoilerNodeNum].MassFlowRate
+
+                var CpHW: Float64 = self.PlantBoilerComps[BoilerNum].loop.glycol.getSpecificHeat(
+                    state, Tin, "ChillerHeaterSupervisoryOperationData::ProcessAndSetAuxilBoiler")
+                var LoadToSetpoint: Float64 = max(0.0, Mdot * CpHW * (HWsetpt - Tin))
+                var pltSizNum: Int = self.PlantBoilerComps[BoilerNum].loop.PlantSizNum
+                var thresholdPlantLoad: Float64 = 0.001 * state.dataSize.PlantSizData[pltSizNum].DesCapacity
+
+                if ((LoadToSetpoint > thresholdPlantLoad and
+                     ((self.Report.AirSourcePlant_OpMode == 0) or LowOAAuxiliaryNeeded)) or
+                    ((LoadToSetpoint > thresholdPlantLoad) and (self.Report.AirSourcePlant_OpMode == 2))):
+                    self.PlantBoilerComps[BoilerNum].comp.Available = True
+                    self.PlantBoilerComps[BoilerNum].comp.ON = True
+                    self.PlantBoilerComps[BoilerNum].comp.CurOpSchemeType = self.Type
+                    self.PlantBoilerComps[BoilerNum].comp.MyLoad = LoadToSetpoint
+                    var OutletBoilerNodeNum: Int = self.PlantBoilerComps[BoilerNum].comp.NodeNumOut
+                    state.dataLoopNodes.Node[OutletBoilerNodeNum].TempSetPoint = HWsetpt
+                    state.dataLoopNodes.Node[self.PlantBoilerComps[BoilerNum].loop.TempSetPointNodeNum].TempSetPoint = HWsetpt
+                    self.Report.BoilerAux_OpMode = 1
+                else:
+                    var OutletBoilerNodeNum: Int = self.PlantBoilerComps[BoilerNum].comp.NodeNumOut
+                    state.dataLoopNodes.Node[OutletBoilerNodeNum].TempSetPoint = HWsetpt
+                    state.dataLoopNodes.Node[self.PlantBoilerComps[BoilerNum].loop.TempSetPointNodeNum].TempSetPoint = HWsetpt
+
+    fn DetermineHWSetpointOARest(self, state: AnyType) -> Float64:
+        var HWSetpoint: Float64 = 0.0
+
+        if ((self.TempReset.LowOutdoorTemp == self.TempReset.BackupLowOutdoorTemp) and
+            (self.Setpoint.PrimHW_Low == self.Setpoint.PrimHW_BackupLow)):
+
+            if self.TempReset.LowOutdoorTemp < self.TempReset.HighOutdoorTemp:
+                if state.dataEnvrn.OutDryBulbTemp <= self.TempReset.LowOutdoorTemp:
+                    HWSetpoint = self.Setpoint.PrimHW_Low
+                elif state.dataEnvrn.OutDryBulbTemp >= self.TempReset.HighOutdoorTemp:
+                    HWSetpoint = self.Setpoint.PrimHW_High
+                else:
+                    HWSetpoint = self.Setpoint.PrimHW_Low - ((state.dataEnvrn.OutDryBulbTemp - self.TempReset.LowOutdoorTemp) /
+                                                              (self.TempReset.HighOutdoorTemp - self.TempReset.LowOutdoorTemp)) *\
+                                                                 (self.Setpoint.PrimHW_Low - self.Setpoint.PrimHW_High)
+                    HWSetpoint = min(HWSetpoint, self.Setpoint.PrimHW_High)
+
+            else:
+                HWSetpoint = 0.5 * (self.Setpoint.PrimHW_Low + self.Setpoint.PrimHW_High)
+        else:
+            if ((self.TempReset.LowOutdoorTemp < self.TempReset.HighOutdoorTemp) and
+                (self.TempReset.BackupLowOutdoorTemp < self.TempReset.LowOutdoorTemp)):
+
+                if state.dataEnvrn.OutDryBulbTemp <= self.TempReset.BackupLowOutdoorTemp:
+                    HWSetpoint = self.Setpoint.PrimHW_BackupLow
+                elif state.dataEnvrn.OutDryBulbTemp >= self.TempReset.HighOutdoorTemp:
+                    HWSetpoint = self.Setpoint.PrimHW_High
+                elif ((state.dataEnvrn.OutDryBulbTemp >= self.TempReset.LowOutdoorTemp) and
+                      (state.dataEnvrn.OutDryBulbTemp < self.TempReset.HighOutdoorTemp)):
+                    HWSetpoint = self.Setpoint.PrimHW_Low - ((state.dataEnvrn.OutDryBulbTemp - self.TempReset.LowOutdoorTemp) /
+                                                              (self.TempReset.HighOutdoorTemp - self.TempReset.LowOutdoorTemp)) *\
+                                                                 (self.Setpoint.PrimHW_Low - self.Setpoint.PrimHW_High)
+                    HWSetpoint = min(HWSetpoint, self.Setpoint.PrimHW_High)
+                elif ((state.dataEnvrn.OutDryBulbTemp > self.TempReset.BackupLowOutdoorTemp) and
+                      (state.dataEnvrn.OutDryBulbTemp < self.TempReset.LowOutdoorTemp)):
+                    HWSetpoint = self.Setpoint.PrimHW_BackupLow - ((state.dataEnvrn.OutDryBulbTemp - self.TempReset.BackupLowOutdoorTemp) /
+                                                                    (self.TempReset.LowOutdoorTemp - self.TempReset.BackupLowOutdoorTemp)) *\
+                                                                       (self.Setpoint.PrimHW_BackupLow - self.Setpoint.PrimHW_Low)
+                    HWSetpoint = min(HWSetpoint, self.Setpoint.PrimHW_BackupLow)
+                    HWSetpoint = max(HWSetpoint, self.Setpoint.PrimHW_Low)
+            else:
+                HWSetpoint = (self.Setpoint.PrimHW_Low + self.Setpoint.PrimHW_High + self.Setpoint.PrimHW_BackupLow) / 3.0
+        return HWSetpoint
+
+
+struct OperationData:
+    var Name: String
+    var TypeOf: String
+    var Type: AnyType
+    var sched: AnyType
+    var Available: Bool
+    var NumEquipLists: Int
+    var CurListPtr: Int
+    var EquipList: DynamicVector[EquipOpList]
+    var EquipListNumForLastStage: Int
+    var ReferenceNodeName: String
+    var ReferenceNodeNumber: Int
+    var ErlSimProgramMngr: Int
+    var ErlInitProgramMngr: Int
+    var initPluginLocation: Int
+    var simPluginLocation: Int
+    var EMSIntVarLoopDemandRate: Float64
+    var MyEnvrnFlag: Bool
+    var ChillerHeaterSupervisoryOperation: AnyType
+
+    fn __init__(inout self):
+        self.Name = ""
+        self.TypeOf = ""
+        self.Type = AnyType()
+        self.sched = AnyType()
+        self.Available = False
+        self.NumEquipLists = 0
+        self.CurListPtr = 0
+        self.EquipList = DynamicVector[EquipOpList]()
+        self.EquipListNumForLastStage = 0
+        self.ReferenceNodeName = ""
+        self.ReferenceNodeNumber = 0
+        self.ErlSimProgramMngr = 0
+        self.ErlInitProgramMngr = 0
+        self.initPluginLocation = -1
+        self.simPluginLocation = -1
+        self.EMSIntVarLoopDemandRate = 0.0
+        self.MyEnvrnFlag = True
+        self.ChillerHeaterSupervisoryOperation = AnyType()
+
+
+fn SetupOutputVariable(state: AnyType, name: String, units: AnyType, obj: AnyType, attr: String, time_step: AnyType, store_type: AnyType, key_value: String) -> None:
+    pass
+
+
+fn ShowSevereError(state: AnyType, message: String) -> None:
+    pass
+
+
+fn PlantUtilities_SetPlantLocationLinks(state: AnyType, loc: AnyType) -> None:
+    pass
+
+
+fn PlantUtilities_ScanPlantLoopsForObject(state: AnyType, name: String, typ: AnyType, err_flag: Bool, num_results: Int, loop_num: Optional[Int] = None) -> Tuple[AnyType, Bool, Int]:
+    return AnyType(), err_flag, num_results

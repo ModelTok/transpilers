@@ -1,0 +1,222 @@
+        self.name = ""
+        self.zone_name = ""
+        self.zone = 0
+        self.space_num = 0
+        self.ext_bound_cond_name = ""
+        self.ext_bound_cond = 0
+        self.ext_solar = False
+        self.ext_wind = False
+        self.has_inc_sol_multiplier = False
+        self.inc_sol_multiplier = 1.0
+        self.view_factor_ground = 0.0
+        self.view_factor_sky = 0.0
+        self.view_factor_ground_ir = 0.0
+        self.view_factor_sky_ir = 0.0
+        self.osc_ptr = 0
+        self.oscm_ptr = 0
+        self.mirrored_surf = False
+        self.is_shadowing = False
+        self.is_shadow_possible_obstruction = False
+        self.shadow_surf_sched = OpaquePointer()
+        self.is_transparent = False
+        self.sched_min_value = 0.0
+        self.active_window_shading_control = 0
+        self.window_shading_control_list = List[Int]()
+        self.has_shade_control = False
+        self.active_shaded_construction = 0
+        self.active_shaded_construction_prev = 0
+        self.shaded_construction_list = List[Int]()
+        self.shaded_storm_win_construction_list = List[Int]()
+        self.frame_divider = 0
+        self.multiplier = 1.0
+        self.rad_encl_index = 0
+        self.solar_encl_index = 0
+        self.solar_encl_surf_index = 0
+        self.is_air_boundary_surf = False
+        self.conv_orientation = 0
+        self.calc_hash_key = SurfaceCalcHashKey()
+        self.is_surf_property_gnd_surfaces_defined = False
+        self.surf_property_gnd_surf_index = 0
+        self.use_surf_property_gnd_surf_temp = False
+        self.use_surf_property_gnd_surf_refl = False
+        self.gnd_refl_solar_rad = 0.0
+        self.surf_has_surrounding_surf_property = False
+        self.surf_sched_external_shading_frac = False
+        self.surf_surrounding_surfaces_num = 0
+        self.surf_external_shading_sched = OpaquePointer()
+        self.surf_linked_out_air_node = 0
+        self.ae = 0.0
+        self.encl_ae_sum = 0.0
+        self.srd_surf_temp = 0.0
+        self.view_factor_srd_surfs = 0.0
+
+fn azimuth_to_compass4(azimuth: Float64) -> Int:
+    debug_assert(azimuth >= 0.0 and azimuth < 360.0)
+    var compass4_azimuth_lo = InlineArray[Float64, 4](315.0, 45.0, 135.0, 225.0)
+    var compass4_azimuth_hi = InlineArray[Float64, 4](45.0, 135.0, 225.0, 315.0)
+    
+    for c4 in range(int(Compass4Num)):
+        var lo = compass4_azimuth_lo[c4]
+        var hi = compass4_azimuth_hi[c4]
+        if lo > hi:
+            if azimuth >= lo or azimuth < hi:
+                return c4
+        else:
+            if azimuth >= lo and azimuth < hi:
+                return c4
+    debug_assert(False)
+    return Compass4Invalid
+
+fn azimuth_to_compass8(azimuth: Float64) -> Int:
+    debug_assert(azimuth >= 0.0 and azimuth < 360.0)
+    var compass8_azimuth_lo = InlineArray[Float64, 8](337.5, 22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5)
+    var compass8_azimuth_hi = InlineArray[Float64, 8](22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5)
+    
+    for c8 in range(int(Compass8Num)):
+        var lo = compass8_azimuth_lo[c8]
+        var hi = compass8_azimuth_hi[c8]
+        if lo > hi:
+            if azimuth >= lo or azimuth < hi:
+                return c8
+        else:
+            if azimuth >= lo and azimuth < hi:
+                return c8
+    debug_assert(False)
+    return Compass8Invalid
+
+fn set_surface_out_bulb_temp_at(state: OpaquePointer):
+    pass
+
+fn check_surface_out_bulb_temp_at(state: OpaquePointer):
+    pass
+
+fn set_surface_wind_speed_at(state: OpaquePointer):
+    pass
+
+fn set_surface_wind_dir_at(state: OpaquePointer):
+    pass
+
+fn c_surface_class(class_no: Int) -> String:
+    if class_no == SurfaceClassWall:
+        return "Wall"
+    elif class_no == SurfaceClassFloor:
+        return "Floor"
+    elif class_no == SurfaceClassRoof:
+        return "Roof"
+    elif class_no == SurfaceClassWindow:
+        return "Window"
+    elif class_no == SurfaceClassGlassDoor:
+        return "Glass Door"
+    elif class_no == SurfaceClassDoor:
+        return "Door"
+    elif class_no == SurfaceClassTDD_Dome:
+        return "TubularDaylightDome"
+    elif class_no == SurfaceClassTDD_Diffuser:
+        return "TubularDaylightDiffuser"
+    elif class_no == SurfaceClassIntMass:
+        return "Internal Mass"
+    elif class_no == SurfaceClassShading:
+        return "Shading"
+    elif class_no == SurfaceClassDetached_B:
+        return "Detached Shading:Building"
+    elif class_no == SurfaceClassDetached_F:
+        return "Detached Shading:Fixed"
+    else:
+        return "Invalid/Unknown"
+
+fn abs_front_side(state: OpaquePointer, surf_num: Int) -> Float64:
+    return 0.0
+
+fn abs_back_side(state: OpaquePointer, surf_num: Int) -> Float64:
+    return 0.0
+
+fn get_variable_absorptance_surface_list(state: OpaquePointer):
+    pass
+
+fn not_shaded(shading_flag: Int) -> Bool:
+    return shading_flag == WinShadingTypeNoShade or shading_flag == WinShadingTypeShadeOff
+
+fn is_shaded(shading_flag: Int) -> Bool:
+    return not not_shaded(shading_flag)
+
+fn is_shaded_no_glare_ctrl(shading_flag: Int) -> Bool:
+    return (shading_flag == WinShadingTypeIntShade or 
+            shading_flag == WinShadingTypeSwitchableGlazing or
+            shading_flag == WinShadingTypeExtShade or 
+            shading_flag == WinShadingTypeExtScreen or 
+            shading_flag == WinShadingTypeIntBlind or
+            shading_flag == WinShadingTypeExtBlind or 
+            shading_flag == WinShadingTypeBGShade or 
+            shading_flag == WinShadingTypeBGBlind)
+
+fn any_shade(shading_flag: Int) -> Bool:
+    return (shading_flag == WinShadingTypeIntShade or 
+            shading_flag == WinShadingTypeExtShade or 
+            shading_flag == WinShadingTypeBGShade)
+
+fn any_shade_screen(shading_flag: Int) -> Bool:
+    return (shading_flag == WinShadingTypeIntShade or 
+            shading_flag == WinShadingTypeExtShade or 
+            shading_flag == WinShadingTypeBGShade or
+            shading_flag == WinShadingTypeExtScreen)
+
+fn any_blind(shading_flag: Int) -> Bool:
+    return (shading_flag == WinShadingTypeIntBlind or 
+            shading_flag == WinShadingTypeExtBlind or 
+            shading_flag == WinShadingTypeBGBlind)
+
+fn any_interior_shade_blind(shading_flag: Int) -> Bool:
+    return (shading_flag == WinShadingTypeIntShade or 
+            shading_flag == WinShadingTypeIntBlind)
+
+fn any_exterior_shade_blind_screen(shading_flag: Int) -> Bool:
+    return (shading_flag == WinShadingTypeExtShade or 
+            shading_flag == WinShadingTypeExtBlind or 
+            shading_flag == WinShadingTypeExtScreen)
+
+fn any_betweenglass_shade_blind(shading_flag: Int) -> Bool:
+    return (shading_flag == WinShadingTypeBGShade or 
+            shading_flag == WinShadingTypeBGBlind)
+
+@always_inline
+fn compass4_names_init() -> InlineArray[StringRef, 4]:
+    return InlineArray[StringRef, 4]("North", "East", "South", "West")
+
+@always_inline
+fn compass8_names_init() -> InlineArray[StringRef, 8]:
+    return InlineArray[StringRef, 8]("North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest")
+
+@always_inline
+fn surface_filter_names_uc_init() -> InlineArray[StringRef, 11]:
+    return InlineArray[StringRef, 11](
+        "ALLEXTERIORSURFACES",
+        "ALLEXTERIORWINDOWS",
+        "ALLEXTERIORWALLS",
+        "ALLEXTERIORROOFS",
+        "ALLEXTERIORFLOORS",
+        "ALLINTERIORSURFACES",
+        "ALLINTERIORWINDOWS",
+        "ALLINTERIORWALLS",
+        "ALLINTERIORROOFS",
+        "ALLINTERIORCEILINGS",
+        "ALLINTERIORFLOORS"
+    )
+
+@always_inline
+fn heat_trans_algo_strs_init() -> InlineArray[StringRef, 10]:
+    return InlineArray[StringRef, 10](
+        "None",
+        "CTF - ConductionTransferFunction",
+        "EMPD - MoisturePenetrationDepthConductionTransferFunction",
+        "CondFD - ConductionFiniteDifference",
+        "HAMT - CombinedHeatAndMoistureFiniteElement",
+        "Window5 Detailed Fenestration",
+        "Window7 Complex Fenestration",
+        "Tubular Daylighting Device",
+        "KivaFoundation - TwoDimensionalFiniteDifference",
+        "Air Boundary - No Heat Transfer"
+    )
+
+@always_inline
+fn surf_t_air_ref_report_vals_init() -> InlineArray[Int, 3]:
+    return InlineArray[Int, 3](1, 2, 3)

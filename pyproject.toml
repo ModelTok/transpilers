@@ -17,12 +17,17 @@ dependencies = [
     "tree-sitter-go>=0.25.0",
     "pyghidra>=3.1.0",
     "libclang>=18.1.1",
+    "openrouter>=0.9.2",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.scripts]
 transpile = "transpilers.cli.main:main"
 transpile-levels = "transpilers.levels:main"
 transpile-api = "transpilers.api.server:main"
+transpile-llm = "transpilers.cli.transpile:main"
+transpile-build-config = "transpilers.cli.build_config:main"
+transpile-comments = "transpilers.cli.strip_comments:main"
 
 [build-system]
 requires = ["hatchling"]

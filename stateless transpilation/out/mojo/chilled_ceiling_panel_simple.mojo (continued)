@@ -1,0 +1,523 @@
+fn SimCoolingPanel(
+    state: Reference[Unknown], EquipName: StringLiteral, ControlledZoneNum: Int32, FirstHVACIteration: Bool
+) -> Tuple[Float64, Int32]:
+    if state.dataChilledCeilingPanelSimple.GetInputFlag:
+        GetCoolingPanelInput(state)
+        state.dataChilledCeilingPanelSimple.GetInputFlag = False
+
+    var CoolingPanelNum: Int32 = 0
+    var CompIndex: Int32 = 0
+
+    if CompIndex == 0:
+        CoolingPanelNum = state.Util.FindItemInList(EquipName, state.dataChilledCeilingPanelSimple.CoolingPanel)
+        if CoolingPanelNum == 0:
+            state.ShowFatalError("SimCoolingPanelSimple: Unit not found=" + EquipName)
+        CompIndex = CoolingPanelNum
+    else:
+        CoolingPanelNum = CompIndex
+        if CoolingPanelNum > state.dataChilledCeilingPanelSimple.CoolingPanel.size() or CoolingPanelNum < 1:
+            state.ShowFatalError(
+                "SimCoolingPanelSimple:  Invalid CompIndex passed=" + String(CoolingPanelNum) + 
+                ", Number of Units=" + String(state.dataChilledCeilingPanelSimple.CoolingPanel.size()) + 
+                ", Entered Unit name=" + EquipName
+            )
+        if state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1].CheckEquipName:
+            if EquipName != state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1].Name:
+                state.ShowFatalError(
+                    "SimCoolingPanelSimple: Invalid CompIndex passed=" + String(CoolingPanelNum) + 
+                    ", Unit name=" + EquipName + 
+                    ", stored Unit Name for that index=" + state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1].Name
+                )
+            state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1].CheckEquipName = False
+
+    var PowerMet: Float64 = 0.0
+
+    if CompIndex > 0:
+        var thisCP = Reference(state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1])
+
+        InitCoolingPanel(state, CoolingPanelNum, ControlledZoneNum, FirstHVACIteration)
+
+        let QZnReq = state.dataZoneEnergyDemand.ZoneSysEnergyDemand[ControlledZoneNum - 1].RemainingOutputReqToCoolSP
+
+        var MaxWaterFlow: Float64
+        var MinWaterFlow: Float64
+        if FirstHVACIteration:
+            MaxWaterFlow = thisCP.WaterMassFlowRateMax
+            MinWaterFlow = 0.0
+        else:
+            MaxWaterFlow = state.dataLoopNodes.Node[thisCP.WaterInletNode - 1].MassFlowRateMaxAvail
+            MinWaterFlow = state.dataLoopNodes.Node[thisCP.WaterInletNode - 1].MassFlowRateMinAvail
+
+        if thisCP.EquipType == state.DataPlant.PlantEquipmentType.CoolingPanel_Simple:
+            thisCP.CalcCoolingPanel(state, CoolingPanelNum)
+        else:
+            state.ShowSevereError(
+                "SimCoolingPanelSimple: Errors in CoolingPanel=" + 
+                state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1].Name
+            )
+            state.ShowContinueError(
+                "Invalid or unimplemented equipment type=" + 
+                String(state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1].EquipType)
+            )
+            state.ShowFatalError("Preceding condition causes termination.")
+
+        PowerMet = thisCP.TotPower
+        UpdateCoolingPanel(state, CoolingPanelNum)
+        state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1].ReportCoolingPanel(state)
+    else:
+        state.ShowFatalError("SimCoolingPanelSimple: Unit not found=" + EquipName)
+
+    return (PowerMet, CompIndex)
+
+
+fn GetCoolingPanelInput(state: Reference[Unknown]) -> None:
+    let RoutineName = "GetCoolingPanelInput:"
+    let routineName = "GetCoolingPanelInput"
+    let MaxFraction = 1.0
+    let MinFraction = 0.0
+    let MaxWaterTempAvg = 30.0
+    let MinWaterTempAvg = 0.0
+    let MaxWaterFlowRate = 10.0
+    let MinWaterFlowRate = 0.00001
+    let WaterMassFlowDefault = 0.063
+    let MinDistribSurfaces = 1
+    let MinThrottlingRange = 0.5
+
+    var ErrorsFound = False
+    let NumCoolingPanels = state.dataInputProcessing.inputProcessor.getNumObjectsFound(state, cCMO_CoolingPanel_Simple)
+
+    state.dataChilledCeilingPanelSimple.CoolingPanel = DynamicVector[CoolingPanelParams](NumCoolingPanels)
+
+    for CoolingPanelNum in range(1, NumCoolingPanels + 1):
+        var cAlphaArgs = DynamicVector[StringLiteral]()
+        var NumAlphas: Int32 = 0
+        var rNumericArgs = DynamicVector[Float64]()
+        var NumNumbers: Int32 = 0
+        var IOStat: Int32 = 0
+
+        state.dataInputProcessing.inputProcessor.getObjectItem(
+            state, cCMO_CoolingPanel_Simple, CoolingPanelNum,
+            cAlphaArgs, NumAlphas, rNumericArgs, NumNumbers, IOStat
+        )
+
+        var thisCP = Reference(state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1])
+
+        if CoolingPanelNum > 1:
+            for CoolPanelNumI in range(2, NumCoolingPanels + 1):
+                if cAlphaArgs[0] == state.dataChilledCeilingPanelSimple.CoolingPanel[CoolPanelNumI - 1].Name:
+                    ErrorsFound = True
+                    state.ShowSevereError(cAlphaArgs[0] + " is used as a name for more than one simple COOLING PANEL.")
+                    state.ShowContinueError("This is not allowed.")
+
+        thisCP.Name = cAlphaArgs[0] if cAlphaArgs.size() > 0 else ""
+        thisCP.EquipType = state.DataPlant.PlantEquipmentType.CoolingPanel_Simple
+
+        thisCP.Schedule = cAlphaArgs[1] if cAlphaArgs.size() > 1 else ""
+        if cAlphaArgs.size() > 1:
+            thisCP.availSched = state.Sched.GetSchedule(state, cAlphaArgs[1])
+        else:
+            thisCP.availSched = state.Sched.GetScheduleAlwaysOn(state)
+
+        thisCP.WaterInletNode = state.Node.GetOnlySingleNode(
+            state, cAlphaArgs[2] if cAlphaArgs.size() > 2 else "", ErrorsFound,
+            state.Node.ConnectionObjectType.ZoneHVACCoolingPanelRadiantConvectiveWater,
+            cAlphaArgs[0] if cAlphaArgs.size() > 0 else "",
+            state.Node.FluidType.Water,
+            state.Node.ConnectionType.Inlet,
+            state.Node.CompFluidStream.Primary,
+            state.Node.ObjectIsNotParent
+        )
+
+        thisCP.WaterOutletNode = state.Node.GetOnlySingleNode(
+            state, cAlphaArgs[3] if cAlphaArgs.size() > 3 else "", ErrorsFound,
+            state.Node.ConnectionObjectType.ZoneHVACCoolingPanelRadiantConvectiveWater,
+            cAlphaArgs[0] if cAlphaArgs.size() > 0 else "",
+            state.Node.FluidType.Water,
+            state.Node.ConnectionType.Outlet,
+            state.Node.CompFluidStream.Primary,
+            state.Node.ObjectIsNotParent
+        )
+        state.Node.TestCompSet(
+            state, cCMO_CoolingPanel_Simple, cAlphaArgs[0] if cAlphaArgs.size() > 0 else "",
+            cAlphaArgs[2] if cAlphaArgs.size() > 2 else "",
+            cAlphaArgs[3] if cAlphaArgs.size() > 3 else "",
+            "Chilled Water Nodes"
+        )
+
+        thisCP.RatedWaterTemp = rNumericArgs[0] if rNumericArgs.size() > 0 else 0.0
+        if thisCP.RatedWaterTemp > MaxWaterTempAvg + 0.001:
+            state.ShowWarningError(RoutineName + cCMO_CoolingPanel_Simple + "=\"" + (cAlphaArgs[0] if cAlphaArgs.size() > 0 else "") + "\", rated water temperature was higher than the allowable maximum.")
+            state.ShowContinueError("...reset to maximum value=[" + String(MaxWaterTempAvg, 2) + "].")
+            thisCP.RatedWaterTemp = MaxWaterTempAvg
+        elif thisCP.RatedWaterTemp < MinWaterTempAvg - 0.001:
+            state.ShowWarningError(RoutineName + cCMO_CoolingPanel_Simple + "=\"" + (cAlphaArgs[0] if cAlphaArgs.size() > 0 else "") + "\", rated water temperature was lower than the allowable minimum.")
+            state.ShowContinueError("...reset to minimum value=[" + String(MinWaterTempAvg, 2) + "].")
+            thisCP.RatedWaterTemp = MinWaterTempAvg
+
+        thisCP.RatedZoneAirTemp = rNumericArgs[1] if rNumericArgs.size() > 1 else 0.0
+        thisCP.RatedWaterFlowRate = rNumericArgs[2] if rNumericArgs.size() > 2 else 0.0
+        if thisCP.RatedWaterFlowRate < 0.00001 or thisCP.RatedWaterFlowRate > 10.0:
+            thisCP.RatedWaterFlowRate = WaterMassFlowDefault
+
+        thisCP.WaterVolFlowRateMax = rNumericArgs[6] if rNumericArgs.size() > 6 else 0.0
+
+        if state.Util.SameString(cAlphaArgs[4] if cAlphaArgs.size() > 4 else "", "CoolingDesignCapacity"):
+            thisCP.CoolingCapMethod = state.DataSizing.CoolingDesignCapacity
+            if rNumericArgs.size() > 3:
+                thisCP.ScaledCoolingCapacity = rNumericArgs[3]
+        elif state.Util.SameString(cAlphaArgs[4] if cAlphaArgs.size() > 4 else "", "CapacityPerFloorArea"):
+            thisCP.CoolingCapMethod = state.DataSizing.CapacityPerFloorArea
+            if rNumericArgs.size() > 4:
+                thisCP.ScaledCoolingCapacity = rNumericArgs[4]
+        elif state.Util.SameString(cAlphaArgs[4] if cAlphaArgs.size() > 4 else "", "FractionOfAutosizedCoolingCapacity"):
+            thisCP.CoolingCapMethod = state.DataSizing.FractionOfAutosizedCoolingCapacity
+            if rNumericArgs.size() > 5:
+                thisCP.ScaledCoolingCapacity = rNumericArgs[5]
+
+        if state.Util.SameString(cAlphaArgs[5] if cAlphaArgs.size() > 5 else "", "MeanAirTemperature"):
+            thisCP.controlType = ClgPanelCtrlType.MAT
+        elif state.Util.SameString(cAlphaArgs[5] if cAlphaArgs.size() > 5 else "", "MeanRadiantTemperature"):
+            thisCP.controlType = ClgPanelCtrlType.MRT
+        elif state.Util.SameString(cAlphaArgs[5] if cAlphaArgs.size() > 5 else "", "OperativeTemperature"):
+            thisCP.controlType = ClgPanelCtrlType.Operative
+        elif state.Util.SameString(cAlphaArgs[5] if cAlphaArgs.size() > 5 else "", "OutdoorDryBulbTemperature"):
+            thisCP.controlType = ClgPanelCtrlType.ODB
+        elif state.Util.SameString(cAlphaArgs[5] if cAlphaArgs.size() > 5 else "", "OutdoorWetBulbTemperature"):
+            thisCP.controlType = ClgPanelCtrlType.OWB
+        elif state.Util.SameString(cAlphaArgs[5] if cAlphaArgs.size() > 5 else "", "ZoneTotalLoad"):
+            thisCP.controlType = ClgPanelCtrlType.ZoneTotalLoad
+        elif state.Util.SameString(cAlphaArgs[5] if cAlphaArgs.size() > 5 else "", "ZoneConvectiveLoad"):
+            thisCP.controlType = ClgPanelCtrlType.ZoneConvectiveLoad
+        else:
+            thisCP.controlType = ClgPanelCtrlType.MAT
+
+        thisCP.ColdThrottlRange = rNumericArgs[7] if rNumericArgs.size() > 7 else 0.5
+        if thisCP.ColdThrottlRange < MinThrottlingRange:
+            thisCP.ColdThrottlRange = MinThrottlingRange
+
+        thisCP.ColdSetptSchedName = cAlphaArgs[6] if cAlphaArgs.size() > 6 else ""
+
+        if state.Util.SameString(cAlphaArgs[7] if cAlphaArgs.size() > 7 else "", "Off"):
+            thisCP.CondCtrlType = CondCtrl.NONE
+        elif state.Util.SameString(cAlphaArgs[7] if cAlphaArgs.size() > 7 else "", "SimpleOff"):
+            thisCP.CondCtrlType = CondCtrl.SIMPLEOFF
+        elif state.Util.SameString(cAlphaArgs[7] if cAlphaArgs.size() > 7 else "", "VariableOff"):
+            thisCP.CondCtrlType = CondCtrl.VARIEDOFF
+        else:
+            thisCP.CondCtrlType = CondCtrl.SIMPLEOFF
+
+        thisCP.CondDewPtDeltaT = rNumericArgs[8] if rNumericArgs.size() > 8 else 0.0
+        thisCP.FracRadiant = rNumericArgs[9] if rNumericArgs.size() > 9 else 0.0
+        if thisCP.FracRadiant < MinFraction:
+            thisCP.FracRadiant = MinFraction
+        if thisCP.FracRadiant > MaxFraction:
+            thisCP.FracRadiant = MaxFraction
+
+        thisCP.FracConvect = 1.0 - thisCP.FracRadiant
+
+        thisCP.FracDistribPerson = rNumericArgs[10] if rNumericArgs.size() > 10 else 0.0
+        if thisCP.FracDistribPerson < MinFraction:
+            thisCP.FracDistribPerson = MinFraction
+        if thisCP.FracDistribPerson > MaxFraction:
+            thisCP.FracDistribPerson = MaxFraction
+
+        thisCP.TotSurfToDistrib = NumNumbers - 11
+        thisCP.SurfaceName = DynamicVector[StringLiteral](thisCP.TotSurfToDistrib)
+        thisCP.SurfacePtr = DynamicVector[Int32](thisCP.TotSurfToDistrib)
+        thisCP.FracDistribToSurf = DynamicVector[Float64](thisCP.TotSurfToDistrib)
+
+        for ctrlZone in range(1, state.dataGlobal.NumOfZones + 1):
+            for zoneEquipTypeNum in range(1, state.dataZoneEquip.ZoneEquipList[ctrlZone - 1].NumOfEquipTypes + 1):
+                if (state.dataZoneEquip.ZoneEquipList[ctrlZone - 1].EquipType[zoneEquipTypeNum - 1] == state.DataZoneEquipment.ZoneEquipType.CoolingPanel and
+                    state.dataZoneEquip.ZoneEquipList[ctrlZone - 1].EquipName[zoneEquipTypeNum - 1] == thisCP.Name):
+                    thisCP.ZonePtr = ctrlZone
+
+        if thisCP.ZonePtr <= 0:
+            ErrorsFound = True
+            continue
+
+        var AllFracsSummed = thisCP.FracDistribPerson
+        for SurfNum in range(1, thisCP.TotSurfToDistrib + 1):
+            thisCP.SurfaceName[SurfNum - 1] = cAlphaArgs[SurfNum + 7] if cAlphaArgs.size() > SurfNum + 7 else ""
+            thisCP.SurfacePtr[SurfNum - 1] = state.HeatBalanceIntRadExchange.GetRadiantSystemSurface(
+                state, cCMO_CoolingPanel_Simple, thisCP.Name, thisCP.ZonePtr,
+                thisCP.SurfaceName[SurfNum - 1], ErrorsFound
+            )
+            thisCP.FracDistribToSurf[SurfNum - 1] = rNumericArgs[SurfNum + 10] if rNumericArgs.size() > SurfNum + 10 else 0.0
+            if thisCP.FracDistribToSurf[SurfNum - 1] > MaxFraction:
+                thisCP.FracDistribToSurf[SurfNum - 1] = MaxFraction
+            if thisCP.FracDistribToSurf[SurfNum - 1] < MinFraction:
+                thisCP.FracDistribToSurf[SurfNum - 1] = MinFraction
+            if thisCP.SurfacePtr[SurfNum - 1] != 0:
+                state.dataSurface.surfIntConv[thisCP.SurfacePtr[SurfNum - 1] - 1].getsRadiantHeat = True
+                state.dataSurface.allGetsRadiantHeatSurfaceList.push_back(thisCP.SurfacePtr[SurfNum - 1])
+
+            AllFracsSummed += thisCP.FracDistribToSurf[SurfNum - 1]
+
+        if AllFracsSummed > (MaxFraction + 0.01):
+            ErrorsFound = True
+        if (AllFracsSummed < (MaxFraction - 0.01)) and (thisCP.FracRadiant > MinFraction):
+            ErrorsFound = True
+
+    if ErrorsFound:
+        state.ShowFatalError(RoutineName + cCMO_CoolingPanel_Simple + "Errors found getting input. Program terminates.")
+
+    for CoolingPanelNum in range(1, NumCoolingPanels + 1):
+        var thisCP = Reference(state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1])
+        state.SetupOutputVariable(state, "Cooling Panel Total Cooling Rate", state.Constant.Units.W,
+            thisCP.Power, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Average, thisCP.Name)
+        state.SetupOutputVariable(state, "Cooling Panel Total System Cooling Rate", state.Constant.Units.W,
+            thisCP.TotPower, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Average, thisCP.Name)
+        state.SetupOutputVariable(state, "Cooling Panel Convective Cooling Rate", state.Constant.Units.W,
+            thisCP.ConvPower, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Average, thisCP.Name)
+        state.SetupOutputVariable(state, "Cooling Panel Radiant Cooling Rate", state.Constant.Units.W,
+            thisCP.RadPower, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Average, thisCP.Name)
+
+        state.SetupOutputVariable(state, "Cooling Panel Total Cooling Energy", state.Constant.Units.J,
+            thisCP.Energy, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Sum, thisCP.Name)
+        state.SetupOutputVariable(state, "Cooling Panel Total System Cooling Energy", state.Constant.Units.J,
+            thisCP.TotEnergy, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Sum, thisCP.Name)
+        state.SetupOutputVariable(state, "Cooling Panel Convective Cooling Energy", state.Constant.Units.J,
+            thisCP.ConvEnergy, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Sum, thisCP.Name)
+        state.SetupOutputVariable(state, "Cooling Panel Radiant Cooling Energy", state.Constant.Units.J,
+            thisCP.RadEnergy, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Sum, thisCP.Name)
+
+        state.SetupOutputVariable(state, "Cooling Panel Water Mass Flow Rate", state.Constant.Units.kg_s,
+            thisCP.WaterMassFlowRate, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Average, thisCP.Name)
+        state.SetupOutputVariable(state, "Cooling Panel Water Inlet Temperature", state.Constant.Units.C,
+            thisCP.WaterInletTemp, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Average, thisCP.Name)
+        state.SetupOutputVariable(state, "Cooling Panel Water Outlet Temperature", state.Constant.Units.C,
+            thisCP.WaterOutletTemp, state.OutputProcessor.TimeStepType.System, state.OutputProcessor.StoreType.Average, thisCP.Name)
+
+
+fn InitCoolingPanel(state: Reference[Unknown], CoolingPanelNum: Int32, ControlledZoneNum: Int32, FirstHVACIteration: Bool) -> None:
+    let RoutineName = "ChilledCeilingPanelSimple:InitCoolingPanel"
+
+    var thisCP = Reference(state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1])
+    var ThisInNode = Reference(state.dataLoopNodes.Node[thisCP.WaterInletNode - 1])
+
+    if thisCP.ZonePtr <= 0:
+        thisCP.ZonePtr = ControlledZoneNum
+
+    if not thisCP.ZoneEquipmentListChecked and state.dataZoneEquip.ZoneEquipInputsFilled:
+        thisCP.ZoneEquipmentListChecked = True
+        if not state.DataZoneEquipment.CheckZoneEquipmentList(state, cCMO_CoolingPanel_Simple, thisCP.Name):
+            state.ShowSevereError("InitCoolingPanel: Unit=[" + cCMO_CoolingPanel_Simple + "," + thisCP.Name + "] is not on any ZoneHVAC:EquipmentList.  It will not be simulated.")
+
+    if thisCP.SetLoopIndexFlag:
+        if state.dataPlnt.PlantLoop:
+            var errFlag = False
+            state.PlantUtilities.ScanPlantLoopsForObject(state, thisCP.Name, thisCP.EquipType, thisCP.plantLoc, errFlag)
+            if errFlag:
+                state.ShowFatalError("InitCoolingPanel: Program terminated for previous conditions.")
+            thisCP.SetLoopIndexFlag = False
+
+    if not state.dataGlobal.SysSizingCalc:
+        if thisCP.MySizeFlagCoolPanel and not thisCP.SetLoopIndexFlag:
+            SizeCoolingPanel(state, CoolingPanelNum)
+            thisCP.MySizeFlagCoolPanel = False
+
+            if thisCP.WaterInletNode > 0:
+                let rho = thisCP.plantLoc.loop.glycol.getDensity(state, state.Constant.CWInitConvTemp, RoutineName)
+                thisCP.WaterMassFlowRateMax = rho * thisCP.WaterVolFlowRateMax
+                state.PlantUtilities.InitComponentNodes(state, 0.0, thisCP.WaterMassFlowRateMax, thisCP.WaterInletNode, thisCP.WaterOutletNode)
+
+    if state.dataGlobal.BeginEnvrnFlag and thisCP.MyEnvrnFlag:
+        let rho = thisCP.plantLoc.loop.glycol.getDensity(state, state.Constant.InitConvTemp, RoutineName)
+        thisCP.WaterMassFlowRateMax = rho * thisCP.WaterVolFlowRateMax
+        state.PlantUtilities.InitComponentNodes(state, 0.0, thisCP.WaterMassFlowRateMax, thisCP.WaterInletNode, thisCP.WaterOutletNode)
+
+        ThisInNode.Temp = 7.0
+        let Cp = thisCP.plantLoc.loop.glycol.getSpecificHeat(state, ThisInNode.Temp, RoutineName)
+        ThisInNode.Enthalpy = Cp * ThisInNode.Temp
+        ThisInNode.Quality = 0.0
+        ThisInNode.Press = 0.0
+        ThisInNode.HumRat = 0.0
+
+        thisCP.ZeroCPSourceSumHATsurf = 0.0
+        thisCP.CoolingPanelSource = 0.0
+        thisCP.CoolingPanelSrcAvg = 0.0
+        thisCP.LastCoolingPanelSrc = 0.0
+        thisCP.LastSysTimeElapsed = 0.0
+        thisCP.LastTimeStepSys = 0.0
+
+        thisCP.MyEnvrnFlag = False
+
+    if not state.dataGlobal.BeginEnvrnFlag:
+        thisCP.MyEnvrnFlag = True
+
+    if state.dataGlobal.BeginTimeStepFlag and FirstHVACIteration:
+        let ZoneNum = thisCP.ZonePtr
+        thisCP.ZeroCPSourceSumHATsurf = state.dataHeatBal.Zone[ZoneNum - 1].sumHATsurf(state)
+        thisCP.CoolingPanelSrcAvg = 0.0
+        thisCP.LastCoolingPanelSrc = 0.0
+        thisCP.LastSysTimeElapsed = 0.0
+        thisCP.LastTimeStepSys = 0.0
+
+    thisCP.WaterMassFlowRate = ThisInNode.MassFlowRate
+    thisCP.WaterInletTemp = ThisInNode.Temp
+    thisCP.WaterInletEnthalpy = ThisInNode.Enthalpy
+    thisCP.TotPower = 0.0
+    thisCP.Power = 0.0
+    thisCP.ConvPower = 0.0
+    thisCP.RadPower = 0.0
+    thisCP.TotEnergy = 0.0
+    thisCP.Energy = 0.0
+    thisCP.ConvEnergy = 0.0
+    thisCP.RadEnergy = 0.0
+
+
+fn SizeCoolingPanel(state: Reference[Unknown], CoolingPanelNum: Int32) -> None:
+    let RoutineName = "SizeCoolingPanel"
+
+    state.dataSize.DataScalableCapSizingON = False
+    var thisCP = Reference(state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1])
+
+    let CompType = "ZoneHVAC:CoolingPanel:RadiantConvective:Water"
+    let CompName = thisCP.Name
+
+    let IsAutoSize = thisCP.ScaledCoolingCapacity == state.DataSizing.AutoSize
+    var DesCoilLoad: Float64 = 0.0
+
+    if state.dataSize.CurZoneEqNum > 0:
+        var CapSizingMethod = thisCP.CoolingCapMethod
+        if not IsAutoSize and not state.dataSize.ZoneSizingRunDone:
+            if CapSizingMethod == state.DataSizing.CoolingDesignCapacity and thisCP.ScaledCoolingCapacity > 0.0:
+                DesCoilLoad = thisCP.ScaledCoolingCapacity
+            elif CapSizingMethod == state.DataSizing.CapacityPerFloorArea:
+                state.dataSize.DataScalableCapSizingON = True
+                DesCoilLoad = thisCP.ScaledCoolingCapacity * state.dataHeatBal.Zone[thisCP.ZonePtr - 1].FloorArea
+                state.dataSize.DataScalableCapSizingON = False
+        else:
+            if (CapSizingMethod == state.DataSizing.CoolingDesignCapacity or
+                CapSizingMethod == state.DataSizing.CapacityPerFloorArea or
+                CapSizingMethod == state.DataSizing.FractionOfAutosizedCoolingCapacity):
+                if CapSizingMethod == state.DataSizing.CoolingDesignCapacity:
+                    DesCoilLoad = thisCP.ScaledCoolingCapacity
+                elif CapSizingMethod == state.DataSizing.CapacityPerFloorArea:
+                    DesCoilLoad = thisCP.ScaledCoolingCapacity * state.dataHeatBal.Zone[thisCP.ZonePtr - 1].FloorArea
+                    state.dataSize.DataScalableCapSizingON = True
+                elif CapSizingMethod == state.DataSizing.FractionOfAutosizedCoolingCapacity:
+                    DesCoilLoad = state.dataSize.FinalZoneSizing[state.dataSize.CurZoneEqNum - 1].NonAirSysDesCoolLoad * thisCP.ScaledCoolingCapacity
+                    state.dataSize.DataScalableCapSizingON = True
+                state.dataSize.DataScalableCapSizingON = False
+            else:
+                DesCoilLoad = 0.0
+
+        thisCP.ScaledCoolingCapacity = DesCoilLoad
+
+    let IsAutoSizeFlow = thisCP.WaterVolFlowRateMax == state.DataSizing.AutoSize
+    if state.dataSize.CurZoneEqNum > 0:
+        var WaterVolFlowMaxCoolDes: Float64 = 0.0
+        if not IsAutoSizeFlow and not state.dataSize.ZoneSizingRunDone:
+            if thisCP.WaterVolFlowRateMax > 0.0:
+                state.BaseSizer.reportSizerOutput(state, CompType, thisCP.Name,
+                    "User-Specified Maximum Cold Water Flow [m3/s]", thisCP.WaterVolFlowRateMax)
+        else:
+            if thisCP.WaterInletNode > 0 and thisCP.WaterOutletNode > 0:
+                let PltSizCoolNum = state.PlantUtilities.MyPlantSizingIndex(
+                    state, CompType, thisCP.Name, thisCP.WaterInletNode, thisCP.WaterOutletNode
+                )
+                if PltSizCoolNum > 0:
+                    if DesCoilLoad >= state.HVAC.SmallLoad:
+                        let rho = thisCP.plantLoc.loop.glycol.getDensity(state, 5.0, RoutineName)
+                        let Cp = thisCP.plantLoc.loop.glycol.getSpecificHeat(state, 5.0, RoutineName)
+                        WaterVolFlowMaxCoolDes = DesCoilLoad / (state.dataSize.PlantSizData[PltSizCoolNum - 1].DeltaT * Cp * rho)
+                    else:
+                        WaterVolFlowMaxCoolDes = 0.0
+
+            if IsAutoSizeFlow:
+                thisCP.WaterVolFlowRateMax = WaterVolFlowMaxCoolDes
+                state.BaseSizer.reportSizerOutput(state, CompType, thisCP.Name,
+                    "Design Size Maximum Cold Water Flow [m3/s]", WaterVolFlowMaxCoolDes)
+
+    state.PlantUtilities.RegisterPlantCompDesignFlow(state, thisCP.WaterInletNode, thisCP.WaterVolFlowRateMax)
+
+    if not thisCP.SizeCoolingPanelUA(state):
+        state.ShowFatalError("SizeCoolingPanelUA: Program terminated for previous conditions.")
+
+
+fn UpdateCoolingPanel(state: Reference[Unknown], CoolingPanelNum: Int32) -> None:
+    let SysTimeElapsed = state.dataHVACGlobal.SysTimeElapsed
+    let TimeStepSys = state.dataHVACGlobal.TimeStepSys
+    var thisCP = Reference(state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum - 1])
+
+    if thisCP.LastSysTimeElapsed == SysTimeElapsed:
+        thisCP.CoolingPanelSrcAvg -= thisCP.LastCoolingPanelSrc * thisCP.LastTimeStepSys / state.dataGlobal.TimeStepZone
+
+    thisCP.CoolingPanelSrcAvg += thisCP.CoolingPanelSource * TimeStepSys / state.dataGlobal.TimeStepZone
+
+    thisCP.LastCoolingPanelSrc = thisCP.CoolingPanelSource
+    thisCP.LastSysTimeElapsed = SysTimeElapsed
+    thisCP.LastTimeStepSys = TimeStepSys
+
+    let WaterInletNode = thisCP.WaterInletNode
+    let WaterOutletNode = thisCP.WaterOutletNode
+
+    var ThisInNode = Reference(state.dataLoopNodes.Node[WaterInletNode - 1])
+    var ThisOutNode = Reference(state.dataLoopNodes.Node[WaterOutletNode - 1])
+
+    state.PlantUtilities.SafeCopyPlantNode(state, WaterInletNode, WaterOutletNode)
+    ThisOutNode.Temp = thisCP.WaterOutletTemp
+    ThisOutNode.Enthalpy = thisCP.WaterOutletEnthalpy
+    ThisInNode.MassFlowRate = thisCP.WaterMassFlowRate
+    ThisOutNode.MassFlowRate = thisCP.WaterMassFlowRate
+    ThisInNode.MassFlowRateMax = thisCP.WaterMassFlowRateMax
+    ThisOutNode.MassFlowRateMax = thisCP.WaterMassFlowRateMax
+
+
+fn UpdateCoolingPanelSourceValAvg(state: Reference[Unknown]) -> Bool:
+    var CoolingPanelSysOn = False
+
+    if not state.dataChilledCeilingPanelSimple.CoolingPanel.size():
+        return False
+
+    for CoolingPanelNum in range(state.dataChilledCeilingPanelSimple.CoolingPanel.size()):
+        if state.dataChilledCeilingPanelSimple.CoolingPanel[CoolingPanelNum].CoolingPanelSrcAvg != 0.0:
+            CoolingPanelSysOn = True
+            break
+
+    for cp in state.dataChilledCeilingPanelSimple.CoolingPanel:
+        cp.CoolingPanelSource = cp.CoolingPanelSrcAvg
+
+    DistributeCoolingPanelRadGains(state)
+    return CoolingPanelSysOn
+
+
+fn DistributeCoolingPanelRadGains(state: Reference[Unknown]) -> None:
+    let SmallestArea = 0.001
+
+    for thisCP in state.dataChilledCeilingPanelSimple.CoolingPanel:
+        for radSurfNum in range(thisCP.TotSurfToDistrib):
+            let surfNum = thisCP.SurfacePtr[radSurfNum]
+            state.dataHeatBalFanSys.surfQRadFromHVAC[surfNum - 1].CoolingPanel = 0.0
+
+    state.dataHeatBalFanSys.ZoneQCoolingPanelToPerson = InlineArray[Float64, 1000](fill=0.0)
+
+    for thisCP in state.dataChilledCeilingPanelSimple.CoolingPanel:
+        let ZoneNum = thisCP.ZonePtr
+        if ZoneNum <= 0:
+            continue
+        state.dataHeatBalFanSys.ZoneQCoolingPanelToPerson[ZoneNum - 1] += thisCP.CoolingPanelSource * thisCP.FracDistribPerson
+
+        for RadSurfNum in range(thisCP.TotSurfToDistrib):
+            let SurfNum = thisCP.SurfacePtr[RadSurfNum]
+            let ThisSurf = state.dataSurface.Surface[SurfNum - 1]
+            if ThisSurf.Area > SmallestArea:
+                let ThisSurfIntensity = thisCP.CoolingPanelSource * thisCP.FracDistribToSurf[RadSurfNum] / ThisSurf.Area
+                state.dataHeatBalFanSys.surfQRadFromHVAC[SurfNum - 1].CoolingPanel += ThisSurfIntensity
+                if ThisSurfIntensity > state.DataHeatBalFanSys.MaxRadHeatFlux:
+                    state.ShowSevereError("DistributeCoolingPanelRadGains:  excessive thermal radiation heat flux intensity detected")
+                    state.ShowContinueError("Surface = " + ThisSurf.Name)
+                    state.ShowContinueError("Surface area = " + String(ThisSurf.Area, 3) + " [m2]")
+                    state.ShowContinueError("Occurs in " + cCMO_CoolingPanel_Simple + " = " + thisCP.Name)
+                    state.ShowContinueError("Radiation intensity = " + String(ThisSurfIntensity, 2) + " [W/m2]")
+                    state.ShowContinueError("Assign a larger surface area or more surfaces in " + cCMO_CoolingPanel_Simple)
+                    state.ShowFatalError("DistributeCoolingPanelRadGains:  excessive thermal radiation heat flux intensity detected")
+            else:
+                state.ShowSevereError("DistributeCoolingPanelRadGains:  surface not large enough to receive thermal radiation heat flux")
+                state.ShowContinueError("Surface = " + ThisSurf.Name)
+                state.ShowContinueError("Surface area = " + String(ThisSurf.Area, 3) + " [m2]")
+                state.ShowContinueError("Occurs in " + cCMO_CoolingPanel_Simple + " = " + thisCP.Name)
+                state.ShowContinueError("Assign a larger surface area or more surfaces in " + cCMO_CoolingPanel_Simple)
+                state.ShowFatalError("DistributeCoolingPanelRadGains:  surface not large enough to receive thermal radiation heat flux")

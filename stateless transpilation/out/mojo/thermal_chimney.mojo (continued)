@@ -1,0 +1,241 @@
+            var air_density = Psy.RhoAirFnPbTdbW(
+                state,
+                state.dataEnvrn.OutBaroPress,
+                tc_zone_mat,
+                tc_zone_hum_rat,
+            )
+            var cp_air = Psy.CpAirFnW(tc_zone_hum_rat)
+            var this_mcp_therm_chim = (
+                tc_volume_air_flow_rate
+                * air_density
+                * cp_air
+                * state.dataThermalChimneys.ThermalChimneySys[loop].RatioThermChimAirFlow[
+                    tc_zone_num
+                ]
+            )
+            if this_mcp_therm_chim <= 0.0:
+                this_mcp_therm_chim = 0.0
+            var this_therm_chim_amfl = this_mcp_therm_chim / cp_air
+            var this_mcp_t_therm_chim = (
+                this_mcp_therm_chim
+                * state.dataHeatBal.Zone[tc_zone_ptr].OutDryBulbTemp
+            )
+            this_tc_zone_hb.MCPThermChim = this_mcp_therm_chim
+            this_tc_zone_hb.ThermChimAMFL = this_therm_chim_amfl
+            this_tc_zone_hb.MCPTThermChim = this_mcp_t_therm_chim
+            if (
+                state.dataHeatBal.doSpaceHeatBalance
+                and tc_space_ptr > 0
+            ):
+                var this_tc_space_hb = state.dataZoneTempPredictorCorrector.spaceHeatBalance[
+                    tc_space_ptr
+                ]
+                this_tc_space_hb.MCPThermChim = this_mcp_therm_chim
+                this_tc_space_hb.ThermChimAMFL = this_therm_chim_amfl
+                this_tc_space_hb.MCPTThermChim = this_mcp_t_therm_chim
+
+        this_zone_hb.MCPThermChim = (
+            tc_volume_air_flow_rate * air_density * cp_air
+        )
+        if this_zone_hb.MCPThermChim <= 0.0:
+            this_zone_hb.MCPThermChim = 0.0
+        this_zone_hb.ThermChimAMFL = this_zone_hb.MCPThermChim / cp_air
+        this_zone_hb.MCPTThermChim = (
+            this_zone_hb.MCPThermChim
+            * state.dataHeatBal.Zone[zone_num].OutDryBulbTemp
+        )
+
+        state.dataThermalChimneys.ThermalChimneyReport[loop].OverallTCVolumeFlow = (
+            tc_volume_air_flow_rate
+        )
+        state.dataThermalChimneys.ThermalChimneyReport[loop].OverallTCMassFlow = (
+            tc_mass_air_flow_rate
+        )
+        state.dataThermalChimneys.ThermalChimneyReport[
+            loop
+        ].OverallTCVolumeFlowStd = (
+            tc_mass_air_flow_rate / state.dataEnvrn.StdRhoAir
+        )
+        if (
+            state.dataThermalChimneys.ThermalChimneyReport[loop].OverallTCMassFlow
+            != (tc_volume_air_flow_rate * air_density_thermal_chim)
+        ):
+            state.dataThermalChimneys.ThermalChimneyReport[
+                loop
+            ].OverallTCMassFlow = (
+                state.dataThermalChimneys.ThermalChimneyReport[
+                    loop
+                ].OverallTCVolumeFlow
+                * air_density_thermal_chim
+            )
+        state.dataThermalChimneys.ThermalChimneyReport[
+            loop
+        ].OutletAirTempThermalChim = (
+            therm_chim_sub_temp[NTC - 1] - Constant.Kelvin
+        )
+
+        if (
+            state.dataThermalChimneys.ThermalChimneySys[loop].availSched.getCurrentVal()
+            <= 0.0
+        ):
+            for tc_zone_num in range(
+                state.dataThermalChimneys.ThermalChimneySys[loop].TotZoneToDistrib
+            ):
+                tc_zone_ptr = state.dataThermalChimneys.ThermalChimneySys[loop].ZonePtr[
+                    tc_zone_num
+                ]
+                this_tc_zone_hb = state.dataZoneTempPredictorCorrector.zoneHeatBalance[
+                    tc_zone_ptr
+                ]
+                this_tc_zone_hb.MCPThermChim = 0.0
+                this_tc_zone_hb.ThermChimAMFL = 0.0
+                this_tc_zone_hb.MCPTThermChim = 0.0
+                tc_space_ptr = (
+                    state.dataThermalChimneys.ThermalChimneySys[loop].spacePtr[
+                        tc_zone_num
+                    ]
+                )
+                if (
+                    state.dataHeatBal.doSpaceHeatBalance
+                    and tc_space_ptr > 0
+                ):
+                    this_tc_space_hb = (
+                        state.dataZoneTempPredictorCorrector.spaceHeatBalance[
+                            tc_space_ptr
+                        ]
+                    )
+                    this_tc_space_hb.MCPThermChim = 0.0
+                    this_tc_space_hb.ThermChimAMFL = 0.0
+                    this_tc_space_hb.MCPTThermChim = 0.0
+            this_zone_hb.MCPThermChim = 0.0
+            this_zone_hb.ThermChimAMFL = 0.0
+            this_zone_hb.MCPTThermChim = 0.0
+            state.dataThermalChimneys.ThermalChimneyReport[loop].OverallTCVolumeFlow = 0.0
+            state.dataThermalChimneys.ThermalChimneyReport[
+                loop
+            ].OverallTCVolumeFlowStd = 0.0
+            state.dataThermalChimneys.ThermalChimneyReport[loop].OverallTCMassFlow = 0.0
+            state.dataThermalChimneys.ThermalChimneyReport[
+                loop
+            ].OutletAirTempThermalChim = (
+                state.dataZoneTempPredictorCorrector.zoneHeatBalance[zone_num].MAT
+            )
+
+
+fn report_thermal_chimney(state: UnsafePointer[NoneType]) -> None:
+    var time_step_sys_sec = state.dataHVACGlobal.TimeStepSysSec
+
+    for zone_loop in range(1, state.dataGlobal.NumOfZones + 1):
+        var this_zone_hb = state.dataZoneTempPredictorCorrector.zoneHeatBalance[zone_loop]
+
+        var air_density = Psy.RhoAirFnPbTdbW(
+            state,
+            state.dataEnvrn.OutBaroPress,
+            this_zone_hb.MAT,
+            this_zone_hb.airHumRat,
+        )
+        var cp_air = Psy.CpAirFnW(this_zone_hb.airHumRat)
+        state.dataThermalChimneys.ZnRptThermChim[zone_loop].ThermalChimneyVolume = (
+            (this_zone_hb.MCPThermChim / cp_air / air_density) * time_step_sys_sec
+        )
+        state.dataThermalChimneys.ZnRptThermChim[zone_loop].ThermalChimneyMass = (
+            (this_zone_hb.MCPThermChim / cp_air) * time_step_sys_sec
+        )
+
+        state.dataThermalChimneys.ZnRptThermChim[zone_loop].ThermalChimneyHeatLoss = (
+            0.0
+        )
+        state.dataThermalChimneys.ZnRptThermChim[zone_loop].ThermalChimneyHeatGain = (
+            0.0
+        )
+
+        if (
+            state.dataZoneTempPredictorCorrector.zoneHeatBalance[zone_loop].ZT
+            > state.dataHeatBal.Zone[zone_loop].OutDryBulbTemp
+        ):
+            state.dataThermalChimneys.ZnRptThermChim[
+                zone_loop
+            ].ThermalChimneyHeatLoss = (
+                this_zone_hb.MCPThermChim
+                * (
+                    state.dataZoneTempPredictorCorrector.zoneHeatBalance[zone_loop].ZT
+                    - state.dataHeatBal.Zone[zone_loop].OutDryBulbTemp
+                )
+                * time_step_sys_sec
+            )
+            state.dataThermalChimneys.ZnRptThermChim[zone_loop].ThermalChimneyHeatGain = (
+                0.0
+            )
+        elif (
+            state.dataZoneTempPredictorCorrector.zoneHeatBalance[zone_loop].ZT
+            <= state.dataHeatBal.Zone[zone_loop].OutDryBulbTemp
+        ):
+            state.dataThermalChimneys.ZnRptThermChim[
+                zone_loop
+            ].ThermalChimneyHeatGain = (
+                this_zone_hb.MCPThermChim
+                * (
+                    state.dataHeatBal.Zone[zone_loop].OutDryBulbTemp
+                    - state.dataZoneTempPredictorCorrector.zoneHeatBalance[zone_loop].ZT
+                )
+                * time_step_sys_sec
+            )
+            state.dataThermalChimneys.ZnRptThermChim[zone_loop].ThermalChimneyHeatLoss = (
+                0.0
+            )
+
+
+fn gauss_elimination(
+    equa_coef: DynamicMatrix[Float64],
+    equa_const: DynamicVector[Float64],
+    therm_chim_sub_temp: DynamicVector[Float64],
+    ntc: Int32,
+) -> None:
+    var tempor = DynamicVector[Float64](ntc, fill=0.0)
+    var tempb: Float64 = 0.0
+    var tcvalue: Float64 = 0.0
+    var tccoefficient: Float64 = 0.0
+    var thermal_chim_sum: Float64 = 0.0
+
+    for therm_chim_loop1 in range(ntc):
+        tcvalue = fabs(equa_coef[therm_chim_loop1][therm_chim_loop1])
+        var pivot = therm_chim_loop1
+        for therm_chim_loop2 in range(therm_chim_loop1 + 1, ntc):
+            if fabs(equa_coef[therm_chim_loop1][therm_chim_loop2]) > tcvalue:
+                tcvalue = fabs(equa_coef[therm_chim_loop1][therm_chim_loop2])
+                pivot = therm_chim_loop2
+
+        if pivot != therm_chim_loop1:
+            tempor = equa_coef[therm_chim_loop1]
+            tempb = equa_const[therm_chim_loop1]
+            equa_coef[therm_chim_loop1] = equa_coef[pivot]
+            equa_const[therm_chim_loop1] = equa_const[pivot]
+            equa_coef[pivot] = tempor
+            equa_const[pivot] = tempb
+
+        for therm_chim_loop2 in range(therm_chim_loop1 + 1, ntc):
+            tccoefficient = (
+                -equa_coef[therm_chim_loop1][therm_chim_loop2]
+                / equa_coef[therm_chim_loop1][therm_chim_loop1]
+            )
+            for idx in range(therm_chim_loop1, ntc):
+                equa_coef[idx][therm_chim_loop2] += (
+                    tccoefficient * equa_coef[idx][therm_chim_loop1]
+                )
+            equa_const[therm_chim_loop2] += (
+                tccoefficient * equa_const[therm_chim_loop1]
+            )
+
+    therm_chim_sub_temp[ntc - 1] = (
+        equa_const[ntc - 1] / equa_coef[ntc - 1][ntc - 1]
+    )
+    for therm_chim_loop2 in range(ntc - 2, -1, -1):
+        thermal_chim_sum = 0.0
+        for therm_chim_loop3 in range(therm_chim_loop2 + 1, ntc):
+            thermal_chim_sum += (
+                equa_coef[therm_chim_loop3][therm_chim_loop2]
+                * therm_chim_sub_temp[therm_chim_loop3]
+            )
+        therm_chim_sub_temp[therm_chim_loop2] = (
+            equa_const[therm_chim_loop2] - thermal_chim_sum
+        ) / equa_coef[therm_chim_loop2][therm_chim_loop2]
