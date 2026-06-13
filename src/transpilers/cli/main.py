@@ -206,6 +206,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print intermediate output (e.g. the Python stage when using --path python_pivot)",
     )
+    parser.add_argument(
+        "--provenance",
+        type=Path,
+        default=None,
+        help=(
+            "write a JSON provenance sidecar mapping every LIR node back to its "
+            "originating HIR node (id + type); supports the structural-fidelity "
+            "verifier and targeted repair"
+        ),
+    )
     args = parser.parse_args(argv)
 
     source_lang = args.source_lang or EXT_TO_SOURCE.get(args.source.suffix)
@@ -315,6 +325,15 @@ def main(argv: list[str] | None = None) -> int:
         raise
     out = trace.output
     sys.stdout.write(out)
+
+    if args.provenance is not None:
+        import json
+        if trace.provenance_map is None:
+            provenance_data = {"provenance_map": None, "warning": "provenance map not built"}
+        else:
+            provenance_data = trace.provenance_map.to_dict()
+        args.provenance.write_text(json.dumps(provenance_data, indent=2, sort_keys=True))
+        sys.stderr.write(f"[provenance] wrote sidecar to {args.provenance}\n")
 
     if args.verify:
         _, _, verify_fn = TARGETS[args.target]

@@ -39,7 +39,20 @@ __all__ = [
     "scan_subscript_assigned_params",
     "is_string_concat",
     "is_list_concat",
+    "copy_provenance",
 ]
+
+
+# -- provenance helper -------------------------------------------------------
+
+def copy_provenance(lir_node: lir.LirNode, mir_node: mir.MirNode) -> lir.LirNode:
+    """Copy ``mir_node._hir_provenance_id`` to ``lir_node._hir_provenance_id``.
+
+    Call this after every LIR node construction to thread provenance from MIR
+    through the lowering pass.  Returns the LIR node for chaining.
+    """
+    lir_node._hir_provenance_id = mir_node._hir_provenance_id
+    return lir_node
 
 
 # --------------------------------------------------------------------------- #
@@ -197,23 +210,27 @@ class MirLoweringBase:
             items.extend(self.lower_struct_items(s))
         for fn in module.functions:
             items.append(self.lower_function(fn))
-        return self.make_module(items)
+        return self.make_module(items, module)
 
-    def make_module(self, items: list[lir.LirNode]):
+    def make_module(self, items: list[lir.LirNode], mir_node: mir.MirNode | None = None):
         assert self.module_cls is not None
-        return self.module_cls(items=items)
+        node = self.module_cls(items=items)
+        if mir_node is not None:
+            copy_provenance(node, mir_node)
+        return node
 
     def lower_struct_items(self, s: mir.MirStruct) -> list[lir.LirNode]:
         """Return the LIR item(s) a struct lowers to. Default: one node with
         ``name`` / ``fields`` / ``methods``. Targets that split a struct into
         several items (e.g. Rust's def + impl) override this."""
-        return [
+        items = [
             self.ns.Struct(
                 name=s.name,
                 fields=[(f.name, self.type_str(f.ty)) for f in s.fields],
                 methods=[self.lower_function(m) for m in s.methods],
             )
         ]
+        return items
 
     def lower_function(self, fn: mir.MirFunction):
         param_names = {p.name for p in fn.params}
@@ -227,7 +244,10 @@ class MirLoweringBase:
         return self.make_function(fn, params, ret, body)
 
     def make_function(self, fn, params, ret, body):
-        return self.ns.Fn(name=fn.name, params=params, return_type=ret, body=body)
+        return copy_provenance(
+            self.ns.Fn(name=fn.name, params=params, return_type=ret, body=body),
+            fn,
+        )
 
     def lower_params(self, fn: mir.MirFunction):
         """Default: ``(name, type)`` tuples. Targets that decorate params
@@ -254,9 +274,9 @@ class MirLoweringBase:
         if isinstance(node, mir.MirReturn):
             return self.lower_return(node)
         if isinstance(node, mir.MirBreak):
-            return self.ns.Break()
+            return copy_provenance(self.ns.Break(), node)
         if isinstance(node, mir.MirContinue):
-            return self.ns.Continue()
+            return copy_provenance(self.ns.Continue(), node)
         if isinstance(node, mir.MirFieldAssign):
             return self.lower_field_assign(node)
         if isinstance(node, mir.MirSubscriptAssign):
@@ -264,44 +284,62 @@ class MirLoweringBase:
         if isinstance(node, mir.MirAssign):
             return self.lower_assign(node, declared, mut)
         if isinstance(node, mir.MirIf):
-            return self.ns.If(
-                test=self.lower_expr(node.test),
-                body=self._lower_block(node.body, declared, mut),
-                orelse=self._lower_block(node.orelse, declared, mut),
+            return copy_provenance(
+                self.ns.If(
+                    test=self.lower_expr(node.test),
+                    body=self._lower_block(node.body, declared, mut),
+                    orelse=self._lower_block(node.orelse, declared, mut),
+                ),
+                node,
             )
         if isinstance(node, mir.MirWhile):
-            return self.ns.While(
-                test=self.lower_expr(node.test),
-                body=self._lower_block(node.body, declared, mut),
+            return copy_provenance(
+                self.ns.While(
+                    test=self.lower_expr(node.test),
+                    body=self._lower_block(node.body, declared, mut),
+                ),
+                node,
             )
         if isinstance(node, mir.MirForRange):
             return self.lower_for_range(node, declared, mut)
         return self.lower_expr(node)
 
     def lower_return(self, node: mir.MirReturn):
-        return self.ns.Return(value=self.lower_expr(node.value) if node.value else None)
+        return copy_provenance(
+            self.ns.Return(value=self.lower_expr(node.value) if node.value else None),
+            node,
+        )
 
     def lower_field_assign(self, node: mir.MirFieldAssign):
-        return self.ns.FieldAssign(
-            obj=self.lower_expr(node.obj),
-            field=node.field,
-            value=self.lower_expr(node.value),
+        return copy_provenance(
+            self.ns.FieldAssign(
+                obj=self.lower_expr(node.obj),
+                field=node.field,
+                value=self.lower_expr(node.value),
+            ),
+            node,
         )
 
     def lower_subscript_assign(self, node: mir.MirSubscriptAssign):
-        return self.ns.SubscriptAssign(
-            obj=self.lower_expr(node.obj),
-            index=self.lower_expr(node.index),
-            value=self.lower_expr(node.value),
+        return copy_provenance(
+            self.ns.SubscriptAssign(
+                obj=self.lower_expr(node.obj),
+                index=self.lower_expr(node.index),
+                value=self.lower_expr(node.value),
+            ),
+            node,
         )
 
     def lower_for_range(self, node: mir.MirForRange, declared: set[str], mut: set[str]):
-        return self.ns.ForRange(
-            target=node.target,
-            start=self.lower_expr(node.start),
-            stop=self.lower_expr(node.stop),
-            step=self.lower_expr(node.step) if node.step else None,
-            body=self._lower_block(node.body, declared, mut),
+        return copy_provenance(
+            self.ns.ForRange(
+                target=node.target,
+                start=self.lower_expr(node.start),
+                stop=self.lower_expr(node.stop),
+                step=self.lower_expr(node.step) if node.step else None,
+                body=self._lower_block(node.body, declared, mut),
+            ),
+            node,
         )
 
     def _lower_block(self, nodes, declared, mut):
@@ -324,9 +362,12 @@ class MirLoweringBase:
         if isinstance(node, mir.MirFieldAccess):
             return self.lower_field_access(node)
         if isinstance(node, mir.MirStructInit):
-            return self.ns.StructInit(
-                name=node.name,
-                field_values=[(n, self.lower_expr(v)) for n, v in node.field_values],
+            return copy_provenance(
+                self.ns.StructInit(
+                    name=node.name,
+                    field_values=[(n, self.lower_expr(v)) for n, v in node.field_values],
+                ),
+                node,
             )
         if isinstance(node, mir.MirMethodCall):
             return self.lower_method_call(node)
@@ -339,15 +380,15 @@ class MirLoweringBase:
         if isinstance(node, mir.MirUnaryOp):
             return self.lower_unary(node)
         if isinstance(node, mir.MirName):
-            return self.ns.Name(name=node.name)
+            return copy_provenance(self.ns.Name(name=node.name), node)
         if isinstance(node, mir.MirIntLiteral):
-            return self.ns.IntLiteral(value=node.value)
+            return copy_provenance(self.ns.IntLiteral(value=node.value), node)
         if isinstance(node, mir.MirFloatLiteral):
-            return self.ns.FloatLiteral(value=node.value)
+            return copy_provenance(self.ns.FloatLiteral(value=node.value), node)
         if isinstance(node, mir.MirBoolLiteral):
-            return self.ns.BoolLiteral(value=node.value)
+            return copy_provenance(self.ns.BoolLiteral(value=node.value), node)
         if isinstance(node, mir.MirStringLiteral):
-            return self.ns.StringLiteral(value=node.value)
+            return copy_provenance(self.ns.StringLiteral(value=node.value), node)
         if isinstance(node, mir.MirNullLiteral):
             return self.lower_null(node)
         if isinstance(node, mir.MirCall):
@@ -365,32 +406,47 @@ class MirLoweringBase:
         return None
 
     def lower_field_access(self, node: mir.MirFieldAccess):
-        return self.ns.FieldAccess(value=self.lower_expr(node.value), field=node.field)
+        return copy_provenance(
+            self.ns.FieldAccess(value=self.lower_expr(node.value), field=node.field),
+            node,
+        )
 
     def lower_method_call(self, node: mir.MirMethodCall):
-        return self.ns.MethodCall(
-            receiver=self.lower_expr(node.receiver),
-            method=node.method,
-            args=[self.lower_expr(a) for a in node.args],
+        return copy_provenance(
+            self.ns.MethodCall(
+                receiver=self.lower_expr(node.receiver),
+                method=node.method,
+                args=[self.lower_expr(a) for a in node.args],
+            ),
+            node,
         )
 
     def lower_compare(self, node: mir.MirCompare):
-        return self.ns.Compare(
-            op=node.op,
-            left=self.lower_expr(node.left),
-            right=self.lower_expr(node.right),
+        return copy_provenance(
+            self.ns.Compare(
+                op=node.op,
+                left=self.lower_expr(node.left),
+                right=self.lower_expr(node.right),
+            ),
+            node,
         )
 
     def lower_boolop(self, node: mir.MirBoolOp):
-        return self.ns.BoolOp(
-            op=node.op,
-            left=self.lower_expr(node.left),
-            right=self.lower_expr(node.right),
+        return copy_provenance(
+            self.ns.BoolOp(
+                op=node.op,
+                left=self.lower_expr(node.left),
+                right=self.lower_expr(node.right),
+            ),
+            node,
         )
 
     def lower_unary(self, node: mir.MirUnaryOp):
         op = "!" if node.op == "not" else "-"
-        return self.ns.Unary(op=op, operand=self.lower_expr(node.operand))
+        return copy_provenance(
+            self.ns.Unary(op=op, operand=self.lower_expr(node.operand)),
+            node,
+        )
 
     def lower_binop(self, node: mir.MirBinOp):  # pragma: no cover - abstract
         raise NotImplementedError
@@ -402,8 +458,11 @@ class MirLoweringBase:
         raise NotImplementedError
 
     def lower_subscript(self, node: mir.MirSubscript):
-        return self.ns.Index(
-            value=self.lower_expr(node.value), index=self.lower_expr(node.index)
+        return copy_provenance(
+            self.ns.Index(
+                value=self.lower_expr(node.value), index=self.lower_expr(node.index)
+            ),
+            node,
         )
 
     def lower_null(self, node: mir.MirNullLiteral):  # pragma: no cover - abstract
@@ -413,4 +472,7 @@ class MirLoweringBase:
         """Map a never-refuse hole onto the dialect's ``<Prefix>Raw`` node.
         Identical for every target, so no per-target override is needed; the
         backend's emitter decides how to render the stub."""
-        return self.ns.Raw(snippet=node.snippet)
+        return copy_provenance(
+            self.ns.Raw(snippet=node.snippet),
+            node,
+        )

@@ -40,6 +40,7 @@ from transpilers.frontends.vb import parse_vb
 from transpilers.ir.hir import HirModule
 from transpilers.ir.lir.base import LirNode
 from transpilers.ir.mir import MirModule
+from transpilers.ir.provenance import HirProvenance, ProvenanceMap
 from transpilers.passes import (
     hir_to_mir,
     infer_types,
@@ -127,6 +128,72 @@ TARGETS = {
 STAGES = ("parse", "hir-to-mir", "infer-types", "lower", "emit", "compile", "run")
 
 
+def _walk_provenance_nodes(node: object, out: list[object]) -> None:
+    """Collect all IR nodes that carry ``_hir_provenance_id`` or
+    ``_hir_node_id`` by DFS walk."""
+    if hasattr(node, "_hir_provenance_id") or hasattr(node, "_hir_node_id"):
+        out.append(node)
+    # Recurse into child collections or attributes.
+    if isinstance(node, (list, tuple)):
+        for child in node:
+            _walk_provenance_nodes(child, out)
+    elif hasattr(node, "__dataclass_fields__"):
+        for field_name in node.__dataclass_fields__:
+            val = getattr(node, field_name, None)
+            if isinstance(val, (list, tuple)):
+                _walk_provenance_nodes(val, out)
+            elif hasattr(val, "__dataclass_fields__"):
+                _walk_provenance_nodes(val, out)
+
+
+def _build_provenance_map(
+    hir_mod: HirModule, mir_mod: MirModule, lir_mod: LirNode
+) -> ProvenanceMap:
+    """Walk all three IR tiers and build a ``ProvenanceMap``.
+
+    Records every HIR node by its ``_hir_node_id``, then links MIR and LIR
+    nodes to their originating HIR nodes via ``_hir_provenance_id``.
+    """
+    pm = ProvenanceMap()
+
+    # Record all HIR nodes.
+    hir_nodes: list[object] = []
+    _walk_provenance_nodes(hir_mod, hir_nodes)
+    for hir_node in hir_nodes:
+        hid = getattr(hir_node, "_hir_node_id", 0)
+        if hid > 0:
+            pm.record_node(
+                hir_node,
+                hir_id=hid,
+                hir_type=type(hir_node).__name__,
+                source_span=None,
+                hir_repr=repr(hir_node)[:120],
+            )
+
+    # Record MIR nodes pointing back to their HIR provenance.
+    mir_nodes: list[object] = []
+    _walk_provenance_nodes(mir_mod, mir_nodes)
+    for mir_node in mir_nodes:
+        hid = getattr(mir_node, "_hir_provenance_id", 0)
+        if hid > 0:
+            # Find the matching HIR provenance by hir_id.
+            for hir_obj_id, prov in list(pm.items()):
+                if prov.hir_id == hid:
+                    pm.record(mir_node, prov)
+                    break
+
+    # Record LIR nodes pointing back to their HIR provenance (via MIR).
+    lir_nodes: list[object] = []
+    _walk_provenance_nodes(lir_mod, lir_nodes)
+    for lir_node in lir_nodes:
+        hid = getattr(lir_node, "_hir_provenance_id", 0)
+        if hid > 0:
+            for hir_obj_id, prov in list(pm.items()):
+                if prov.hir_id == hid:
+                    pm.record(lir_node, prov)
+                    break
+
+    return pm
 @dataclass
 class StageTrace:
     """Every intermediate artifact of one source→target transpilation."""
@@ -137,6 +204,7 @@ class StageTrace:
     mir: MirModule
     lir: LirNode
     output: str
+    provenance_map: ProvenanceMap | None = None
 
 
 def run_stages(
@@ -201,6 +269,7 @@ def run_stages(
     if llm_rename_fill is not None:
         llm_rename(mir_mod, llm_fill=llm_rename_fill)
     lir_mod = lower(mir_mod)
+    provenance = _build_provenance_map(hir_mod, mir_mod, lir_mod)
     return StageTrace(
         source_lang=source_lang,
         target=target,
@@ -208,4 +277,5 @@ def run_stages(
         mir=mir_mod,
         lir=lir_mod,
         output=emit(lir_mod),
+        provenance_map=provenance,
     )

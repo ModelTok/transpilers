@@ -24,6 +24,7 @@ from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, Struct
 from ._mir_lower_base import (
     MirLoweringBase,
     collect_mutable,
+    copy_provenance,
     is_list_concat,
     is_string_concat,
     scan_reassigned_params,
@@ -70,14 +71,17 @@ class _RustLowering(MirLoweringBase):
         if node.augmented_op is not None:
             # x += value  →  x = x + value  (explicit form composes more
             # cleanly with type promotion later).
-            rhs = lir.RustBinOp(
+            rhs = copy_provenance(lir.RustBinOp(
                 op=node.augmented_op,
                 left=lir.RustName(name=node.target),
                 right=self.lower_expr(node.value),
-            )
-            return lir.RustReassign(name=node.target, value=rhs)
+            ), node)
+            return copy_provenance(lir.RustReassign(name=node.target, value=rhs), node)
         if node.target in declared:
-            return lir.RustReassign(name=node.target, value=self.lower_expr(node.value))
+            return copy_provenance(
+                lir.RustReassign(name=node.target, value=self.lower_expr(node.value)),
+                node,
+            )
         declared.add(node.target)
         # Unknown inferred type → omit annotation; Rust's local inference
         # picks it up from the initializer.
@@ -86,11 +90,14 @@ class _RustLowering(MirLoweringBase):
         except ValueError:
             ty_str = None
         is_list = isinstance(node.ty, ListT)
-        return lir.RustLet(
-            name=node.target,
-            mutable=(node.target in mut) or is_list,
-            ty=ty_str,
-            value=self.lower_expr(node.value),
+        return copy_provenance(
+            lir.RustLet(
+                name=node.target,
+                mutable=(node.target in mut) or is_list,
+                ty=ty_str,
+                value=self.lower_expr(node.value),
+            ),
+            node,
         )
 
     # -- expressions ------------------------------------------------------- #
@@ -102,22 +109,34 @@ class _RustLowering(MirLoweringBase):
             return _RustListConcat(left=self.lower_expr(node.left), right=self.lower_expr(node.right))
         # Python `//` (FloorDivide) → Rust `/` on integer types.
         op = "/" if node.op == "//" else node.op
-        return lir.RustBinOp(op=op, left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+        return copy_provenance(
+            lir.RustBinOp(op=op, left=self.lower_expr(node.left), right=self.lower_expr(node.right)),
+            node,
+        )
 
     def lower_boolop(self, node: mir.MirBoolOp):
         op = "&&" if node.op == "and" else "||"
-        return lir.RustBoolOp(op=op, left=self.lower_expr(node.left), right=self.lower_expr(node.right))
+        return copy_provenance(
+            lir.RustBoolOp(op=op, left=self.lower_expr(node.left), right=self.lower_expr(node.right)),
+            node,
+        )
 
     def lower_null(self, node: mir.MirNullLiteral):
         # No OptionT in the type lattice yet; emit a bare `None` so the
         # downstream rustc surfaces the missing context.
-        return lir.RustName(name="None")
+        return copy_provenance(lir.RustName(name="None"), node)
 
     def lower_list(self, node: mir.MirList):
-        return lir.RustVec(elements=[self.lower_expr(e) for e in node.elements])
+        return copy_provenance(
+            lir.RustVec(elements=[self.lower_expr(e) for e in node.elements]),
+            node,
+        )
 
     def lower_subscript(self, node: mir.MirSubscript):
-        return lir.RustIndex(value=self.lower_expr(node.value), index=self.lower_expr(node.index))
+        return copy_provenance(
+            lir.RustIndex(value=self.lower_expr(node.value), index=self.lower_expr(node.index)),
+            node,
+        )
 
     def lower_call(self, node: mir.MirCall):
         # Stdlib mapping table — turn well-known Python-style builtins into
@@ -128,7 +147,10 @@ class _RustLowering(MirLoweringBase):
         if node.func == "len":
             if len(args) != 1:
                 raise ValueError("len() takes exactly one argument")
-            return lir.RustMethodCall(receiver=args[0], method="len", args=[], cast_to="i64")
+            return copy_provenance(
+                lir.RustMethodCall(receiver=args[0], method="len", args=[], cast_to="i64"),
+                node,
+            )
         if node.func in ("print", "println"):
             # Rewrap each arg so the rendering matches Python's str(): bools
             # become "True"/"False", floats use `{:?}` (Rust Debug for f64
@@ -141,7 +163,10 @@ class _RustLowering(MirLoweringBase):
                 tokens.append("{:?}" if isinstance(refined, _RustPyFloat) else "{}")
                 rendered_args.append(refined)
             template = " ".join(tokens)
-            return lir.RustMacro(name="println", template=template, args=rendered_args)
+            return copy_provenance(
+                lir.RustMacro(name="println", template=template, args=rendered_args),
+                node,
+            )
         if node.func == "sum" and len(args) == 1:
             # `sum(xs)` → `xs.iter().sum()`. No cast: the element type flows
             # through, so `.sum()`'s output is inferred from the iterator
@@ -151,19 +176,40 @@ class _RustLowering(MirLoweringBase):
             iter_chain = lir.RustMethodChain(receiver=args[0], method="iter", args=[])
             return lir.RustMethodChain(receiver=iter_chain, method="sum", args=[])
         if node.func == "abs" and len(args) == 1:
-            return lir.RustMethodChain(receiver=args[0], method="abs", args=[])
+            return copy_provenance(
+                lir.RustMethodChain(receiver=args[0], method="abs", args=[]),
+                node,
+            )
         if node.func == "min" and len(args) == 2:
-            return lir.RustMethodChain(receiver=args[0], method="min", args=[args[1]])
+            return copy_provenance(
+                lir.RustMethodChain(receiver=args[0], method="min", args=[args[1]]),
+                node,
+            )
         if node.func == "max" and len(args) == 2:
-            return lir.RustMethodChain(receiver=args[0], method="max", args=[args[1]])
+            return copy_provenance(
+                lir.RustMethodChain(receiver=args[0], method="max", args=[args[1]]),
+                node,
+            )
         if node.func == "int" and len(args) == 1:
-            return lir.RustBinOp(op="as", left=args[0], right=lir.RustName(name="i64"))
+            return copy_provenance(
+                lir.RustBinOp(op="as", left=args[0], right=lir.RustName(name="i64")),
+                node,
+            )
         if node.func == "float" and len(args) == 1:
-            return lir.RustBinOp(op="as", left=args[0], right=lir.RustName(name="f64"))
+            return copy_provenance(
+                lir.RustBinOp(op="as", left=args[0], right=lir.RustName(name="f64")),
+                node,
+            )
         if node.func == "bool" and len(args) == 1:
-            return lir.RustCompare(op="!=", left=args[0], right=lir.RustIntLiteral(value=0))
+            return copy_provenance(
+                lir.RustCompare(op="!=", left=args[0], right=lir.RustIntLiteral(value=0)),
+                node,
+            )
         if node.func == "str" and len(args) == 1:
-            return lir.RustMethodChain(receiver=args[0], method="to_string", args=[])
+            return copy_provenance(
+                lir.RustMethodChain(receiver=args[0], method="to_string", args=[]),
+                node,
+            )
         # Default: direct function call. Pass list arguments by reference so
         # the caller's binding isn't moved.
         refined: list[lir.LirNode] = []
@@ -172,7 +218,10 @@ class _RustLowering(MirLoweringBase):
                 refined.append(_RustRef(value=lowered))
             else:
                 refined.append(lowered)
-        return lir.RustCall(func=node.func, args=refined)
+        return copy_provenance(
+            lir.RustCall(func=node.func, args=refined),
+            node,
+        )
 
 
 _LOWERING = _RustLowering()

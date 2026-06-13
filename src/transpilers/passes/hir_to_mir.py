@@ -24,6 +24,17 @@ from transpilers.ir.types import (
 )
 
 
+# -- provenance helper -------------------------------------------------------
+# Every MIR node built from a HIR node carries the HIR node's id in
+# ``_hir_provenance_id``.  This helper sets it at construction time.
+
+
+def _prov(mir_node: mir.MirNode, hir_node: hir.HirNode) -> mir.MirNode:
+    """Copy ``hir_node._hir_node_id`` to ``mir_node._hir_provenance_id``."""
+    mir_node._hir_provenance_id = hir_node._hir_node_id
+    return mir_node
+
+
 PYTHON_TYPE_MAP: dict[str, Type] = {
     "int": IntT(),
     "float": FloatT(),
@@ -104,43 +115,55 @@ def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
     return mir.MirModule(functions=functions, structs=structs)
 
 
+# -- provenance-aware lowering helpers ---------------------------------------
+# Every ``_lower_*`` function receives a HIR node and assigns its id to the
+# returned MIR sub-tree.  This wrapper sets ``_hir_provenance_id`` on a
+# single MIR node; synthetic nodes that have no corresponding HIR node
+# (generated indices, default inits) remain at id 0.
+
+
+def _p(node: mir.MirNode, hir_node: hir.HirNode) -> mir.MirNode:
+    node._hir_provenance_id = hir_node._hir_node_id
+    return node
+
+
 def _lower_struct(s: hir.HirStruct) -> mir.MirStruct:
-    fields = [mir.MirParam(name=f.name, ty=_resolve_annotation(f.annotation)) for f in s.fields]
+    fields = [_p(mir.MirParam(name=f.name, ty=_resolve_annotation(f.annotation)), f) for f in s.fields]
     methods = [_lower_function(m) for m in s.methods]
     _STRUCT_FIELD_NAMES[s.name] = [f.name for f in fields]
     _STRUCT_FIELD_TYPES[s.name] = {f.name: f.ty for f in fields}
-    return mir.MirStruct(name=s.name, fields=fields, methods=methods)
+    return _p(mir.MirStruct(name=s.name, fields=fields, methods=methods), s)
 
 
 def _lower_function(fn: hir.HirFunction) -> mir.MirFunction:
-    params = [mir.MirParam(name=p.name, ty=_resolve_annotation(p.annotation)) for p in fn.params]
+    params = [_p(mir.MirParam(name=p.name, ty=_resolve_annotation(p.annotation)), p) for p in fn.params]
     ret_ty = _resolve_annotation(fn.return_annotation)
     env: dict[str, Type] = {p.name: p.ty for p in params}
     body = [_lower_stmt(n, env) for n in fn.body]
-    return mir.MirFunction(name=fn.name, params=params, return_type=ret_ty, body=body)
+    return _p(mir.MirFunction(name=fn.name, params=params, return_type=ret_ty, body=body), fn)
 
 
 def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
     if isinstance(node, hir.HirRaw):
-        return mir.MirRaw(snippet=node.snippet)
+        return _p(mir.MirRaw(snippet=node.snippet), node)
     if isinstance(node, hir.HirReturn):
-        return mir.MirReturn(value=_lower_expr(node.value, env) if node.value else None)
+        return _p(mir.MirReturn(value=_lower_expr(node.value, env) if node.value else None), node)
     if isinstance(node, hir.HirBreak):
-        return mir.MirBreak()
+        return _p(mir.MirBreak(), node)
     if isinstance(node, hir.HirContinue):
-        return mir.MirContinue()
+        return _p(mir.MirContinue(), node)
     if isinstance(node, hir.HirFieldAssign):
-        return mir.MirFieldAssign(
+        return _p(mir.MirFieldAssign(
             obj=_lower_expr(node.obj, env),
             field=node.field,
             value=_lower_expr(node.value, env),
-        )
+        ), node)
     if isinstance(node, hir.HirSubscriptAssign):
-        return mir.MirSubscriptAssign(
+        return _p(mir.MirSubscriptAssign(
             obj=_lower_expr(node.obj, env),
             index=_lower_expr(node.index, env),
             value=_lower_expr(node.value, env),
-        )
+        ), node)
     if isinstance(node, hir.HirAssign):
         value = _lower_expr(node.value, env)
         ann_ty = _resolve_annotation(node.annotation) if node.annotation else None
@@ -160,18 +183,18 @@ def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
             value.ty = ty
         if node.target not in env:
             env[node.target] = ty
-        return mir.MirAssign(target=node.target, value=value, ty=ty, augmented_op=node.augmented_op)
+        return _p(mir.MirAssign(target=node.target, value=value, ty=ty, augmented_op=node.augmented_op), node)
     if isinstance(node, hir.HirIf):
-        return mir.MirIf(
+        return _p(mir.MirIf(
             test=_lower_expr(node.test, env),
             body=[_lower_stmt(n, env) for n in node.body],
             orelse=[_lower_stmt(n, env) for n in node.orelse],
-        )
+        ), node)
     if isinstance(node, hir.HirWhile):
-        return mir.MirWhile(
+        return _p(mir.MirWhile(
             test=_lower_expr(node.test, env),
             body=[_lower_stmt(n, env) for n in node.body],
-        )
+        ), node)
     if isinstance(node, hir.HirFor):
         return _lower_for(node, env)
     if isinstance(node, hir.HirForEach):
@@ -195,7 +218,8 @@ def _lower_for(node: hir.HirFor, env: dict[str, Type]) -> mir.MirForRange:
         raise NotImplementedError(f"range arity {len(args)}")
     env[node.target] = IntT()
     body = [_lower_stmt(n, env) for n in node.body]
-    return mir.MirForRange(target=node.target, start=start, stop=stop, step=step, body=body)
+    # The for-loop node itself carries provenance from the HirFor.
+    return _p(mir.MirForRange(target=node.target, start=start, stop=stop, step=step, body=body), node)
 
 
 # Monotonic counter for synthesised plain-foreach index names. A plain index is
@@ -227,91 +251,92 @@ def _lower_foreach(node: hir.HirForEach, env: dict[str, Type]) -> mir.MirForRang
     env[index_name] = IntT()
 
     # `value = seq[index]` — typed binding synthesised at the body head.
-    binding = mir.MirAssign(
+    # Synthetic nodes carry the ForEach's provenance id.
+    binding = _p(mir.MirAssign(
         target=node.value_name,
-        value=mir.MirSubscript(
-            value=mir.MirName(name=node.iterable, ty=seq_ty),
-            index=mir.MirName(name=index_name, ty=IntT()),
+        value=_p(mir.MirSubscript(
+            value=_p(mir.MirName(name=node.iterable, ty=seq_ty), node),
+            index=_p(mir.MirName(name=index_name, ty=IntT()), node),
             ty=elem_ty,
-        ),
+        ), node),
         ty=elem_ty,
         augmented_op=None,
-    )
+    ), node)
     env[node.value_name] = elem_ty
     body = [binding, *(_lower_stmt(n, env) for n in node.body)]
 
-    stop = mir.MirCall(
-        func="len", args=[mir.MirName(name=node.iterable, ty=seq_ty)], ty=IntT()
-    )
-    return mir.MirForRange(
+    stop = _p(mir.MirCall(
+        func="len", args=[_p(mir.MirName(name=node.iterable, ty=seq_ty), node)], ty=IntT()
+    ), node)
+    return _p(mir.MirForRange(
         target=index_name,
-        start=mir.MirIntLiteral(value=0, ty=IntT()),
+        start=_p(mir.MirIntLiteral(value=0, ty=IntT()), node),
         stop=stop,
         step=None,
         body=body,
-    )
+    ), node)
 
 
 def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
     if isinstance(node, hir.HirRaw):
-        return mir.MirRaw(snippet=node.snippet)
+        return _p(mir.MirRaw(snippet=node.snippet), node)
     if isinstance(node, hir.HirBinOp):
         left = _lower_expr(node.left, env)
         right = _lower_expr(node.right, env)
-        return mir.MirBinOp(op=node.op, left=left, right=right, ty=_binop_type(node.op, _type_of(left), _type_of(right)))
+        return _p(mir.MirBinOp(op=node.op, left=left, right=right, ty=_binop_type(node.op, _type_of(left), _type_of(right))), node)
     if isinstance(node, hir.HirCompare):
-        return mir.MirCompare(
+        return _p(mir.MirCompare(
             op=node.op, left=_lower_expr(node.left, env), right=_lower_expr(node.right, env), ty=BoolT()
-        )
+        ), node)
     if isinstance(node, hir.HirBoolOp):
-        return mir.MirBoolOp(
+        return _p(mir.MirBoolOp(
             op=node.op, left=_lower_expr(node.left, env), right=_lower_expr(node.right, env), ty=BoolT()
-        )
+        ), node)
     if isinstance(node, hir.HirUnaryOp):
         operand = _lower_expr(node.operand, env)
         ty = BoolT() if node.op == "not" else _type_of(operand)
-        return mir.MirUnaryOp(op=node.op, operand=operand, ty=ty)
+        return _p(mir.MirUnaryOp(op=node.op, operand=operand, ty=ty), node)
     if isinstance(node, hir.HirName):
         # A free name (not a local/param) that matches a module-level constant
         # inlines that constant's value — re-lowered here so it carries its
         # literal type. Locals/params shadow constants (checked via `env`).
         if node.name not in env and node.name in _MODULE_CONSTS:
             return _lower_expr(_MODULE_CONSTS[node.name], env)
-        return mir.MirName(name=node.name, ty=env.get(node.name, UnknownT(hint=f"name {node.name}")))
+        return _p(mir.MirName(name=node.name, ty=env.get(node.name, UnknownT(hint=f"name {node.name}"))), node)
     if isinstance(node, hir.HirIntLiteral):
-        return mir.MirIntLiteral(value=node.value, ty=IntT())
+        return _p(mir.MirIntLiteral(value=node.value, ty=IntT()), node)
     if isinstance(node, hir.HirFloatLiteral):
-        return mir.MirFloatLiteral(value=node.value, ty=FloatT())
+        return _p(mir.MirFloatLiteral(value=node.value, ty=FloatT()), node)
     if isinstance(node, hir.HirBoolLiteral):
-        return mir.MirBoolLiteral(value=node.value, ty=BoolT())
+        return _p(mir.MirBoolLiteral(value=node.value, ty=BoolT()), node)
     if isinstance(node, hir.HirStringLiteral):
-        return mir.MirStringLiteral(value=node.value, ty=StrT())
+        return _p(mir.MirStringLiteral(value=node.value, ty=StrT()), node)
     if isinstance(node, hir.HirNullLiteral):
-        return mir.MirNullLiteral()
+        return _p(mir.MirNullLiteral(), node)
     if isinstance(node, hir.HirCall):
         return _lower_call(node, env)
     if isinstance(node, hir.HirList):
         elements = [_lower_expr(e, env) for e in node.elements]
         elem_ty = _type_of(elements[0]) if elements else UnknownT(hint="empty list literal")
-        return mir.MirList(elements=elements, ty=ListT(elem=elem_ty))
+        return _p(mir.MirList(elements=elements, ty=ListT(elem=elem_ty)), node)
     if isinstance(node, hir.HirSubscript):
         value = _lower_expr(node.value, env)
         index = _lower_expr(node.index, env)
         value_ty = _type_of(value)
         ty: Type = value_ty.elem if isinstance(value_ty, ListT) else UnknownT(hint="subscript on non-list")
-        return mir.MirSubscript(value=value, index=index, ty=ty)
+        return _p(mir.MirSubscript(value=value, index=index, ty=ty), node)
     if isinstance(node, hir.HirFieldAccess):
         # Type of a field access stays Unknown for now — a field-resolution
         # pass would look up the struct's field types. Out of scope for the
         # minimal struct slice; the LIR emitters handle Unknown by leaving
         # the field bare and letting target inference work.
-        return mir.MirFieldAccess(value=_lower_expr(node.value, env), field=node.field)
+        return _p(mir.MirFieldAccess(value=_lower_expr(node.value, env), field=node.field), node)
     if isinstance(node, hir.HirMethodCall):
-        return mir.MirMethodCall(
+        return _p(mir.MirMethodCall(
             receiver=_lower_expr(node.receiver, env),
             method=node.method,
             args=[_lower_expr(a, env) for a in node.args],
-        )
+        ), node)
     if isinstance(node, hir.HirStructInit):
         # Pair positional ctor args with the struct's declared field names so
         # every target's emitter can render named-field form when it wants.
@@ -324,9 +349,9 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
                 pairs.append((fname, lowered_args[i]))
             else:
                 pairs.append((fname, _default_init_for(field_types.get(fname, UnknownT()))))
-        return mir.MirStructInit(
+        return _p(mir.MirStructInit(
             name=node.name, field_values=pairs, ty=StructT(name=node.name)
-        )
+        ), node)
     raise NotImplementedError(f"HIR expr {type(node).__name__}")
 
 
@@ -347,9 +372,9 @@ def _numeric_result_ty(arg_tys: list[Type]) -> Type:
 def _lower_call(node: hir.HirCall, env: dict[str, Type]) -> mir.MirNode:
     args = [_lower_expr(a, env) for a in node.args]
     if node.func == "len":
-        return mir.MirCall(func="len", args=args, ty=IntT())
+        return _p(mir.MirCall(func="len", args=args, ty=IntT()), node)
     if node.func == "range":
-        return mir.MirCall(func="range", args=args, ty=RangeT())
+        return _p(mir.MirCall(func="range", args=args, ty=RangeT()), node)
     # Common builtins across source languages — assign a plausible return
     # type so call results flow through inference rather than blocking on
     # UnknownT. Heuristic, not exhaustive; the stdlib_maps/ tables are the
@@ -362,23 +387,23 @@ def _lower_call(node: hir.HirCall, env: dict[str, Type]) -> mir.MirNode:
             ty: Type = tys[0].elem
         else:
             ty = _numeric_result_ty(tys)
-        return mir.MirCall(func=node.func, args=args, ty=ty)
+        return _p(mir.MirCall(func=node.func, args=args, ty=ty), node)
     if node.func == "sum":
         # sum of a list -> the list's element type (sum([floats]) is float).
         t0 = _type_of(args[0]) if args else IntT()
         ty = t0.elem if isinstance(t0, ListT) else IntT()
-        return mir.MirCall(func="sum", args=args, ty=ty)
+        return _p(mir.MirCall(func="sum", args=args, ty=ty), node)
     if node.func in ("int", "ord", "id", "hash"):
-        return mir.MirCall(func=node.func, args=args, ty=IntT())
+        return _p(mir.MirCall(func=node.func, args=args, ty=IntT()), node)
     if node.func in ("float", "round"):
-        return mir.MirCall(func=node.func, args=args, ty=FloatT())
+        return _p(mir.MirCall(func=node.func, args=args, ty=FloatT()), node)
     if node.func == "bool":
-        return mir.MirCall(func=node.func, args=args, ty=BoolT())
+        return _p(mir.MirCall(func=node.func, args=args, ty=BoolT()), node)
     if node.func in ("str", "repr", "format"):
-        return mir.MirCall(func=node.func, args=args, ty=StrT())
+        return _p(mir.MirCall(func=node.func, args=args, ty=StrT()), node)
     if node.func in ("print", "println"):
-        return mir.MirCall(func=node.func, args=args, ty=NoneT())
-    return mir.MirCall(func=node.func, args=args, ty=UnknownT(hint=f"call {node.func}"))
+        return _p(mir.MirCall(func=node.func, args=args, ty=NoneT()), node)
+    return _p(mir.MirCall(func=node.func, args=args, ty=UnknownT(hint=f"call {node.func}")), node)
 
 
 def _resolve_annotation(ann: str | None) -> Type:

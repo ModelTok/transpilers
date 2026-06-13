@@ -9,9 +9,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+# Global monotonic counter for HIR node ids.
+_HIR_NODE_ID_COUNTER = 0
+
+
+def _next_hir_id() -> int:
+    global _HIR_NODE_ID_COUNTER
+    _HIR_NODE_ID_COUNTER += 1
+    return _HIR_NODE_ID_COUNTER
+
 
 class HirNode:
     """Base for every HIR node.
+
+    Every subclass that is a ``@dataclass`` automatically gets a
+    ``_hir_node_id: int`` instance attribute (set via ``__post_init__``).
 
     The optional ``source_loc`` field is set by frontends that have
     access to a parser carrying source positions (libclang, libcst,
@@ -21,6 +33,18 @@ class HirNode:
     """
 
     source_loc: str | None = None
+    _hir_node_id: int
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        old_post = getattr(cls, "__post_init__", None)
+
+        def _post_init(self):
+            self._hir_node_id = _next_hir_id()
+            if old_post:
+                old_post(self)
+
+        cls.__post_init__ = _post_init
 
 
 @dataclass
