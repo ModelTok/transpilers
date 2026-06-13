@@ -47,3 +47,17 @@ data/analyze_corpus.py
 data/_dedup_cache.json
 data/_clean_aux.json
 data/_repo_signals.json
+
+# --- data flywheel (issue #51) ---
+# Append-only repair outcomes log: regenerable by re-running the crawl/repair
+data/repair_outcomes.jsonl
+# Latest metrics snapshot: re-derived from repair_outcomes.jsonl
+data/flywheel_metrics.json
+# Crawl output: re-derivable by re-running scripts/crawl_github.py
+data/sft/github_crawl/
+# SFT pairs harvested from verified repairs: re-derivable by promote_repair.py
+data/sft/flywheel_pairs.jsonl
+# Promotion idempotency log: regenerable by re-running
+data/sft/flywheel_promotions.jsonl
+# Auto-rendered metrics markdown: re-derived from data/flywheel_metrics.json
+docs/flywheel_metrics.md

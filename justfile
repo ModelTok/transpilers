@@ -51,3 +51,17 @@ cloud-train model="Qwen/Qwen2.5-Coder-1.5B-Instruct" gpu="4090" *args:
 clean:
     rm -rf .pytest_cache .ruff_cache build dist src/*.egg-info
     find . -type d -name __pycache__ -prune -exec rm -rf {} +
+
+# Data flywheel: pipe verified repairs back into stdlib_maps/ + SFT (issue #51).
+# Run with GITHUB_TOKEN to crawl + repair, or without (--skip-crawl) to only
+# promote + refresh metrics from the current repair_outcomes.jsonl.
+flywheel mode="skip-crawl":
+	uv run python scripts/sft/flywheel_run.py {{ if mode == "skip-crawl" { "--skip-crawl" } else { "" } }}
+
+# Refresh the metrics snapshot + markdown from the current repair log
+flywheel-metrics:
+	uv run python scripts/sft/flywheel_metrics.py
+
+# Pipe current repair log into stdlib_maps/ + SFT corpus
+flywheel-promote:
+	uv run python scripts/sft/promote_repair.py --refresh-metrics

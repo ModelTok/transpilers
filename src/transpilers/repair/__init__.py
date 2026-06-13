@@ -12,6 +12,12 @@ Two repair surfaces live here:
 
 The signal helper (:mod:`transpilers.repair.signal`) and the flywheel
 recorder (:mod:`transpilers.repair.flywheel`) are shared between both.
+
+Issue #51 also adds :mod:`transpilers.repair.outcomes` (the
+``RepairOutcome`` / ``RepairTracker`` pair + the algorithmic-vs-LLM
+ratio aggregator) and the scripts that pipe those into ``stdlib_maps/``
+and the SFT corpus; see ``scripts/sft/promote_repair.py`` and
+``docs/data_flywheel.md``.
 """
 
 from .flywheel import Flywheel, FlywheelRecord, merge_dedup, read_flywheel
@@ -21,6 +27,14 @@ from .loop import (
     VerificationOutcome,
     Verifier,
     escalating_repair,
+)
+from .outcomes import (
+    DEFAULT_LOG_PATH,
+    DEFAULT_METRICS_PATH,
+    RepairOutcome,
+    RepairTracker,
+    VALID_VERDICTS,
+    rollup,
 )
 from .repair import RepairPass, RepairResult, repair
 from .signal import (
@@ -54,4 +68,11 @@ __all__ = [
     "FlywheelRecord",
     "read_flywheel",
     "merge_dedup",
+    # data flywheel (issue #51)
+    "RepairOutcome",
+    "RepairTracker",
+    "rollup",
+    "VALID_VERDICTS",
+    "DEFAULT_LOG_PATH",
+    "DEFAULT_METRICS_PATH",
 ]
