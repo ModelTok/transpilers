@@ -35,6 +35,7 @@ def transpile(
     llm_fill=None,
     llm_rename_fill=None,
     ir_hints=None,
+    trace_types_hints=None,
 ) -> str:
     return run_stages(
         source,
@@ -43,16 +44,17 @@ def transpile(
         llm_fill=llm_fill,
         llm_rename_fill=llm_rename_fill,
         ir_hints=ir_hints,
+        trace_types_hints=trace_types_hints,
     ).output
 
 
 # Convenience wrappers — kept stable for tests and external callers.
-def transpile_python_to_rust(source: str, *, llm_fill=None) -> str:
-    return transpile(source, source_lang="python", target="rust", llm_fill=llm_fill)
+def transpile_python_to_rust(source: str, *, llm_fill=None, trace_types_hints=None) -> str:
+    return transpile(source, source_lang="python", target="rust", llm_fill=llm_fill, trace_types_hints=trace_types_hints)
 
 
-def transpile_python_to_zig(source: str, *, llm_fill=None) -> str:
-    return transpile(source, source_lang="python", target="zig", llm_fill=llm_fill)
+def transpile_python_to_zig(source: str, *, llm_fill=None, trace_types_hints=None) -> str:
+    return transpile(source, source_lang="python", target="zig", llm_fill=llm_fill, trace_types_hints=trace_types_hints)
 
 
 def transpile_c_to_rust(source: str, *, llm_fill=None) -> str:
@@ -63,16 +65,16 @@ def transpile_c_to_zig(source: str, *, llm_fill=None) -> str:
     return transpile(source, source_lang="c", target="zig", llm_fill=llm_fill)
 
 
-def transpile_python_to_c(source: str, *, llm_fill=None) -> str:
-    return transpile(source, source_lang="python", target="c", llm_fill=llm_fill)
+def transpile_python_to_c(source: str, *, llm_fill=None, trace_types_hints=None) -> str:
+    return transpile(source, source_lang="python", target="c", llm_fill=llm_fill, trace_types_hints=trace_types_hints)
 
 
 def transpile_c_to_c(source: str, *, llm_fill=None) -> str:
     return transpile(source, source_lang="c", target="c", llm_fill=llm_fill)
 
 
-def transpile_python_to_mojo(source: str, *, llm_fill=None) -> str:
-    return transpile(source, source_lang="python", target="mojo", llm_fill=llm_fill)
+def transpile_python_to_mojo(source: str, *, llm_fill=None, trace_types_hints=None) -> str:
+    return transpile(source, source_lang="python", target="mojo", llm_fill=llm_fill, trace_types_hints=trace_types_hints)
 
 
 def transpile_c_to_mojo(source: str, *, llm_fill=None) -> str:
@@ -170,6 +172,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--trace-types",
+        action="store_true",
+        help=(
+            "execute Python source under sys.settrace instrumentation and record "
+            "runtime types to fill UnknownT holes (eliminates most UnknownT for "
+            "untyped Python without LLM calls)"
+        ),
+    )
+    parser.add_argument(
         "--fidelity",
         choices=["structural", "idiomatic"],
         default="structural",
@@ -230,6 +241,19 @@ def main(argv: list[str] | None = None) -> int:
         from transpilers.passes.ir_preload import extract_ir_types
         ir_hints = extract_ir_types(args.source)
 
+    trace_types_hints = None
+    if args.trace_types and source_lang == "python":
+        from transpilers.passes.trace_types import trace_types
+
+        trace_types_hints = trace_types(src_input, source_path=str(args.source))
+        if trace_types_hints and args.verbose:
+            sys.stderr.write(
+                f"--- trace types hints ({len(trace_types_hints)} functions) ---\n"
+            )
+            for fn_name, (ptypes, rtype) in sorted(trace_types_hints.items()):
+                sys.stderr.write(f"  {fn_name}: params={ptypes}, ret={rtype}\n")
+            sys.stderr.write("--- end trace types hints ---\n")
+
     # ------------------------------------------------------------------
     # Two-stage python_pivot path: C++ → Python → <target>
     # ------------------------------------------------------------------
@@ -278,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
             llm_fill=llm_fill,
             llm_rename_fill=rename_fill,
             ir_hints=ir_hints,
+            trace_types_hints=trace_types_hints,
         )
     except Exception as exc:
         # Verify-gate instrumentation (failure taxonomy): tag the failure

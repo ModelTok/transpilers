@@ -11,6 +11,7 @@ from .mir_to_mojo_lir import mir_to_mojo_lir
 from .mir_to_python_lir import mir_to_python_lir
 from .mir_to_rust_lir import mir_to_rust_lir
 from .mir_to_zig_lir import mir_to_zig_lir
+from .trace_types import trace_types_from_file as trace_types_from_file
 
 __all__ = [
     "extract_ir_types",
@@ -24,4 +25,5 @@ __all__ = [
     "mir_to_python_lir",
     "mir_to_rust_lir",
     "mir_to_zig_lir",
+    "trace_types_from_file",
 ]

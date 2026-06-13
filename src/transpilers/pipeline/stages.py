@@ -147,8 +147,28 @@ def run_stages(
     llm_fill=None,
     llm_rename_fill=None,
     ir_hints=None,
+    trace_types_hints=None,
 ) -> StageTrace:
     """Run the full pipeline, returning all intermediate artifacts.
+
+    Parameters
+    ----------
+    source:
+        Source code text.
+    source_lang:
+        Source language identifier (``"python"``, ``"c"``, …).
+    target:
+        Target language identifier (``"rust"``, ``"mojo"``, …).
+    llm_fill:
+        Optional LLM callback for filling ``UnknownT`` type holes.
+    llm_rename_fill:
+        Optional LLM callback for renaming opaque variables.
+    ir_hints:
+        Pre-populated type hints from LLVM IR (for C/C++ frontends).
+    trace_types_hints:
+        Pre-populated type hints from Python trace-driven execution.
+        Merged with *ir_hints* before inference — trace-driven hints take
+        precedence since they are ground-truth observations.
 
     Raises whatever the failing stage raises — callers that need failure
     attribution should drive the stages via ``transpilers.verify.taxonomy``.
@@ -157,7 +177,11 @@ def run_stages(
     lower, emit, _ = TARGETS[target]
     hir_mod = parse(source)
     mir_mod = hir_to_mir(hir_mod)
-    infer_types(mir_mod, llm_fill=llm_fill, ir_hints=ir_hints)
+    # Merge ir_hints (LLVM IR derived) with trace_types_hints (runtime derived).
+    merged_hints = dict(ir_hints or {})
+    if trace_types_hints:
+        merged_hints.update(trace_types_hints)
+    infer_types(mir_mod, llm_fill=llm_fill, ir_hints=merged_hints if merged_hints else None)
     if llm_rename_fill is not None:
         llm_rename(mir_mod, llm_fill=llm_rename_fill)
     lir_mod = lower(mir_mod)
