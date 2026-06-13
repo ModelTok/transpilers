@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import clang.cindex as ci
 
+from transpilers.frontends.errors import UnsupportedConstruct
+
 CursorKind = ci.CursorKind
 
 def _strip_unexposed(cursor: ci.Cursor) -> ci.Cursor:

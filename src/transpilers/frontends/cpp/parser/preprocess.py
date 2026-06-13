@@ -1,0 +1,300 @@
+"""C++ preprocessor front-end (issue #50).
+
+Wraps the host ``clang -E`` so we expand real macros (``INT_MIN``, project
+``#define``s, conditional ``#ifdef`` blocks) and strip ``#include`` lines
+*before* libclang sees the source. This means:
+
+* macro-expanded tokens reach the parser as real identifiers / literals,
+  so a downstream inference pass can reason about their types;
+* C++20 ``requires std::foo<T>`` constraints -- which libclang cannot
+  parse inside template parameter lists in our setup -- become harmless
+  blank lines that we delete;
+* the parser never trips over missing system headers (``<vector>``,
+  ``<concepts>``, etc.) because the preamble defines a small ``std``
+  namespace as opaque class templates.
+
+Returned text is the *user* code, with macros expanded and includes/guards
+removed, suitable for handing to libclang as ``unsaved_files`` content. The
+string is byte-stable for the same input (clang's line-marker output is
+deterministic), so callers can use it as a cache key if they want to.
+
+Usage::
+
+    from transpilers.frontends.cpp.parser.preprocess import preprocess_cpp
+    preprocessed = preprocess_cpp("int x = 1;")
+    # -> "namespace std { ... }\nint x = 1;"
+"""
+from __future__ import annotations
+
+import re
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Final
+
+# Minimal std:: namespace shadow so the user's templates can refer to
+# common types (std::vector<T>, std::totally_ordered<T>, std::swap, ...)
+# without dragging in a full libcxx. We declare them as opaque class
+# templates; the backends treat any of these names as list[T] / str / etc.
+# via the existing _type_text aliases.
+#
+# This is the *parser* preamble -- it is *not* user code. The HIR never
+# sees it: only top-level decls from the original file are kept. We add
+# it to the preprocessed source so libclang can build a valid AST.
+PARSER_PREAMBLE: Final[str] = """
+namespace std {
+    template <typename T> class vector {
+    public:
+        T& operator[](int);
+        unsigned long size() const;
+        void push_back(const T&);
+        T* begin();
+        T* end();
+    };
+    template <typename T, typename U> T exchange(T&, U&&);
+    template <typename T> void swap(T&, T&);
+    template <typename T> struct totally_ordered { static const bool value = true; };
+    template <typename T> struct equality_comparable { static const bool value = true; };
+    template <typename T, typename Alloc = int> class list {};
+    template <typename K, typename V> struct pair { K first; V second; };
+    template <typename... T> struct tuple {};
+    template <typename K, typename V> class unordered_map {};
+    template <typename K, typename V> class map {};
+    template <typename K, typename Cmp = int> class set {};
+    template <typename K, typename Cmp = int> class unordered_set {};
+    template <class T, class Container = int, class Cmp = int> class priority_queue {};
+    template <class T> class queue {};
+    template <class T> class stack {};
+    template <class T> class deque {};
+    template <typename R, typename... A> class function {};
+    class exception {};
+    using size_t = unsigned long;
+    using ptrdiff_t = long;
+    class string { public: unsigned long size() const; };
+    class string_view {};
+    template <typename T> T numeric_limits_min() { return T(); }
+    template <typename T> T numeric_limits_max() { return T(); }
+    template <typename T> class numeric_limits { public: static T min(); static T max(); };
+    class underflow_error {};
+    template <bool B, typename T = void> struct enable_if {};
+    template <typename T> T min(const T&, const T&);
+    template <typename T> T max(const T&, const T&);
+    // Math intrinsics -- the existing strict engine (cmath
+    // detection) routes these to `from math import <name>` in
+    // Mojo / Rust. The original frontend declared them at TU
+    // scope (see `_PREAMBLE` in core.py); when the C++ source
+    // already wraps them in `std::`, we need a `std::`-qualified
+    // declaration too, otherwise libclang errors out.
+    double sqrt(double); double exp(double); double log(double);
+    double log10(double); double log2(double); double cbrt(double);
+    double pow(double, double);
+    double sin(double); double cos(double); double tan(double);
+    double asin(double); double acos(double); double atan(double);
+    double atan2(double, double);
+    double sinh(double); double cosh(double); double tanh(double);
+    double fabs(double); double ceil(double); double floor(double);
+    double round(double); double trunc(double);
+    double fmod(double, double); double hypot(double, double);
+    double fmin(double, double); double fmax(double, double);
+    double fma(double, double, double);
+    int abs(int); long labs(long);
+    // iostream-shaped IO. The strict engine doesn't model stream
+    // operators (>> / <<); calls to cin/cout become HirRaw holes
+    // that every backend emits as TODO[port] stubs. We declare
+    // them as opaque class types with the operator overloads so
+    // libclang's template-based type resolution doesn't fail.
+    class istream { public: istream& operator>>(int&); istream& operator>>(long&);
+                            istream& operator>>(double&); istream& operator>>(char&);
+                            istream& operator>>(char*); istream& operator>>(void*); };
+    class ostream { public: ostream& operator<<(int); ostream& operator<<(long);
+                            ostream& operator<<(double); ostream& operator<<(char);
+                            ostream& operator<<(const char*);
+                            ostream& operator<<(ostream& (*)(ostream&)); };
+    istream& cin = *(istream*)0;
+    ostream& cout = *(ostream*)0;
+    ostream& cerr = *(ostream*)0;
+    ostream& clog = *(ostream*)0;
+    ostream& endl(ostream&);
+    // C stdio -- used by competitive-programming examples.
+    int scanf(const char*, ...);
+    int printf(const char*, ...);
+    int sscanf(const char*, const char*, ...);
+    int sprintf(char*, const char*, ...);
+    // Common algorithm-shaped templates that the backends already
+    // know about (mostly as `list[T]` aliases). Declared as opaque
+    // templates so libclang can resolve them when the user code
+    // calls them with concrete types.
+    template <typename It, typename T> void fill(It, It, const T&);
+    template <typename It, typename T> It find(It, It, const T&);
+    template <typename It, typename T> It remove(It, It, const T&);
+    template <typename It, typename T> T accumulate(It, It, T);
+    template <typename It> void sort(It, It);
+    template <typename It, typename Cmp> void sort(It, It, Cmp);
+    template <typename It> It unique(It, It);
+    template <typename It, typename Pred> It unique(It, It, Pred);
+    template <typename It, typename Out> Out copy(It, It, Out);
+    template <typename It, typename Out> Out move(It, It, Out);
+    // Smart pointers -- still leave the ownership lowering to
+    // the inference / LLM pass; we just need the type to exist
+    // so the AST can hold a constructor call.
+    template <typename T> class shared_ptr { public: shared_ptr(T*); T* operator->(); T& operator*(); };
+    template <typename T> class unique_ptr { public: unique_ptr(T*); T* operator->(); T& operator*(); };
+    // Cast helpers.
+    template <typename T, typename U> T* static_cast_helper(U*);
+    template <typename T, typename U> T* dynamic_cast_helper(U*);
+}
+void* operator new(unsigned long, void*);
+inline void* operator new(unsigned long);
+inline void operator delete(void*);
+
+// TU-scope `using` declarations so user code that writes bare
+// `vector<int>` (instead of `std::vector<int>`) still resolves
+// against the parser preamble. Mirrors the older `using` block in
+// the original core._PREAMBLE.
+using std::vector;
+using std::list;
+using std::pair;
+using std::tuple;
+using std::map;
+using std::unordered_map;
+using std::set;
+using std::unordered_set;
+using std::queue;
+using std::stack;
+using std::deque;
+using std::priority_queue;
+using std::string;
+using std::string_view;
+using std::swap;
+using std::min;
+using std::max;
+using std::function;
+using std::shared_ptr;
+using std::unique_ptr;
+using std::sqrt;
+using std::exp;
+using std::log;
+using std::log10;
+using std::log2;
+using std::cbrt;
+using std::pow;
+using std::sin;
+using std::cos;
+using std::tan;
+using std::asin;
+using std::acos;
+using std::atan;
+using std::atan2;
+using std::sinh;
+using std::cosh;
+using std::tanh;
+using std::fabs;
+using std::ceil;
+using std::floor;
+using std::round;
+using std::trunc;
+using std::fmod;
+using std::hypot;
+using std::fmin;
+using std::fmax;
+using std::fma;
+using std::abs;
+using std::labs;
+using std::size_t;
+using std::ptrdiff_t;
+using std::exception;
+using std::numeric_limits;
+using std::underflow_error;
+"""
+
+# Line markers clang emits (e.g. '# 42 "foo.cpp" 2'). Strip them so
+# the byte stream we feed to libclang is just user code + the preamble.
+_LINEMARKER_RE = re.compile(r"^#\s*\d+\s+\"[^\"]+\".*$", re.MULTILINE)
+# `include` may or may not have a space between the directive and
+# the header (`#include<string>` vs `#include <string>`). The
+# `\s*` after `include` is the only thing keeping both forms working.
+_INCLUDE_RE = re.compile(r"^#\s*include\s*[<\"][^\"<>]+[>\"]\s*$", re.MULTILINE)
+_IFNDEF_RE = re.compile(r"^\s*#\s*ifndef\s+\S+\s*$", re.MULTILINE)
+_DEFINE_GUARD_RE = re.compile(r"^\s*#\s*define\s+\S+\s*$", re.MULTILINE)
+_ENDIF_RE = re.compile(r"^\s*#\s*endif.*$", re.MULTILINE)
+# C++20 `requires` constraints that confuse our libclang + template
+# combination (the parser confuses `void` with a type-cast). Match
+# both the standalone form (`requires std::foo<T>` on its own line) and
+# the inline form (`requires std::foo<T> void name(...)`).
+_REQUIRES_LINE_RE = re.compile(r"^\s*requires\s+std::\S.*$", re.MULTILINE)
+_REQUIRES_INLINE_RE = re.compile(r"requires\s+std::\w+<[^>]*>\s*")
+
+
+def _strip_directives(text: str) -> str:
+    """Remove cpp directives libclang does not need: linemarkers, includes,
+    header guards, and C++20 `requires` clauses. Everything else
+    (including user `#define`s that did not fire, blank lines, etc.) is
+    preserved."""
+    out = _LINEMARKER_RE.sub("", text)
+    out = _INCLUDE_RE.sub("", out)
+    out = _IFNDEF_RE.sub("", out)
+    out = _DEFINE_GUARD_RE.sub("", out)
+    out = _ENDIF_RE.sub("", out)
+    out = _REQUIRES_LINE_RE.sub("", out)
+    out = _REQUIRES_INLINE_RE.sub("", out)
+    return out
+
+
+def _clang_executable() -> str | None:
+    """Locate the host `clang` binary. Returns None if no clang is found;
+    callers that need strict preprocessor behaviour should treat that as
+    a hard failure."""
+    found = shutil.which("clang++") or shutil.which("clang")
+    if found:
+        return found
+    for c in ("/usr/bin/clang++", "/usr/bin/clang"):
+        if Path(c).is_file():
+            return c
+    return None
+
+
+def preprocess_cpp(
+    source: str,
+    *,
+    clang: str | None = None,
+    std: str = "c++20",
+    timeout: float = 15.0,
+) -> str:
+    """Run the real preprocessor on *source* and return the cleaned result.
+
+    The cleaned result is *macro-expanded user code* -- directives stripped,
+    `#include`s removed, `requires` clauses deleted, and the parser preamble
+    prepended. The output is ready to hand to libclang.
+
+    On any failure (no clang, timeout, non-zero exit) we fall back to the
+    raw *source* with the same directive-stripping applied. This is
+    deliberately lenient: the parser is a best-effort tool, and the failure
+    mode for "no clang" should be the same as the failure mode for "we
+    could not preprocess".
+    """
+    if not source:
+        return PARSER_PREAMBLE
+
+    if clang is None:
+        clang = _clang_executable()
+    if clang is None:
+        return PARSER_PREAMBLE + _strip_directives(source)
+
+    try:
+        proc = subprocess.run(
+            [clang, "-E", f"-std={std}", "-x", "c++", "-nostdinc++", "-"],
+            input=source,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return PARSER_PREAMBLE + _strip_directives(source)
+
+    if proc.returncode != 0 or not proc.stdout:
+        return PARSER_PREAMBLE + _strip_directives(source)
+
+    return PARSER_PREAMBLE + _strip_directives(proc.stdout)
+
+
+__all__ = ["PARSER_PREAMBLE", "preprocess_cpp"]

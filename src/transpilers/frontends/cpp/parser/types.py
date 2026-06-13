@@ -5,6 +5,18 @@ import clang.cindex as ci
 
 from .errors import UnsupportedConstruct
 
+# Internal shim used by the nested ``std::vector<std::vector<T>>``
+# branch in ``_type_text``: feeding the inner spelling back through
+# the alias logic without constructing a real libclang ``Type``.
+# ``ci.Type`` has no public constructor, so we wrap the spelling in
+# a stand-in that exposes just the attribute the recursion needs.
+class _TypeShim:
+    __slots__ = ("spelling",)
+
+    def __init__(self, spelling: str) -> None:
+        self.spelling = spelling
+
+
 CPP_TYPE_ALIASES: dict[str, str] = {
     # Integer family — collapse all width/signedness variants onto `int`.
     "int": "int",
@@ -91,12 +103,24 @@ def _type_text(t: ci.Type) -> str:
     # std::string family → str.
     if cleaned in ("string", "std::string", "std::basic_string<char>"):
         return "str"
-    # std::vector<T> → list[T]. Recursive in case T is itself a template.
+    # std::vector<T> → list[T]. Recursive in case T is itself a template
+    # (e.g. `std::vector<std::vector<int>>` -> `list[list[int]]`).
     if cleaned.startswith(("vector<", "std::vector<")) and cleaned.endswith(">"):
         inner = cleaned.split("<", 1)[1][:-1].strip()
-        # Recurse via a fresh _type_text would need a ci.Type; just map the
-        # common element-types directly.
-        return f"list[{_VECTOR_ELEM_ALIASES.get(inner, inner)}]"
+        # Inner can be another vector: recurse the spelling, not the
+        # alias table, so ``std::vector<std::vector<int>>`` becomes
+        # ``list[list[int]]`` rather than ``list[std::vector<int>]``
+        # (which the backends don't understand).
+        if inner.startswith(("vector<", "std::vector<")) and inner.endswith(">"):
+            inner = _type_text(
+                # The libclang Type wrapper is annoying to construct
+                # here, so we recurse by feeding the cleaned spelling
+                # back through the alias logic via a tiny shim.
+                _TypeShim(spelling=inner)
+            )
+        else:
+            inner = _VECTOR_ELEM_ALIASES.get(inner, inner)
+        return f"list[{inner}]"
     # Array types — `int[]`, `int[10]`, `int[n]`. Drop the size; carry the
     # element type as a list.
     if "[" in cleaned and cleaned.endswith("]"):
@@ -127,7 +151,17 @@ def _type_text(t: ci.Type) -> str:
         return "None"
     # Struct/class types: pass the bare name through so HIR→MIR resolves it
     # against the struct registry (HirStruct names land in StructT(name)).
+    # Exception: template-shaped names (`std::vector<int>`) collapse to
+    # `list[T]` because libclang surfaces instantiated templates as RECORD
+    # kinds whose spelling is the original `vector<...>` text. Without
+    # this branch a function like
+    #   void rotate(std::vector<std::vector<int>>& m)
+    # would emit `std::vector<std::vector<int>>` as a HIR annotation
+    # and the backends (which only know `list[T]`) would refuse it.
     if kind == ci.TypeKind.RECORD:
+        if cleaned.startswith(("vector<", "std::vector<")) and cleaned.endswith(">"):
+            inner = cleaned.split("<", 1)[1][:-1].strip()
+            return f"list[{_VECTOR_ELEM_ALIASES.get(inner, inner)}]"
         return cleaned
     # Raw pointers — in C-style C++ these are almost always buffers, indexed
     # like arrays (`p[i]`). Model as an indexable `list[elem]` so subscripting

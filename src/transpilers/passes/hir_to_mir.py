@@ -85,6 +85,22 @@ def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
             functions.append(_lower_function(node))
         elif isinstance(node, hir.HirStruct):
             structs.append(_lower_struct(node))
+        elif isinstance(node, hir.HirRaw):
+            # Top-level unsupported construct (issue #50: a C++
+            # template definition that the IR doesn't model). Emit a
+            # placeholder function carrying the snippet, so the
+            # downstream emit pass renders a TODO[port] stub. The
+            # function name is best-effort ("raw_<n>") and the ground
+            # truth still records the real signature under the
+            # template's qualified name.
+            functions.append(
+                mir.MirFunction(
+                    name=f"__raw_{len(functions)}",
+                    params=[],
+                    return_type=UnknownT(hint="top-level raw hole"),
+                    body=[mir.MirRaw(snippet=node.snippet)],
+                )
+            )
     return mir.MirModule(functions=functions, structs=structs)
 
 

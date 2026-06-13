@@ -393,9 +393,16 @@ def test_cpp_class_compiles_as_rust():
 
 # ---------- refusals ----------
 
-def test_cpp_template_refused():
-    with pytest.raises(Exception):
-        _rust("template<typename T> T add(T a, T b) { return a + b; }")
+def test_cpp_template_preserved_as_raw_hole():
+    # Issue #50: templates are now preserved as HirRaw holes (with a
+    # TODO[port] stub emitted by every backend), and the *signature*
+    # is recorded in the ground truth so callers can pick up the
+    # parameter / return types via the AST. We don't refuse the
+    # construct outright anymore -- templates are real C++ and the
+    # engine should emit *something* rather than aborting.
+    out = _mojo("template<typename T> T add(T a, T b) { return a + b; }")
+    # The mojo backend should emit a TODO stub for the function body.
+    assert "TODO[port]" in out
 
 
 def test_cpp_class_inheritance_refused():

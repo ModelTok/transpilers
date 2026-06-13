@@ -221,14 +221,29 @@ def classify_unit(
         )
 
     lower, emit, verify_fn = TARGETS[target]
+    # The C++ frontend returns (HirModule, TypeGroundTruth). Other
+    # frontends still return a bare HirModule. Normalise so the rest
+    # of the staged driver can treat the parse step the same way.
     try:
-        hir_mod = FRONTENDS[source_lang](source)
+        parsed = FRONTENDS[source_lang](source)
     except Exception as exc:
         return fail("parse", exc)
+    if isinstance(parsed, tuple) and len(parsed) == 2:
+        hir_mod, cpp_truth = parsed
+    else:
+        hir_mod, cpp_truth = parsed, None
     try:
         mir_mod = hir_to_mir(hir_mod)
     except Exception as exc:
         return fail("hir-to-mir", exc)
+    # Apply the C++ ground truth (issue #50). No-op for non-C++
+    # frontends.
+    if cpp_truth is not None:
+        from transpilers.passes.cpp_ground_truth import apply_ground_truth
+        try:
+            apply_ground_truth(mir_mod, cpp_truth, hir_mod)
+        except Exception as exc:
+            return fail("ground-truth", exc)
     try:
         infer_types(mir_mod, llm_fill=llm_fill, ir_hints=ir_hints)
     except Exception as exc:

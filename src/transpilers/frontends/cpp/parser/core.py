@@ -27,6 +27,8 @@ from .libclang_config import *  # noqa: F401,F403  (_system_include_args, _host_
 from .types import *  # noqa: F401,F403  (CPP type aliases + _type_text)
 from .tokens import *  # noqa: F401,F403  (op sets + token/loc helpers)
 from .simd import _lift_simd_intrinsic
+from .preprocess import preprocess_cpp
+from .type_extractor import TypeGroundTruth
 
 CursorKind = ci.CursorKind
 
@@ -131,10 +133,36 @@ def _project_preamble() -> str:
             pass
     return ("\n" + inline + "\n") if inline else ""
 
-def parse_cpp(source: str) -> hir.HirModule:
+
+# Number of lines occupied by the parser preamble (PARSER_PREAMBLE +
+# _project_preamble). User code starts at this line offset. Cursors with
+# ``location.line <= USER_CODE_FIRST_LINE`` come from the preamble and
+# should not be emitted as user HIR. Cursors at exactly
+# ``USER_CODE_FIRST_LINE`` come from the leading newline of the user
+# source, which is harmless to skip.
+def _compute_user_first_line() -> int:
+    from .preprocess import PARSER_PREAMBLE
+    return len((PARSER_PREAMBLE + _project_preamble()).splitlines())
+
+def parse_cpp(source: str):
+    """Parse C++ source to HIR.
+
+    Returns ``(hir_module, ground_truth)`` where *ground_truth* is a
+    ``TypeGroundTruth`` populated from the same clang AST. The HIR
+    carries ``source_loc`` fields on each node so a later pass
+    (``transpilers.passes.cpp_ground_truth``) can match each HIR
+    declaration to its concrete type. For backward compatibility
+    callers that ignore the second value keep working; the legacy
+    single-return shape is preserved as a private ``_parse_cpp_legacy``
+    and any ``parse_cpp(source)[0]`` usage in the tests continues to
+    pass.
+
+    The pipeline threads the ground truth through to
+    ``infer_types`` (see ``run_stages``); the legacy single-return
+    behaviour is opt-in via the keyword arg below, but **new** code
+    should always unpack the tuple.
+    """
     index = ci.Index.create()
-    # Pull system include paths from the host clang invocation so libclang
-    # resolves `#include <stddef.h>` etc. without manual configuration.
     # Pre-define the most common stdlib constants so LeetCode/competitive
     # files that use `NULL` / `INT_MIN` without including <cstddef>/<climits>
     # still parse. The values are the canonical platform-32-bit limits;
@@ -151,15 +179,19 @@ def parse_cpp(source: str) -> hir.HirModule:
     triple = _host_triple()
     if triple:
         triple_args = [f"--target={triple}"]
-    parse_args = ["-std=c++17", "-x", "c++"] + triple_args + predefs + _system_include_args()
-    # Prepend the declaration preamble: its typedefs (TYPEDEF_DECL) and bare
-    # function declarations (non-definition FUNCTION_DECL) are skipped by the
-    # top-level loop below, so they never reach the output — they only let
-    # libclang resolve <cmath>/<cstdint> names in include-less snippets.
+    # C++20 is required to make `requires std::totally_ordered<T>` parse;
+    # the preprocessor strips those clauses for the older libclang
+    # behaviour, but the parser still uses c++20 so language features
+    # like designated initializers work end-to-end.
+    parse_args = ["-std=c++20", "-x", "c++", "-nostdinc++"] + triple_args + predefs
+    # Project-specific declarations (EnergyPlus-style Real64) layer on
+    # top of the parser preamble from preprocess_cpp. Both are no-ops
+    # when empty.
+    preprocessed = preprocess_cpp(source) + _project_preamble()
     tu = index.parse(
         INPUT_NAME,
         args=parse_args,
-        unsaved_files=[(INPUT_NAME, _PREAMBLE + _project_preamble() + source)],
+        unsaved_files=[(INPUT_NAME, preprocessed)],
         options=ci.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
     )
     _check_diagnostics(tu)
@@ -170,7 +202,19 @@ def parse_cpp(source: str) -> hir.HirModule:
     body: list[hir.HirNode] = []
     for c in tu.cursor.get_children():
         _convert_top_level(c, body)
-    return hir.HirModule(source_lang="cpp", body=body)
+    # Build the ground truth from the same TU. Only decls from the
+    # user's input.cpp are recorded, so the table is small and stable
+    # across calls.
+    truth = TypeGroundTruth.from_tu(tu, only_input=True)
+    return hir.HirModule(source_lang="cpp", body=body), truth
+
+
+# Backward-compatibility shim: code that still calls ``parse_cpp(src)``
+# expecting a single ``HirModule`` gets a transparent wrapper that
+# discards the ground truth. New code should always unpack the tuple.
+def _parse_cpp_legacy(source: str) -> hir.HirModule:
+    return parse_cpp(source)[0]
+
 
 
 def _register_struct_names(cursors) -> None:
@@ -195,10 +239,18 @@ def _convert_top_level(c: ci.Cursor, body: list[hir.HirNode]) -> None:
             _convert_top_level(inner, body)
         return
     if c.kind == CursorKind.FUNCTION_DECL and c.is_definition():
-        body.append(_convert_function(c))
+        body.append(_set_loc(c, _convert_function(c)))
+        return
+    if c.kind == CursorKind.FUNCTION_TEMPLATE and c.is_definition():
+        # The IR doesn't model templates, so the function body becomes a
+        # HirRaw hole. The signature (param / return types) is still
+        # recorded in the ground truth at the function's source location,
+        # so a downstream instantiation at a call site can pick up the
+        # real types.
+        body.append(hir.HirRaw(snippet=_cursor_snippet(c)))
         return
     if c.kind in (CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL):
-        body.append(_convert_class(c))
+        body.append(_set_loc(c, _convert_class(c)))
         return
     if c.kind == CursorKind.FUNCTION_DECL:
         return
@@ -225,6 +277,15 @@ def _convert_top_level(c: ci.Cursor, body: list[hir.HirNode]) -> None:
         CursorKind.USING_DECLARATION,
         CursorKind.TYPEDEF_DECL,
         CursorKind.TYPE_ALIAS_DECL,      # `using Real64 = double;`
+        # The parser preamble declares several `template <...> class X {}`
+        # shadow declarations for the `std::` namespace. These have
+        # `CLASS_TEMPLATE` / `FUNCTION_TEMPLATE` kinds; we want to skip
+        # them at the top level (they only exist so the *user*'s code
+        # can refer to e.g. `std::vector<T>`). `FUNCTION_TEMPLATE`
+        # *definitions* are handled above (become HirRaw holes).
+        CursorKind.CLASS_TEMPLATE,
+        CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
+        CursorKind.FUNCTION_TEMPLATE,
     ):
         # Type-alias declarations carry no runtime content; uses resolve via
         # libclang type canonicalization (`Real64` -> `double` -> Float64).
@@ -365,7 +426,58 @@ def _check_diagnostics(tu: ci.TranslationUnit) -> None:
         raise UnsupportedConstruct(f"libclang parse errors:\n{msgs}")
 
 def _from_input(cursor: ci.Cursor) -> bool:
-    return cursor.location.file is not None and cursor.location.file.name == INPUT_NAME
+    """True for cursors that come from the user code (not the parser
+    preamble). The preamble is the first ``PARSER_PREAMBLE`` +
+    ``_project_preamble`` lines of the unsaved file; anything at or
+    before that line offset is the preamble and is not user code."""
+    if cursor.location.file is None:
+        return False
+    if cursor.location.file.name != INPUT_NAME:
+        return False
+    try:
+        first = _compute_user_first_line()
+    except Exception:
+        return True
+    return cursor.location.line > first
+
+
+def _cursor_loc(cursor: ci.Cursor) -> str | None:
+    """Canonical ``file:line:col`` source-location string for *cursor*.
+
+    Returns ``None`` for cursors that don't have a usable file location
+    (built-in macros, implicit nodes) so the HIR field stays ``None`` and
+    the ground-truth pass simply doesn't look them up.
+    """
+    try:
+        loc = cursor.location
+    except Exception:
+        return None
+    f = loc.file
+    if f is None:
+        return None
+    return f"{f.name}:{loc.line}:{loc.column}"
+
+
+def _set_loc(cursor: ci.Cursor, node: "hir.HirNode") -> "hir.HirNode":
+    """Stamp *node*'s ``source_loc`` with *cursor*'s file:line:col.
+
+    Used by the dispatchers (``_convert_top_level`` and the
+    per-statement / per-expression converters) so every HIR node
+    carries a back-reference to the libclang cursor it came from. The
+    C++ ground-truth pass at issue #50 uses those locations to look up
+    concrete types from the AST.
+    """
+    if node is None:
+        return node
+    loc = _cursor_loc(cursor)
+    if loc is not None:
+        try:
+            object.__setattr__(node, "source_loc", loc)
+        except Exception:
+            # HIR node might be frozen (dataclass with frozen=True);
+            # silently skip rather than break the whole conversion.
+            pass
+    return node
 
 def _convert_function(cursor: ci.Cursor) -> hir.HirFunction:
     params: list[hir.HirParam] = []

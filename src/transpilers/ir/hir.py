@@ -11,7 +11,16 @@ from dataclasses import dataclass, field
 
 
 class HirNode:
-    pass
+    """Base for every HIR node.
+
+    The optional ``source_loc`` field is set by frontends that have
+    access to a parser carrying source positions (libclang, libcst,
+    tree-sitter...). It is used by the C++ ground-truth pass to
+    cross-reference HIR nodes with the corresponding clang AST cursor
+    so concrete types can be looked up at issue #50.
+    """
+
+    source_loc: str | None = None
 
 
 @dataclass

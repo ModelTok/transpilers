@@ -53,7 +53,9 @@ _LAMBDA_SRC = textwrap.dedent(
 
 def test_frontend_emits_hir_raw_not_refuse():
     """The unsupported statement becomes a HirRaw hole; the rest survives."""
-    module = parse_cpp(_TRY_SRC)
+    parsed = parse_cpp(_TRY_SRC)
+    # Issue #50: parse_cpp now returns (HirModule, TypeGroundTruth).
+    module = parsed[0] if isinstance(parsed, tuple) else parsed
     fn = next(n for n in module.body if isinstance(n, hir.HirFunction))
     # The body keeps the supported statements (decl, += , return) and gains
     # exactly one HirRaw hole for the try/catch.

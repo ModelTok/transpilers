@@ -173,14 +173,30 @@ def run_stages(
     Raises whatever the failing stage raises — callers that need failure
     attribution should drive the stages via ``transpilers.verify.taxonomy``.
     """
+    from transpilers.passes.cpp_ground_truth import apply_ground_truth
     parse = FRONTENDS[source_lang]
     lower, emit, _ = TARGETS[target]
-    hir_mod = parse(source)
+    # The C++ frontend returns (HirModule, TypeGroundTruth). The
+    # other frontends still return a bare HirModule; normalise to a
+    # (HirModule, truth-or-None) pair here so the rest of the
+    # pipeline doesn't need to know about the C++ quirk.
+    parsed = parse(source)
+    if isinstance(parsed, tuple) and len(parsed) == 2:
+        hir_mod, cpp_truth = parsed
+    else:
+        hir_mod, cpp_truth = parsed, None
     mir_mod = hir_to_mir(hir_mod)
     # Merge ir_hints (LLVM IR derived) with trace_types_hints (runtime derived).
     merged_hints = dict(ir_hints or {})
     if trace_types_hints:
         merged_hints.update(trace_types_hints)
+    # Apply C++ ground truth *before* the inference pass: the
+    # inference pass benefits from the resolved types and uses them
+    # to anchor its own propagation, so filling holes first means
+    # fewer UnknownT holes reach the algorithmic dataflow. For other
+    # source languages this is a no-op (cpp_truth is None).
+    if cpp_truth is not None:
+        apply_ground_truth(mir_mod, cpp_truth, hir_mod)
     infer_types(mir_mod, llm_fill=llm_fill, ir_hints=merged_hints if merged_hints else None)
     if llm_rename_fill is not None:
         llm_rename(mir_mod, llm_fill=llm_rename_fill)
