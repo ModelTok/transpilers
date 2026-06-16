@@ -53,7 +53,8 @@ def test_fortran_do_iter_loop():
         end function
         """,
     )
-    assert "for i in 0..n - 1 + 1" in out
+    # `n - 1 + 1` becomes wrapping arithmetic due to arbitrary-precision int contract
+    assert "wrapping_sub(1)).wrapping_add(1)" in out
 
 
 def test_fortran_result_var_pre_declared():
@@ -298,7 +299,8 @@ def test_vb_for_to_inclusive_endpoint():
         End Function
         """,
     )
-    assert "for i in 0..n - 1 + 1 {" in out
+    # `n - 1 + 1` becomes wrapping arithmetic
+    assert "wrapping_sub(1)).wrapping_add(1)" in out
 
 
 # ---------- Assembly via Ghidra ----------

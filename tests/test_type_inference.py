@@ -32,7 +32,8 @@ def test_param_inferred_from_int_literal_binop():
         """
     )
     assert "fn add_one(x: i64) -> i64" in out
-    assert "return x + 1;" in out
+    # Arbitrary-precision int -> wrapping arithmetic
+    assert "wrapping_add(1)" in out
 
 
 def test_local_var_inferred_from_literal_assignment():

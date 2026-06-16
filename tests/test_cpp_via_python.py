@@ -46,7 +46,8 @@ def test_cpp_via_python_to_rust():
     python_ir, out = _pivot(_ADD, "rust")
     assert "def add(a: int, b: int) -> int:" in python_ir
     assert "fn add(a: i64, b: i64) -> i64" in out
-    assert "return a + b;" in out
+    # Arbitrary-precision int -> wrapping_* for safety
+    assert "wrapping_add(b)" in out
 
 
 def test_cpp_via_python_to_mojo():

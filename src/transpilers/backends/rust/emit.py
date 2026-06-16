@@ -200,13 +200,19 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         if node.template:
             return f'{node.name}!("{node.template}", {rendered})' if rendered else f'{node.name}!("{node.template}")'
         return f"{node.name}!({rendered})"
-    from transpilers.passes.mir_to_rust_lir import _RustIfExpr, _RustRef, _RustPyFloat, _RustListConcat
+    from transpilers.passes.mir_to_rust_lir import _RustIfExpr, _RustRef, _RustPyFloat, _RustListConcat, _RustOverflowGuard
     if isinstance(node, _RustIfExpr):
         return f"if {_emit_expr(node.test)} {{ {_emit_expr(node.then_)} }} else {{ {_emit_expr(node.else_)} }}"
     if isinstance(node, _RustRef):
         return f"&mut {_emit_expr(node.value)}"
     if isinstance(node, _RustPyFloat):
         return _emit_expr(node.value)
+    if isinstance(node, _RustOverflowGuard):
+        # `(left).wrapping_add(right)` — parenthesise the left operand so
+        # compound expressions like `(a + b).wrapping_mul(c)` parse correctly.
+        _stem = {"+": "add", "-": "sub", "*": "mul", "/": "div", "%": "rem"}[node.op]
+        method = f"{node.style}_{_stem}"
+        return f"({_emit_expr(node.left)}).{method}({_emit_expr(node.right)})"
     if isinstance(node, _RustListConcat):
         # `left + right` for Vec: clone left, extend with right's elements.
         left = _emit_expr(node.left)

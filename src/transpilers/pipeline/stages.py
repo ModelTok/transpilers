@@ -43,6 +43,7 @@ from transpilers.ir.mir import MirModule
 from transpilers.ir.provenance import HirProvenance, ProvenanceMap
 from transpilers.passes import (
     hir_to_mir,
+    infer_contracts,
     infer_types,
     llm_rename,
     mir_to_c_lir,
@@ -266,6 +267,10 @@ def run_stages(
     if cpp_truth is not None:
         apply_ground_truth(mir_mod, cpp_truth, hir_mod)
     infer_types(mir_mod, llm_fill=llm_fill, ir_hints=merged_hints if merged_hints else None)
+    # Semantic-contract inference: runs after type resolution so it can
+    # map resolved types to contracts (arbitrary-precision int → overflow
+    # guard, Python ref → borrow annotation, etc.).
+    infer_contracts(mir_mod)
     if llm_rename_fill is not None:
         llm_rename(mir_mod, llm_fill=llm_rename_fill)
     lir_mod = lower(mir_mod)

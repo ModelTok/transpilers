@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .types import Type, UnknownT
+from .contracts import SemanticContract, WILDCARD
 
 
 class MirNode:
@@ -21,6 +22,7 @@ class MirNode:
     """
 
     _hir_provenance_id: int
+    contract: SemanticContract = WILDCARD
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -28,6 +30,7 @@ class MirNode:
 
         def _post_init(self):
             self._hir_provenance_id = 0
+            self.contract = WILDCARD
             if old_post:
                 old_post(self)
 

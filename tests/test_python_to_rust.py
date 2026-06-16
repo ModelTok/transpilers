@@ -29,12 +29,15 @@ def _compile(src: str) -> None:
 def test_add_emits_expected_rust():
     out = _t("def add(a: int, b: int) -> int:\n    return a + b\n")
     assert "fn add(a: i64, b: i64) -> i64" in out
-    assert "return a + b;" in out
+    # Python int is arbitrary-precision → Rust must emit wrapping arithmetic
+    # to avoid silent overflow miscompilation.
+    assert "(a).wrapping_add(b)" in out
 
 
 def test_muladd_uses_correct_precedence():
     out = _t("def muladd(a: int, b: int, c: int) -> int:\n    return a * b + c\n")
-    assert "return a * b + c;" in out
+    # The expression is `(a * b) + c`; both ops become wrapping.
+    assert "(a).wrapping_mul(b)).wrapping_add(c)" in out
 
 
 def test_missing_annotation_surfaces_a_hole():
@@ -87,7 +90,9 @@ def test_while_with_mutability_inferred():
     assert "let mut result: i64 = 1;" in out
     assert "let mut i: i64 = 1;" in out
     assert "while i <= n {" in out
-    assert "result *= i;" in out
+    # Python int is arbitrary-precision -> wrapping arithmetic
+    assert "result = (result).wrapping_mul(i);" in out
+    assert "i = (i).wrapping_add(1);" in out
 
 
 def test_for_range_accumulator():
