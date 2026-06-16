@@ -1,0 +1,63 @@
+# DiffusionGemma 26B QLoRA (4-bit) — C++/Python -> Mojo, on 24+ GB GPUs.
+# google/diffusion-gemma-26b-it is a 26B MoE (3.8B active) text-diffusion model
+# released under Apache 2.0.  This config fine-tunes it for code transpilation
+# using LLaMA Factory with QLoRA.
+#
+# IMPORTANT: DiffusionGemma is NOT a standard autoregressive model.  It uses
+# text diffusion (entropy-bounded denoising sampler, 256-token canvases).
+# LLaMA Factory's standard SFT trainer treats it as an autoregressive LM during
+# training (teacher-forcing), BUT inference afterwards MUST use a diffusion-aware
+# runtime (llama.cpp diffusion branch, vLLM with diffusion params, or Unsloth).
+#
+# Hardware notes:
+#   - The 26B MoE in 4-bit QLoRA + grad checkpointing can fit on 24 GB GPUs
+#     (RTX 4090/5090) with a tight cutoff_len.
+#   - For 48 GB GPUs (A40, L40S, RTX PRO 6000), cutoff_len can be 2048-4096.
+#   - Uses bitsandbytes 4-bit NF4 quantization.
+#
+# See ../docs/diffusion_gemma.md for the full fine-tuning + inference guide.
+
+### model
+model_name_or_path: google/diffusion-gemma-26b-it
+trust_remote_code: true
+
+### method (QLoRA)
+stage: sft
+do_train: true
+finetuning_type: lora
+quantization_bit: 4
+quantization_method: bnb
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+# Freeze vision tower if the model variant includes one (gemma4_unified).
+# DiffusionGemma is primarily text; the vision component is frozen to save VRAM.
+freeze_vision_tower: true
+freeze_multi_modal_projector: true
+
+### dataset
+dataset_dir: /mnt/c/Github/transpilers/data/sft/cpp_mojo
+dataset: mojo_acquisition,cpp_mojo_translation
+template: gemma4
+cutoff_len: 1024          # 24 GB ceiling; 2048+ for 48 GB GPUs
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+### output
+output_dir: saves/DiffusionGemma-26B/lora/cpp_mojo_qlora_v1
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true   # essential for 24 GB; can disable on 48 GB
+learning_rate: 1.0e-4
+num_train_epochs: 2.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
