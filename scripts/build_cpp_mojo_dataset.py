@@ -52,7 +52,9 @@ PREAMBLE_FILE = REPO / "scripts" / "ep_preamble.h"
 
 # Mojo toolchain from the energyplus-mojo pixi env — invoked directly with
 # MODULAR_HOME set so we never run `pixi run` (which rewrites that repo's lock).
-EPMOJO = Path("/home/bart/Github/energyplus-mojo/.pixi/envs/default")
+# Override with TRANSPILERS_EPMOJO when the repo lives elsewhere.
+EPMOJO = Path(os.environ.get("TRANSPILERS_EPMOJO",
+                             "/home/bart/Github/energyplus-mojo/.pixi/envs/default"))
 MOJO_BIN = EPMOJO / "bin" / "mojo"
 MODULAR_HOME = EPMOJO / "share" / "max"
 
@@ -194,13 +196,14 @@ def _split_top_level(s: str) -> list[str]:
     return out
 
 
-def extract_fns(ep_src: Path) -> list[CppFn]:
+def extract_fns(ep_src: Path, recursive: bool = False) -> list[CppFn]:
     """Scan every .cc for scalar-returning function *definitions*, resolving
     multi-line / comment-laden signatures by paren+brace matching."""
     fns: list[CppFn] = []
     seen: set[str] = set()
     # .cc translation units + .hh headers (the headers carry many inline scalar fns)
-    for cc in sorted(list(ep_src.glob("*.cc")) + list(ep_src.glob("*.hh"))):
+    pat_cc, pat_hh = ("**/*.cc", "**/*.hh") if recursive else ("*.cc", "*.hh")
+    for cc in sorted(list(ep_src.glob(pat_cc)) + list(ep_src.glob(pat_hh))):
         text = cc.read_text(errors="ignore")
         for m in _SIG_START.finditer(text):
             name = m.group("name")
@@ -234,7 +237,7 @@ def extract_fns(ep_src: Path) -> list[CppFn]:
                 continue
             seen.add(name)
             fns.append(CppFn(name=name, ret=m.group("ret"), params=params,
-                             body=body, source_file=cc.name))
+                             body=body, source_file=str(cc.relative_to(ep_src))))
     return fns
 
 
@@ -562,9 +565,14 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=REPO / "data" / "cpp_mojo_pairs.jsonl")
     ap.add_argument("--limit", type=int, default=0, help="cap candidates (0=all)")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--recursive", action="store_true",
+                    help="also scan ep-src subdirectories (AirflowNetwork, Autosizing, ...)")
+    ap.add_argument("--dump-fails", type=Path, default=None,
+                    help="write failed candidates (name, stage, cpp body) as JSONL "
+                         "for a downstream LLM-translate + re-verify pass")
     args = ap.parse_args()
 
-    fns = extract_fns(args.ep_src)
+    fns = extract_fns(args.ep_src, recursive=args.recursive)
     print(f"extracted {len(fns)} candidate pure-scalar C++ functions")
     if args.limit:
         fns = fns[: args.limit]
@@ -573,22 +581,31 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     stats = {"transpile_fail": 0, "sig_fail": 0, "verify_fail": 0, "ok": 0}
     pairs = []
+    fails = []
+
+    def _fail(fn: CppFn, stage: str, mojo: str | None = None) -> None:
+        stats[stage] += 1
+        fails.append({"function_name": fn.name, "source_file": fn.source_file,
+                      "ret_type": fn.ret, "arg_types": [t for t, _ in fn.params],
+                      "stage": stage, "cpp_source": fn.body,
+                      **({"mojo_attempt": mojo} if mojo else {})})
+
     for i, fn in enumerate(fns, 1):
         mojo = transpile(fn)
         if not mojo:
-            stats["transpile_fail"] += 1
+            _fail(fn, "transpile_fail")
             if args.verbose:
                 print(f"[{i}/{len(fns)}] {fn.name}: transpile_fail")
             continue
         mp = mojo_params(mojo)
         if mp is None or len(mp) != len(fn.params):
-            stats["sig_fail"] += 1
+            _fail(fn, "sig_fail", mojo)
             if args.verbose:
                 print(f"[{i}/{len(fns)}] {fn.name}: sig_fail")
             continue
         vres = verify(fn, mojo, mp)
         if vres is None:
-            stats["verify_fail"] += 1
+            _fail(fn, "verify_fail", mojo)
             if args.verbose:
                 print(f"[{i}/{len(fns)}] {fn.name}: verify_fail")
             continue
@@ -613,6 +630,13 @@ def main() -> int:
     with args.out.open("w") as f:
         for p in pairs:
             f.write(json.dumps(p, ensure_ascii=False) + "\n")
+
+    if args.dump_fails:
+        args.dump_fails.parent.mkdir(parents=True, exist_ok=True)
+        with args.dump_fails.open("w") as f:
+            for rec in fails:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        print(f"failed candidates -> {args.dump_fails} ({len(fails)})")
 
     print("\n=== summary ===")
     print(f"candidates:     {len(fns)}")

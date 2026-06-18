@@ -1,0 +1,164 @@
+extracted 154 candidate pure-scalar C++ functions
+[1/154] ratedGrossTotalCap: transpile_fail
+[2/154] subcoolReheatFlag: transpile_fail
+[3/154] numSpeeds: transpile_fail
+[4/154] Windward: OK  (finite 125/125, max_rel 0.0e+00)  @ ConvectionCoefficients.cc
+[5/154] CalcASHRAESimpleIntConvCoeff: OK  (finite 125/125, max_rel 0.0e+00)  @ ConvectionCoefficients.cc
+[6/154] CalcASHRAETARPNatural: transpile_fail
+[7/154] CalcAlamdariHammondUnstableHorizontal: OK  (finite 108/125, max_rel 2.2e-10)  @ ConvectionCoefficients.cc
+[8/154] CalcAlamdariHammondStableHorizontal: OK  (finite 117/125, max_rel 2.0e-10)  @ ConvectionCoefficients.cc
+[9/154] CalcAlamdariHammondVerticalWall: OK  (finite 108/125, max_rel 2.0e-10)  @ ConvectionCoefficients.cc
+[10/154] CalcKhalifaEq3WallAwayFromHeat: OK  (finite 125/125, max_rel 2.0e-10)  @ ConvectionCoefficients.cc
+[11/154] CalcKhalifaEq4CeilingAwayFromHeat: OK  (finite 125/125, max_rel 1.2e-10)  @ ConvectionCoefficients.cc
+[12/154] CalcKhalifaEq5WallsNearHeat: OK  (finite 125/125, max_rel 2.8e-10)  @ ConvectionCoefficients.cc
+[13/154] CalcKhalifaEq6NonHeatedWalls: OK  (finite 125/125, max_rel 2.1e-10)  @ ConvectionCoefficients.cc
+[14/154] CalcKhalifaEq7Ceiling: OK  (finite 125/125, max_rel 1.5e-10)  @ ConvectionCoefficients.cc
+[15/154] CalcAwbiHattonHeatedFloor: OK  (finite 125/125, max_rel 2.7e-10)  @ ConvectionCoefficients.cc
+[16/154] CalcAwbiHattonHeatedWall: OK  (finite 125/125, max_rel 2.6e-10)  @ ConvectionCoefficients.cc
+[17/154] CalcBeausoleilMorrisonMixedAssistedWall: verify_fail
+[18/154] CalcBeausoleilMorrisonMixedOpposingWall: verify_fail
+[19/154] CalcBeausoleilMorrisonMixedStableFloor: OK  (finite 91/125, max_rel 3.4e-10)  @ ConvectionCoefficients.cc
+[20/154] CalcBeausoleilMorrisonMixedUnstableFloor: OK  (finite 90/125, max_rel 5.7e-10)  @ ConvectionCoefficients.cc
+[21/154] CalcBeausoleilMorrisonMixedStableCeiling: verify_fail
+[22/154] CalcBeausoleilMorrisonMixedUnstableCeiling: verify_fail
+[23/154] CalcFohannoPolidoriVerticalWall: OK  (finite 111/125, max_rel 2.5e-10)  @ ConvectionCoefficients.cc
+[24/154] CalcKaradagChilledCeiling: OK  (finite 125/125, max_rel 2.0e-10)  @ ConvectionCoefficients.cc
+[25/154] CalcGoldsteinNovoselacCeilingDiffuserFloor: OK  (finite 106/125, max_rel 5.2e-10)  @ ConvectionCoefficients.cc
+[26/154] CalcMoWITTNatural: OK  (finite 125/125, max_rel 3.0e-10)  @ ConvectionCoefficients.cc
+[27/154] CalcMoWITTForcedWindward: OK  (finite 98/125, max_rel 7.9e-10)  @ ConvectionCoefficients.cc
+[28/154] CalcMoWITTForcedLeeward: OK  (finite 98/125, max_rel 5.5e-10)  @ ConvectionCoefficients.cc
+[29/154] CalcMoWITTWindward: transpile_fail
+[30/154] CalcMoWITTLeeward: transpile_fail
+[31/154] CalcNusseltJurges: OK  (finite 125/125, max_rel 2.1e-16)  @ ConvectionCoefficients.cc
+[32/154] CalcMcAdams: OK  (finite 125/125, max_rel 2.1e-16)  @ ConvectionCoefficients.cc
+[33/154] CalcMitchell: OK  (finite 90/125, max_rel 5.1e-10)  @ ConvectionCoefficients.cc
+[34/154] CalcWindSurfaceTheta: verify_fail
+[35/154] CalcEmmelVertical: transpile_fail
+[36/154] CalcEmmelRoof: transpile_fail
+[37/154] CalcASHRAEVerticalWall: OK  (finite 125/125, max_rel 3.0e-10)  @ ConvectionCoefficients.hh
+[38/154] CalcWaltonUnstableHorizontalOrTilt: OK  (finite 120/125, max_rel 3.0e-10)  @ ConvectionCoefficients.hh
+[39/154] CalcWaltonStableHorizontalOrTilt: OK  (finite 125/125, max_rel 3.0e-10)  @ ConvectionCoefficients.hh
+[40/154] AdjustCBF: verify_fail
+[41/154] FanSpdResidualCool: OK  (finite 125/125, max_rel 3.6e-15)  @ DXCoils.cc
+[42/154] FanSpdResidualHeat: OK  (finite 125/125, max_rel 4.8e-15)  @ DXCoils.cc
+[43/154] angle_2dvector: OK  (finite 125/125, max_rel 3.5e-15)  @ DXFEarClipping.cc
+[44/154] CalcPipeTransBeam: transpile_fail
+[45/154] DayltgGlarePositionFactor: transpile_fail
+[46/154] calculateThirdOrderFloorTemperature: OK  (finite 122/125, max_rel 4.3e-15)  @ DisplacementVentMgr.cc
+[47/154] pvstar: verify_fail
+[48/154] Le: OK  (finite 125/125, max_rel 6.8e-16)  @ ExtendedHeatIndex.cc
+[49/154] Qv: transpile_fail
+[50/154] Zs: OK  (finite 125/125, max_rel 1.3e-15)  @ ExtendedHeatIndex.cc
+[51/154] Ra: OK  (finite 125/125, max_rel 8.5e-16)  @ ExtendedHeatIndex.cc
+[52/154] Ra_bar: OK  (finite 125/125, max_rel 6.4e-16)  @ ExtendedHeatIndex.cc
+[53/154] Ra_un: OK  (finite 125/125, max_rel 6.8e-16)  @ ExtendedHeatIndex.cc
+[54/154] GlycolTempToTempIndex: OK  (finite 125/125, max_rel 0.0e+00)  @ FluidProperties.cc
+[55/154] GetInterpValue: OK  (finite 119/125, max_rel 4.4e-15)  @ FluidProperties.hh
+[56/154] OrdinalDay: transpile_fail
+[57/154] BetweenDateHoursLeftInclusive: OK  (finite 125/125, max_rel 0.0e+00)  @ General.cc
+[58/154] BetweenDates: OK  (finite 125/125, max_rel 0.0e+00)  @ General.cc
+[59/154] SafeDivide: OK  (finite 125/125, max_rel 2.8e-15)  @ General.cc
+[60/154] rotAzmDiffDeg: OK  (finite 125/125, max_rel 2.6e-15)  @ General.cc
+[61/154] epexp: OK  (finite 118/125, max_rel 5.3e-11)  @ General.hh
+[62/154] Interp: OK  (finite 125/125, max_rel 1.9e-15)  @ General.hh
+[63/154] BBConvergeCheck: transpile_fail
+[64/154] isEven: OK  (finite 125/125, max_rel 0.0e+00)  @ GroundHeatExchangers/Base.hh
+[65/154] WVDC: OK  (finite 124/125, max_rel 4.4e-10)  @ HeatBalanceHAMTManager.cc
+[66/154] SafeDiv: transpile_fail
+[67/154] should_be_fixed_output: OK  (finite 125/125, max_rel 0.0e+00)  @ IOFiles.hh
+[68/154] fixed_will_fit: OK  (finite 125/125, max_rel 0.0e+00)  @ IOFiles.hh
+[69/154] CalcDetIceStorLMTDstar: transpile_fail
+[70/154] TempSItoIP: OK  (finite 125/125, max_rel 1.6e-16)  @ IceThermalStorage.cc
+[71/154] TempIPtoSI: OK  (finite 125/125, max_rel 2.5e-15)  @ IceThermalStorage.cc
+[72/154] CheckThermalComfortSchedules: OK  (finite 125/125, max_rel 0.0e+00)  @ InternalHeatGains.cc
+[73/154] can_instantiate: transpile_fail
+[74/154] FuncDetermineCoolantWaterExitTemp: OK  (finite 108/125, max_rel 2.6e-10)  @ MicroCHPElectricGenerator.cc
+[75/154] WaterConversionFunct: OK  (finite 120/125, max_rel 3.2e-15)  @ OutputReportTabular.cc
+[76/154] isInTriangle: OK  (finite 125/125, max_rel 0.0e+00)  @ OutputReportTabular.cc
+[77/154] isInQuadrilateral: transpile_fail
+[78/154] SandiaModuleTemperature: OK  (finite 82/125, max_rel 2.4e-10)  @ Photovoltaics.cc
+[79/154] SandiaEffectiveIrradiance: OK  (finite 115/125, max_rel 3.6e-15)  @ Photovoltaics.cc
+[80/154] SandiaIxx: OK  (finite 125/125, max_rel 4.3e-15)  @ Photovoltaics.cc
+[81/154] max_abs_Comp_MyLoad: transpile_fail
+[82/154] Fahrenheit2Celsius: OK  (finite 125/125, max_rel 2.5e-15)  @ PlantLoopHeatPumpEIR.cc
+[83/154] add: OK  (finite 125/125, max_rel 2.8e-16)  @ PlantLoopHeatPumpEIR.hh
+[84/154] subtract: OK  (finite 125/125, max_rel 8.3e-16)  @ PlantLoopHeatPumpEIR.hh
+[85/154] calcFluxWeightingFactor: OK  (finite 125/125, max_rel 2.5e-15)  @ PlantPipingSystemsManager.cc
+[86/154] BoundValueToWithinTwoValues: OK  (finite 125/125, max_rel 0.0e+00)  @ PlantUtilities.cc
+[87/154] IntegerIsWithinTwoValues: OK  (finite 125/125, max_rel 0.0e+00)  @ PlantUtilities.cc
+[88/154] CSplineint: transpile_fail
+[89/154] PsyRhoAirFnPbTdbW: OK  (finite 125/125, max_rel 4.2e-15)  @ Psychrometrics.hh
+[90/154] PsyHFnTdbW: OK  (finite 125/125, max_rel 4.8e-15)  @ Psychrometrics.hh
+[91/154] PsyHFnTdbW_fast: OK  (finite 125/125, max_rel 3.9e-15)  @ Psychrometrics.hh
+[92/154] PsyCpAirFnW: verify_fail
+[93/154] PsyCpAirFnW_fast: verify_fail
+[94/154] PsyTdbFnHW: OK  (finite 125/125, max_rel 3.8e-15)  @ Psychrometrics.hh
+[95/154] PsyRhovFnTdbRhLBnd0C: OK  (finite 125/125, max_rel 9.3e-12)  @ Psychrometrics.hh
+[96/154] PsyRhovFnTdbWPb: OK  (finite 125/125, max_rel 3.9e-15)  @ Psychrometrics.hh
+[97/154] PsyRhovFnTdbWPb_fast: OK  (finite 125/125, max_rel 4.3e-15)  @ Psychrometrics.hh
+[98/154] F6: OK  (finite 125/125, max_rel 4.1e-15)  @ Psychrometrics.hh
+[99/154] F7: OK  (finite 125/125, max_rel 4.5e-15)  @ Psychrometrics.hh
+[100/154] RhoH2O: OK  (finite 125/125, max_rel 4.7e-15)  @ Psychrometrics.hh
+[101/154] hasRIDetailedZoneTSData: transpile_fail
+[102/154] hasRIDetailedHVACTSData: transpile_fail
+[103/154] hasRITimestepTSData: transpile_fail
+[104/154] hasRIHourlyTSData: transpile_fail
+[105/154] hasRIDailyTSData: transpile_fail
+[106/154] hasRIMonthlyTSData: transpile_fail
+[107/154] hasRIRunPeriodTSData: transpile_fail
+[108/154] hasRIYearlyTSData: transpile_fail
+[109/154] hasTSMeters: transpile_fail
+[110/154] hasHRMeters: transpile_fail
+[111/154] hasDYMeters: transpile_fail
+[112/154] hasMNMeters: transpile_fail
+[113/154] hasSMMeters: transpile_fail
+[114/154] hasYRMeters: transpile_fail
+[115/154] hasMeterData: transpile_fail
+[116/154] hasAnyTSData: transpile_fail
+[117/154] hasOutputData: transpile_fail
+[118/154] OutdoorDryBulbGrad: verify_fail
+[119/154] isMinuteMultipleOfTimestep: verify_fail
+[120/154] getCurrentVal: transpile_fail
+[121/154] interpSetPoint: OK  (finite 125/125, max_rel 2.5e-15)  @ SetPointManager.cc
+[122/154] neq: OK  (finite 125/125, max_rel 0.0e+00)  @ SolarShading.cc
+[123/154] d_eq: OK  (finite 125/125, max_rel 0.0e+00)  @ SolarShading.cc
+[124/154] GetIEEREquationResult: OK  (finite 125/125, max_rel 1.5e-15)  @ StandardRatings.cc
+[125/154] MakeUpWaterVolFlowFunct: OK  (finite 120/125, max_rel 3.2e-15)  @ SwimmingPool.cc
+[126/154] MakeUpWaterVolFunct: OK  (finite 120/125, max_rel 3.2e-15)  @ SwimmingPool.cc
+[127/154] GoAhead: OK  (finite 125/125, max_rel 0.0e+00)  @ TARCOGArgs.cc
+[128/154] LDSumMax: transpile_fail
+[129/154] LDSumMean: transpile_fail
+[130/154] pos: OK  (finite 125/125, max_rel 0.0e+00)  @ TARCOGCommon.cc
+[131/154] CalcFangerPPD: verify_fail
+[132/154] CalcRelativeAirVelocity: OK  (finite 125/125, max_rel 1.9e-16)  @ ThermalComfort.cc
+[133/154] CalcSatVapPressFromTemp: OK  (finite 125/125, max_rel 2.9e-15)  @ ThermalComfort.cc
+[134/154] CalcSatVapPressFromTempTorr: OK  (finite 125/125, max_rel 7.3e-12)  @ ThermalComfort.cc
+[135/154] PassiveGapNusseltNumber: verify_fail
+[136/154] fclamp: OK  (finite 125/125, max_rel 0.0e+00)  @ UtilityRoutines.hh
+[137/154] calculateWaterBoundaryConvectionCoefficient: OK  (finite 125/125, max_rel 8.1e-10)  @ WeatherManager.cc
+[138/154] interpolateWindDirection: OK  (finite 125/125, max_rel 3.3e-15)  @ WeatherManager.cc
+[139/154] GetSTM: transpile_fail
+[140/154] isLeapYear: OK  (finite 125/125, max_rel 0.0e+00)  @ WeatherManager.cc
+[141/154] computeJulianDate: OK  (finite 125/125, max_rel 0.0e+00)  @ WeatherManager.cc
+[142/154] calculateDayOfYear: transpile_fail
+[143/154] validMonthDay: verify_fail
+[144/154] IS_OPENNESS: OK  (finite 125/125, max_rel 4.9e-15)  @ WindowEquivalentLayer.cc
+[145/154] IS_DSRATIO: OK  (finite 125/125, max_rel 2.7e-15)  @ WindowEquivalentLayer.cc
+[146/154] VB_SLAT_RADIUS_RATIO: OK  (finite 125/125, max_rel 4.6e-15)  @ WindowEquivalentLayer.cc
+[147/154] FNU: OK  (finite 125/125, max_rel 8.8e-11)  @ WindowEquivalentLayer.cc
+[148/154] HRadPar: OK  (finite 125/125, max_rel 4.1e-15)  @ WindowEquivalentLayer.cc
+[149/154] HIC_ASHRAE: OK  (finite 125/125, max_rel 4.4e-15)  @ WindowEquivalentLayer.cc
+[150/154] VB_CriticalSlatAngle: OK  (finite 125/125, max_rel 1.5e-16)  @ WindowEquivalentLayer.cc
+[151/154] FEQX: OK  (finite 125/125, max_rel 0.0e+00)  @ WindowEquivalentLayer.cc
+[152/154] TRadC: OK  (finite 96/125, max_rel 3.5e-15)  @ WindowEquivalentLayer.cc
+[153/154] InterpolateBetweenTwoValues: OK  (finite 120/125, max_rel 4.2e-15)  @ WindowManager.cc
+[154/154] InterpolateBetweenFourValues: OK  (finite 120/125, max_rel 4.8e-15)  @ WindowManager.cc
+failed candidates -> /home/amd/night/fails_full.jsonl (55)
+
+=== summary ===
+candidates:     154
+transpile_fail: 41
+sig_fail:       0
+verify_fail:    14
+VERIFIED pairs: 99
+written to:     /home/amd/night/pairs_full.jsonl

@@ -42,5 +42,23 @@
       "response": "output",
       "system": "system"
     }
+  },
+  "cpp_mojo_translation_ep_v3": {
+    "file_name": "train_translation_ep_v3.jsonl",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output",
+      "system": "system"
+    }
+  },
+  "cpp_mojo_translation_ep_v3_nocomment": {
+    "file_name": "train_translation_ep_v3_nocomment.jsonl",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output",
+      "system": "system"
+    }
   }
 }
