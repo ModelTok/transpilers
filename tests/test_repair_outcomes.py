@@ -310,7 +310,9 @@ def test_rollup_convenience_is_context_manager_clean(tmp_path: Path):
 
 def test_default_paths_are_under_data():
     """DEFAULT_LOG_PATH and DEFAULT_METRICS_PATH are the documented locations."""
-    assert str(DEFAULT_LOG_PATH).startswith("data/")
-    assert str(DEFAULT_LOG_PATH).endswith("repair_outcomes.jsonl")
-    assert str(DEFAULT_METRICS_PATH).startswith("data/")
-    assert str(DEFAULT_METRICS_PATH).endswith("flywheel_metrics.json")
+    # Use as_posix() so the assertion holds regardless of the OS path
+    # separator (Windows renders these with backslashes).
+    assert DEFAULT_LOG_PATH.as_posix().startswith("data/")
+    assert DEFAULT_LOG_PATH.name == "repair_outcomes.jsonl"
+    assert DEFAULT_METRICS_PATH.as_posix().startswith("data/")
+    assert DEFAULT_METRICS_PATH.name == "flywheel_metrics.json"

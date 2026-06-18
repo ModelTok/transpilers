@@ -43,6 +43,29 @@ command runs all three steps. Issue #51's acceptance criterion
 ("documented loop where each run lowers LLM dependence") is met by that
 script + this document.
 
+### The live repair loop also feeds the log
+
+Step 1 is not limited to the batch corpus scripts. The
+verification-driven repair loop (`transpilers.repair.escalating_repair`,
+issue #47) emits its own `RepairOutcome` per unit when given a
+`RepairTracker`:
+
+```python
+from transpilers.repair import RepairTracker, escalating_repair
+
+tracker = RepairTracker()  # → data/repair_outcomes.jsonl
+escalating_repair(src, source_lang="cpp", target="mojo",
+                  tiered_client=client, tracker=tracker)
+```
+
+The loop derives the verdict from the path the unit took: an attempt-1
+pass (no LLM) is `algorithmic`; a pass on a later attempt is `llm`
+(carrying `n_llm_calls`); budget exhaustion is `unrepaired`. The loop
+does not apply deterministic rule patches itself, so it never emits the
+`rule` verdict — that comes from `scripts/sft/mojo_repair` in the batch
+path. If no tracker is passed, setting `$TRANSPILER_REPAIR_OUTCOMES_PATH`
+opts the loop in against that log (mirrors `$TRANSPILER_FLYWHEEL_PATH`).
+
 ## The north-star metric
 
 For every unit the pipeline produces one of four **verdicts**:
