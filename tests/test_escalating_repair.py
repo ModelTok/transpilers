@@ -515,3 +515,111 @@ def test_legacy_repair_still_works():
     )
     # max_passes=1 → one translate, one verify, no LLM fix-up.
     assert res.passes == 1
+
+
+# ---------------------------------------------------------------------------
+# RepairTracker wiring (issue #51): the live loop emits one RepairOutcome
+# per unit so the algorithmic-vs-LLM ratio is populated, not just by the
+# batch corpus scripts.
+# ---------------------------------------------------------------------------
+
+
+def _tracker(tmp_path: Path):
+    from transpilers.repair import RepairTracker
+
+    return RepairTracker(
+        log_path=tmp_path / "outcomes.jsonl",
+        metrics_path=tmp_path / "metrics.json",
+    )
+
+
+def test_tracker_records_algorithmic_when_first_try_passes(tmp_path: Path):
+    """Attempt-1 pass (no LLM) is recorded as the cheap ``algorithmic`` verdict."""
+    client = TieredLlmClient(tiers={}, default_cache_dir=tmp_path)
+    tracker = _tracker(tmp_path)
+    res = escalating_repair(
+        "def f(): pass",
+        source_lang="python",
+        target="rust",
+        tiered_client=client,
+        verifier=_ScriptedVerifier([True]),
+        initial_translate=lambda: "fn f() {}",
+        tracker=tracker,
+    )
+    tracker.close()
+    assert res.passed
+    snap = tracker.aggregate()
+    assert snap["by_verdict"] == {"algorithmic": 1}
+    assert snap["llm_fraction"] == 0.0
+
+
+def test_tracker_records_llm_when_repaired(tmp_path: Path):
+    """A unit only the LLM could fix is recorded as ``llm`` with the call count."""
+    local = _ScriptedTier(["fn f() -> i32 { 0 }\n"])
+    client = TieredLlmClient(
+        tiers={ModelTier.LOCAL_FINETUNED: local},
+        default_cache_dir=tmp_path,
+    )
+    tracker = _tracker(tmp_path)
+    res = escalating_repair(
+        "def f(): return 0",
+        source_lang="python",
+        target="rust",
+        tiered_client=client,
+        verifier=_ScriptedVerifier([False, True]),
+        initial_translate=lambda: "fn f() { }",
+        tracker=tracker,
+    )
+    tracker.close()
+    assert res.passed
+    out = list(tracker.iter_log())
+    assert len(out) == 1
+    assert out[0].verdict == "llm"
+    assert out[0].n_llm_calls == 1
+    assert out[0].is_frontier_only  # LLM was the only thing that got us to pass
+
+
+def test_tracker_records_unrepaired_on_refusal(tmp_path: Path):
+    """Budget exhaustion → ``unrepaired`` (refuse-don't-guess, no silent pass)."""
+    local = _ScriptedTier({"": "fn f() { STILL_BROKEN }\n"})
+    client = TieredLlmClient(
+        tiers={ModelTier.LOCAL_FINETUNED: local},
+        default_cache_dir=tmp_path,
+    )
+    tracker = _tracker(tmp_path)
+    res = escalating_repair(
+        "def f(): return 0",
+        source_lang="python",
+        target="rust",
+        tiered_client=client,
+        verifier=_ScriptedVerifier([False, False, False]),
+        initial_translate=lambda: "fn f() { }",
+        max_attempts=3,
+        tracker=tracker,
+    )
+    tracker.close()
+    assert res.refused
+    out = list(tracker.iter_log())
+    assert len(out) == 1
+    assert out[0].verdict == "unrepaired"
+    assert out[0].is_pass is False
+
+
+def test_tracker_auto_created_from_env(tmp_path: Path, monkeypatch):
+    """With no explicit tracker, $TRANSPILER_REPAIR_OUTCOMES_PATH opts in."""
+    from transpilers.repair import RepairOutcome  # noqa: F401  (import smoke)
+
+    log = tmp_path / "env_outcomes.jsonl"
+    monkeypatch.setenv("TRANSPILER_REPAIR_OUTCOMES_PATH", str(log))
+    client = TieredLlmClient(tiers={}, default_cache_dir=tmp_path)
+    escalating_repair(
+        "def f(): pass",
+        source_lang="python",
+        target="rust",
+        tiered_client=client,
+        verifier=_ScriptedVerifier([True]),
+        initial_translate=lambda: "fn f() {}",
+    )
+    assert log.exists()
+    lines = [ln for ln in log.read_text().splitlines() if ln.strip()]
+    assert len(lines) == 1

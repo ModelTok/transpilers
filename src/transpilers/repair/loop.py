@@ -25,6 +25,7 @@ from typing import Any, Callable
 
 from transpilers.llm.client import ModelTier, TieredLlmClient
 from transpilers.repair.flywheel import Flywheel
+from transpilers.repair.outcomes import RepairOutcome, RepairTracker
 from transpilers.repair.signal import (
     RepairSignal,
     signal_from_compile,
@@ -390,6 +391,7 @@ def escalating_repair(
     initial_translate: Callable[[], str] | None = None,
     max_attempts: int = 5,
     flywheel: Flywheel | None = None,
+    tracker: RepairTracker | None = None,
     enable_cache: bool = True,
 ) -> EscalatingRepairResult:
     """Run the verification-driven repair loop with escalating tiers.
@@ -412,6 +414,13 @@ def escalating_repair(
         tiers are available.
     flywheel
         Optional :class:`Flywheel` to record every verified repair.
+    tracker
+        Optional :class:`RepairTracker` (issue #51). Records one
+        :class:`RepairOutcome` per unit — verdict ``algorithmic`` /
+        ``llm`` / ``unrepaired`` — so the algorithmic-vs-LLM ratio is
+        populated by the live loop, not just the batch corpus scripts.
+        If ``None`` and ``$TRANSPILER_REPAIR_OUTCOMES_PATH`` is set, a
+        tracker is created against that log.
     enable_cache
         When ``False``, the CACHED tier is bypassed (force a fresh LLM
         call). Useful for measuring the loop's incremental lift.
@@ -431,16 +440,29 @@ def escalating_repair(
         if path:
             flywheel = Flywheel(path=path)
 
+    if tracker is None:
+        import os
+
+        outcomes_path = os.environ.get("TRANSPILER_REPAIR_OUTCOMES_PATH")
+        if outcomes_path:
+            tracker = RepairTracker(log_path=outcomes_path)
+
     available = tiered_client.available_tiers()
     if not available:
-        return _trivial_loop(
+        return _finalize(
+            _trivial_loop(
+                source=source,
+                source_lang=source_lang,
+                target=target,
+                initial_translate=initial_translate,
+                verifier=verifier,
+                max_attempts=max_attempts,
+                flywheel=flywheel,
+            ),
+            tracker=tracker,
             source=source,
             source_lang=source_lang,
             target=target,
-            initial_translate=initial_translate,
-            verifier=verifier,
-            max_attempts=max_attempts,
-            flywheel=flywheel,
         )
 
     non_cached = [t for t in available if t != ModelTier.CACHED]
@@ -534,19 +556,25 @@ def escalating_repair(
         )
 
         if verified:
-            return _on_verified_pass(
-                attempt=attempt,
-                tier=tier,
-                current_code=current_code,
-                history=history,
+            return _finalize(
+                _on_verified_pass(
+                    attempt=attempt,
+                    tier=tier,
+                    current_code=current_code,
+                    history=history,
+                    source=source,
+                    source_lang=source_lang,
+                    target=target,
+                    last_signal=last_signal,
+                    tiered_client=tiered_client,
+                    flywheel=flywheel,
+                    enable_cache=enable_cache,
+                    max_attempts=max_attempts,
+                ),
+                tracker=tracker,
                 source=source,
                 source_lang=source_lang,
                 target=target,
-                last_signal=last_signal,
-                tiered_client=tiered_client,
-                flywheel=flywheel,
-                enable_cache=enable_cache,
-                max_attempts=max_attempts,
             )
 
         last_signal = outcome.signal or RepairSignal(
@@ -554,14 +582,85 @@ def escalating_repair(
         )
         last_signal.attempt = attempt
 
-    return EscalatingRepairResult(
-        code=current_code,
-        passed=False,
-        attempts=max_attempts,
-        fixing_tier=available[min(len(available) - 1, max_attempts - 1)],
-        history=history,
-        refused=True,
+    return _finalize(
+        EscalatingRepairResult(
+            code=current_code,
+            passed=False,
+            attempts=max_attempts,
+            fixing_tier=available[min(len(available) - 1, max_attempts - 1)],
+            history=history,
+            refused=True,
+        ),
+        tracker=tracker,
+        source=source,
+        source_lang=source_lang,
+        target=target,
     )
+
+
+def _finalize(
+    result: EscalatingRepairResult,
+    *,
+    tracker: RepairTracker | None,
+    source: str,
+    source_lang: str,
+    target: str,
+) -> EscalatingRepairResult:
+    """Emit one :class:`RepairOutcome` per unit, then return *result* unchanged.
+
+    The verdict is derived purely from *result*, so every terminal path
+    (trivial loop, verified pass, refusal) records the same way:
+
+    * not passed                 -> ``unrepaired``
+    * passed on attempt 1        -> ``algorithmic`` (attempt 1 is always the
+                                    no-LLM initial translation)
+    * passed on a later attempt  -> ``llm`` (an LLM-derived fix verified)
+
+    The loop never applies deterministic rule patches itself (those live in
+    the batch corpus scripts), so the ``rule`` verdict is not produced here.
+    """
+    if tracker is None:
+        return result
+
+    import hashlib
+
+    history = result.history
+    # Count actual LLM round-trips: retries (attempt > 1) that were not served
+    # from cache. Cache hits replay a prior LLM answer without a fresh call.
+    n_llm_calls = sum(1 for h in history if h.attempt > 1 and not h.cache_hit)
+    # Bucket / construct come from the last failing signal we saw.
+    bucket = ""
+    for h in reversed(history):
+        if h.signal is not None and not h.verified:
+            bucket = h.signal.bucket
+            break
+
+    if not result.passed:
+        verdict = "unrepaired"
+    elif result.attempts <= 1:
+        verdict = "algorithmic"
+    else:
+        verdict = "llm"
+
+    fingerprint = hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
+    tracker.record(
+        RepairOutcome(
+            source_lang=source_lang,
+            target=target,
+            fingerprint=fingerprint,
+            bucket=bucket,
+            verdict=verdict,
+            n_llm_calls=n_llm_calls,
+            n_repair_passes=max(0, result.attempts - 1),
+            wallclock_ms=sum(h.elapsed_ms for h in history),
+            notes=(
+                f"fixing_tier={result.fixing_tier.value}"
+                if result.fixing_tier
+                else "fixing_tier=none"
+            ),
+        )
+    )
+    return result
 
 
 def _on_verified_pass(

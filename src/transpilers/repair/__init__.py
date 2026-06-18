@@ -28,6 +28,14 @@ from .loop import (
     Verifier,
     escalating_repair,
 )
+from .outcomes import (
+    DEFAULT_LOG_PATH,
+    DEFAULT_METRICS_PATH,
+    VALID_VERDICTS,
+    RepairOutcome,
+    RepairTracker,
+    rollup,
+)
 from .repair import RepairPass, RepairResult, repair
 from .signal import (
     RepairSignal,
