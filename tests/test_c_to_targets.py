@@ -26,7 +26,8 @@ def _zig(src: str) -> str:
 def test_c_add_to_rust():
     out = _rust("int add(int a, int b) { return a + b; }")
     assert "fn add(a: i64, b: i64) -> i64" in out
-    assert "return a + b;" in out
+    # C int is fixed-width -> wrapping_* for safety from arbitrary-precision
+    assert "wrapping_add(b)" in out
 
 
 def test_c_if_else_to_rust():
@@ -207,4 +208,5 @@ def test_interprocedural_inference_on_c():
         """
     )
     assert "fn square(x: i64) -> i64" in out
-    assert "total += square(i)" in out
+    assert "wrapping_mul(x)" in out  # C int -> wrapping arithmetic
+    assert "wrapping_add(square(i))" in out

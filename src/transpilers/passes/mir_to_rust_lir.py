@@ -19,6 +19,7 @@ emitter consumes.
 from __future__ import annotations
 
 from transpilers.ir import lir, mir
+from transpilers.ir.contracts import OverflowBehavior, SemanticContract
 from transpilers.ir.types import BoolT, FloatT, IntT, ListT, NoneT, StrT, StructT, Type, UnknownT
 
 from ._mir_lower_base import (
@@ -109,6 +110,31 @@ class _RustLowering(MirLoweringBase):
             return _RustListConcat(left=self.lower_expr(node.left), right=self.lower_expr(node.right))
         # Python `//` (FloorDivide) → Rust `/` on integer types.
         op = "/" if node.op == "//" else node.op
+        # ── Overflow-safe emission ──────────────────────────────────────────
+        # If the MIR node carries a semantic contract saying `ARBITRARY`
+        # precision (Python int), but we know the Rust type is fixed-width
+        # (i64), we must emit a wrapping or checked operation.  The contract
+        # tells us what the source expects; we emit the Rust equivalent or
+        # annotate the binop so the emitter can decide.
+        contract: SemanticContract = getattr(node, "contract", SemanticContract())
+        if (
+            contract.overflow is OverflowBehavior.ARBITRARY
+            and op in ("+", "-", "*")
+        ):
+            # Arbitrary-precision source ints flowing into a fixed-width
+            # target need explicit overflow handling.  Emit a wrapping
+            # operation as the safe default (matches Rust's `wrapping_add`,
+            # `wrapping_sub`, `wrapping_mul`).
+            style = _overflow_style(contract)
+            return copy_provenance(
+                _RustOverflowGuard(
+                    op=op,
+                    left=self.lower_expr(node.left),
+                    right=self.lower_expr(node.right),
+                    style=style,
+                ),
+                node,
+            )
         return copy_provenance(
             lir.RustBinOp(op=op, left=self.lower_expr(node.left), right=self.lower_expr(node.right)),
             node,
@@ -330,3 +356,25 @@ def _rust_type(ty: Type) -> str:
     if isinstance(ty, UnknownT):
         raise ValueError(f"unresolved type hole: {ty.hint}")
     raise NotImplementedError(f"type {type(ty).__name__}")
+def _overflow_style(contract: SemanticContract) -> str:
+    """Map a source-language overflow contract to a Rust overflow-method prefix.
+
+    Returns ``"wrapping"``, ``"checked"``, or ``"saturating"``.
+    """
+    if contract.overflow in (OverflowBehavior.ARBITRARY, OverflowBehavior.UNSPECIFIED, OverflowBehavior.WRAP):
+        return "wrapping"
+    if contract.overflow is OverflowBehavior.CHECKED:
+        return "checked"
+    if contract.overflow is OverflowBehavior.SATURATE:
+        return "saturating"
+    return "wrapping"
+class _RustOverflowGuard(lir.LirNode):
+    """Overflow-aware arithmetic. Emits `(a).wrapping_<op>(b)` when the source
+    (Python arbitrary-precision int) could overflow in the target (i64).
+    Also supports `checked_*` and `saturating_*` forms based on contract."""
+
+    def __init__(self, op: str, left: lir.LirNode, right: lir.LirNode, style: str = "wrapping") -> None:
+        self.op = op
+        self.left = left
+        self.right = right
+        self.style = style  # "wrapping", "checked", or "saturating"

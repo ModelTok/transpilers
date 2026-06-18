@@ -43,7 +43,8 @@ def test_java_add_to_rust():
         """,
     )
     assert "fn add(a: i64, b: i64) -> i64" in out
-    assert "return a + b;" in out
+    # Java int is fixed-width -> wrapping_* for safety
+    assert "wrapping_add(b)" in out
 
 
 def test_java_for_loop_desugars():
