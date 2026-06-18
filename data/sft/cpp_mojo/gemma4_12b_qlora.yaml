@@ -20,7 +20,7 @@ freeze_vision_tower: true
 freeze_multi_modal_projector: true
 
 ### dataset
-dataset_dir: /mnt/c/Github/transpilers/data/sft/cpp_mojo
+dataset_dir: /home/bart/.cline/worktrees/21960/transpilers/data/sft/cpp_mojo
 dataset: mojo_acquisition,cpp_mojo_translation
 template: gemma4
 cutoff_len: 1024          # tight to survive 12 GB with a 12B model + vision tower
