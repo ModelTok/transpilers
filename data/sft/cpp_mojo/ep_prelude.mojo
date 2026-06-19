@@ -24,8 +24,11 @@ struct Constant:
     comptime PiOvr2 = 1.57079632679489662
     comptime Kelvin = 273.15
     comptime StefanBoltzmann = 5.6697e-8
+    comptime Sigma = 5.6697e-8                 # EP alias for Stefan-Boltzmann
     comptime DegToRad = 0.0174532925199432958
     comptime RadToDeg = 57.2957795130823209
+    comptime UniversalGasConstant = 8314.462175   # J/(kmol*K)
+    comptime Gravity = 9.807                   # m/s^2
 
 struct DataPrecisionGlobals:
     comptime EXP_LowerLimit = -20.0
@@ -35,3 +38,38 @@ struct DataPrecisionGlobals:
 struct TARCOGParams:
     comptime MMax = 100
     comptime NMax = 100
+
+# ObjexxFCL-style 1-based dense arrays (List-backed). C++ uses call syntax
+# `a(i)`; the model maps that to Mojo subscript `a[i]`. Both are 1-based, so the
+# shim mirrors ep_oracle.h's Array1D/Array2D exactly.
+struct Array1D(Copyable, Movable):
+    var _d: List[Float64]
+    def __init__(out self, n: Int = 0, fill: Float64 = 0.0):
+        self._d = List[Float64]()
+        for _ in range(n):
+            self._d.append(fill)
+    def __getitem__(self, i: Int) raises -> Float64:
+        return self._d[i - 1]
+    def __setitem__(mut self, i: Int, v: Float64) raises:
+        self._d[i - 1] = v
+    def size(self) -> Int:
+        return len(self._d)
+    def __len__(self) -> Int:
+        return len(self._d)
+
+struct Array2D(Copyable, Movable):
+    var _d: List[Float64]
+    var _rows: Int
+    var _cols: Int
+    def __init__(out self, rows: Int = 0, cols: Int = 0, fill: Float64 = 0.0):
+        self._rows = rows
+        self._cols = cols
+        self._d = List[Float64]()
+        for _ in range(rows * cols):
+            self._d.append(fill)
+    def __getitem__(self, i: Int, j: Int) raises -> Float64:
+        return self._d[(i - 1) * self._cols + (j - 1)]
+    def __setitem__(mut self, i: Int, j: Int, v: Float64) raises:
+        self._d[(i - 1) * self._cols + (j - 1)] = v
+    def size(self) -> Int:
+        return len(self._d)
