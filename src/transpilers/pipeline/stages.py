@@ -40,7 +40,7 @@ from transpilers.frontends.vb import parse_vb
 from transpilers.ir.hir import HirModule
 from transpilers.ir.lir.base import LirNode
 from transpilers.ir.mir import MirModule
-from transpilers.ir.provenance import HirProvenance, ProvenanceMap
+from transpilers.ir.provenance import ProvenanceMap
 from transpilers.passes import (
     hir_to_mir,
     infer_types,
