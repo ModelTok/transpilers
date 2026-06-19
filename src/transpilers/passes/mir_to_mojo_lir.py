@@ -72,10 +72,10 @@ class _MojoLowering(MirLoweringBase):
             items.extend(self.lower_struct_items(struct))
         for fn in module.functions:
             items.append(self.lower_function(fn))
-        # Idiomatic Mojo uses `from math import sqrt, exp` (explicit names), not
-        # `import math` + qualified `math.sqrt` (module-qualified access is not
-        # the standard form). Only the actually-used names are imported.
-        imports = ([f"from math import {', '.join(sorted(self._used_math))}"]
+        # Mojo 1.0 requires the `std.` prefix: `from std.math import sqrt, exp`
+        # (bare `from math import` is deprecated and warns). Explicit names, not
+        # `import std.math` + qualified access. Only actually-used names imported.
+        imports = ([f"from std.math import {', '.join(sorted(self._used_math))}"]
                    if self._used_math else [])
         return lir.MojoModule(items=items, imports=imports)
 

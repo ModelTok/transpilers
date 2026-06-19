@@ -227,10 +227,10 @@ def test_e2e_macro_expansion_flows_to_annotation():
 
 
 def test_e2e_uses_clang_resolved_intrinsic_signature():
-    """`std::sqrt(x)` -> Mojo emits `from math import sqrt`."""
+    """`std::sqrt(x)` -> Mojo emits `from std.math import sqrt`."""
     from transpilers.cli.main import transpile_cpp_to_mojo
     out = transpile_cpp_to_mojo("double f(double x){ return std::sqrt(x); }")
-    assert "from math import sqrt" in out
+    assert "from std.math import sqrt" in out
 
 
 def test_e2e_template_definition_emits_todo_stub():

@@ -65,7 +65,7 @@ def test_mojo_bool_type():
 
 
 def test_mojo_math_import_is_idiomatic():
-    """cmath intrinsics use `from math import <names>` (bare calls), not the
+    """cmath intrinsics use `from std.math import <names>` (Mojo 1.0), not the
     non-idiomatic `import math` + module-qualified `math.sqrt`."""
     import tempfile
     from transpilers.levels import transpile_level
@@ -74,7 +74,7 @@ def test_mojo_math_import_is_idiomatic():
     with open(p, "w") as f:
         f.write("double f(double x){ return std::sqrt(x) + std::exp(x); }")
     out = transpile_level("file", p, target="mojo", engine="strict")[0].output
-    assert "from math import exp, sqrt" in out
+    assert "from std.math import exp, sqrt" in out
     assert "math.sqrt" not in out and "import math\n" not in out
     assert "sqrt(x)" in out
 

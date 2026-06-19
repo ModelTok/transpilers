@@ -148,7 +148,7 @@ def verify_with_replay(item):
         fixtures = parse_fixtures((t / "fx.tsv").read_text())
 
         (t / "rep.mojo").write_text(gen_replay_program(item, fixtures))
-        r = subprocess.run([MOJO_BIN, "build", "-Xlinker", "-ldl", str(t / "rep.mojo"), "-o", str(t / "rep")],
+        r = subprocess.run([MOJO_BIN, "build", "-Xlinker", "-ldl", "-Xlinker", "-lm", str(t / "rep.mojo"), "-o", str(t / "rep")],
                            capture_output=True, text=True, timeout=180, env=MOJO_ENV)
         if r.returncode != 0:
             errs = [ln for ln in r.stderr.splitlines() if ": error:" in ln]
