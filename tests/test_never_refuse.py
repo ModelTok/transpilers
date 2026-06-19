@@ -13,10 +13,8 @@ import pytest
 
 from transpilers.cli.main import (
     transpile,
-    transpile_cpp_to_c,
     transpile_cpp_to_mojo,
     transpile_cpp_to_rust,
-    transpile_cpp_to_zig,
 )
 from transpilers.frontends.cpp.parser.core import parse_cpp
 from transpilers.ir import hir

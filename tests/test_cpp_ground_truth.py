@@ -6,9 +6,7 @@ us resolved types, and the HIR->MIR hole-filling picks them up.
 """
 from __future__ import annotations
 
-import textwrap
 
-import pytest
 
 from transpilers.frontends.cpp.parser import parse_cpp
 from transpilers.frontends.cpp.parser.preprocess import (
@@ -18,19 +16,14 @@ from transpilers.frontends.cpp.parser.preprocess import (
 from transpilers.frontends.cpp.parser.type_extractor import TypeGroundTruth
 from transpilers.ir import hir, mir
 from transpilers.ir.types import (
-    BoolT,
-    FloatT,
     IntT,
     ListT,
     NoneT,
     StrT,
-    StructT,
-    Type,
     UnknownT,
 )
 from transpilers.passes.cpp_ground_truth import apply_ground_truth
 from transpilers.passes import hir_to_mir
-from transpilers.frontends.errors import UnsupportedConstruct
 
 
 # ---------------------------------------------------------------------------

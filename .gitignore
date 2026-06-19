@@ -61,3 +61,7 @@ data/sft/flywheel_pairs.jsonl
 data/sft/flywheel_promotions.jsonl
 # Auto-rendered metrics markdown: re-derived from data/flywheel_metrics.json
 docs/flywheel_metrics.md
+
+# secrets / embedded vendored clone (added 2026-06-19)
+stateless transpilation/.env
+transpyle/
