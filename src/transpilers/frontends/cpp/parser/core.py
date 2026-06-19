@@ -107,13 +107,14 @@ double trunc(double); double fmod(double, double); double hypot(double, double);
 double fmin(double, double); double fmax(double, double); double fma(double, double, double);
 double max(double, double); double min(double, double);
 int max(int, int); int min(int, int); int abs(int); long labs(long);
+double clamp(double, double, double); int clamp(int, int, int);
 namespace std {
 using ::exp; using ::log; using ::log10; using ::log2; using ::sqrt; using ::cbrt;
 using ::pow; using ::sin; using ::cos; using ::tan; using ::asin; using ::acos;
 using ::atan; using ::atan2; using ::sinh; using ::cosh; using ::tanh;
 using ::fabs; using ::ceil; using ::floor; using ::round; using ::trunc;
 using ::fmod; using ::hypot; using ::fmin; using ::fmax; using ::fma;
-using ::max; using ::min; using ::abs; using ::labs;
+using ::max; using ::min; using ::abs; using ::labs; using ::clamp;
 }
 """
 
