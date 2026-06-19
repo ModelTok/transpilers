@@ -1,6 +1,5 @@
 """Multi-level transpilation (object / file / module / folder)."""
 import os
-import tempfile
 
 from transpilers.levels import transpile_level, extract_objects
 

@@ -49,13 +49,11 @@ from transpilers.ir.types import (
 )
 
 if TYPE_CHECKING:
-    from clang.cindex import Cursor, TranslationUnit
+    from clang.cindex import Cursor
 
 from .types import (
     CPP_TYPE_ALIASES,
     SIMD_TYPE_ALIASES,
-    _VECTOR_ELEM_ALIASES,
-    _type_text,
 )
 
 _log = logging.getLogger(__name__)

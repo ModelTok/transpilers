@@ -12,7 +12,6 @@ extractor is on the hot path of every parse.
 """
 from __future__ import annotations
 
-import re
 
 from transpilers.ir.types import (
     BoolT,

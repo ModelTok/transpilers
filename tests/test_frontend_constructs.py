@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import textwrap
 
-import pytest
 
 from transpilers.cli.main import transpile_python_to_rust
 

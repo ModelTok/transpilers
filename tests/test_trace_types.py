@@ -19,7 +19,6 @@ from transpilers.ir.types import (
     ListT,
     NoneT,
     StrT,
-    Type,
     UnknownT,
 )
 from transpilers.passes.trace_types import (
