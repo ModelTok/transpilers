@@ -98,6 +98,7 @@ namespace std {
     double fmin(double, double); double fmax(double, double);
     double fma(double, double, double);
     int abs(int); long labs(long);
+    double clamp(double, double, double); int clamp(int, int, int);
     // iostream-shaped IO. The strict engine doesn't model stream
     // operators (>> / <<); calls to cin/cout become HirRaw holes
     // that every backend emits as TODO[port] stubs. We declare

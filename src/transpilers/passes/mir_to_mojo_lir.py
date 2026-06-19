@@ -206,6 +206,9 @@ class _MojoLowering(MirLoweringBase):
             return lir.MojoMethodCall(receiver=args[0], method="sqrt", args=[])
         if node.func == "simd_abs" and len(args) == 1:
             return lir.MojoCall(func="abs", args=args)
+        # std::clamp(x, lo, hi) -> Mojo `x.clamp(lo, hi)` (method on SIMD/Float).
+        if node.func == "clamp" and len(args) == 3:
+            return lir.MojoMethodCall(receiver=args[0], method="clamp", args=args[1:])
         # <cmath> intrinsics -> Mojo math fns via `from math import <name>`.
         if node.func in _MATH_FNS:
             self._used_math.add(node.func)

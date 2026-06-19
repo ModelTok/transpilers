@@ -40,6 +40,7 @@ MOJO_ENV = dict(os.environ, MODULAR_HOME=f"{EPMOJO}/share/max", PATH="/usr/bin:/
 DECLS = """#include <cmath>
 #include <algorithm>
 typedef double Real64; typedef long long Int64; typedef int Int;
+static const double SMALL = 1e-10;
 double pow_2(double),pow_3(double),pow_4(double),pow_5(double),pow_6(double),pow_7(double);
 double root_4(double),root_8(double),sign(double,double),mod(double,double),radians(double),pvstar(double);
 namespace Constant{const double Pi=3.14159265358979324,TwoPi=6.28318530717958648,PiOvr2=1.57079632679489662,Kelvin=273.15,StefanBoltzmann=5.6697e-8,Sigma=5.6697e-8,DegToRad=0.0174532925199432958,RadToDeg=57.2957795130823209,UniversalGasConstant=8314.462175,Gravity=9.807;}
@@ -133,6 +134,9 @@ def bench_one(name):
     for a, b in zip(cpp_out, mojo_out):
         try:
             fa, fb = float(a), float(b)
+            # both NaN or both same inf == same behavior (domain edge); accept
+            if (fa != fa and fb != fb) or fa == fb:
+                continue
             if abs(fa - fb) <= 1e-6 * max(abs(fa), abs(fb), 1e-9):
                 continue
         except ValueError:
