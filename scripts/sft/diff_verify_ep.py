@@ -44,7 +44,7 @@ def verify(item):
         if not cpp_out:
             return False, "cpp_no_output"
         (t/"b.mojo").write_text(PRELUDE + "\n" + item["mojo_unit"] + "\n\n" + item["mojo_driver"] + "\n")
-        r = run([MOJO_BIN, "build", "-Xlinker", "-ldl", str(t/"b.mojo"), "-o", str(t/"b")], env=MOJO_ENV)
+        r = run([MOJO_BIN, "build", "-Xlinker", "-ldl", "-Xlinker", "-lm", str(t/"b.mojo"), "-o", str(t/"b")], env=MOJO_ENV)
         if r.returncode != 0:
             errs = [l for l in r.stderr.splitlines() if ": error:" in l and "failed to parse" not in l]
             return False, "mojo_compile: " + (errs[0][:50] if errs else "link/parse")
