@@ -1,52 +1,227 @@
 {
- "scalar_fns_total": 48,
- "leaf_frontier_count": 45,
+ "scalar_fns_total": 134,
+ "leaf_frontier_count": 124,
  "leaf_frontier_sample": [
+  "AbsoluteAirMass",
+  "AdjustCBF",
+  "AirMass",
   "BoundValueToWithinTwoValues",
+  "CSplineint",
   "CalcASHRAESimpleIntConvCoeff",
-  "CalcASHRAETARPNatural",
+  "CalcASHRAEVerticalWall",
+  "CalcAlamdariHammondStableHorizontal",
+  "CalcAlamdariHammondUnstableHorizontal",
+  "CalcAlamdariHammondVerticalWall",
+  "CalcAwbiHattonHeatedFloor",
+  "CalcAwbiHattonHeatedWall",
+  "CalcBeausoleilMorrisonMixedAssistedWall",
+  "CalcBeausoleilMorrisonMixedOpposingWall",
+  "CalcBeausoleilMorrisonMixedStableCeiling",
+  "CalcBeausoleilMorrisonMixedStableFloor",
+  "CalcBeausoleilMorrisonMixedUnstableCeiling",
+  "CalcBeausoleilMorrisonMixedUnstableFloor",
+  "CalcConvCoeffBetweenPlates",
+  "CalcDetIceStorLMTDstar",
   "CalcFangerPPD",
+  "CalcFohannoPolidoriVerticalWall",
+  "CalcGoldsteinNovoselacCeilingDiffuserFloor",
+  "CalcKaradagChilledCeiling",
+  "CalcKhalifaEq3WallAwayFromHeat",
+  "CalcKhalifaEq4CeilingAwayFromHeat",
+  "CalcKhalifaEq5WallsNearHeat",
+  "CalcKhalifaEq6NonHeatedWalls",
+  "CalcKhalifaEq7Ceiling",
   "CalcMcAdams",
   "CalcMitchell",
   "CalcMoWITTForcedLeeward",
   "CalcMoWITTForcedWindward",
   "CalcMoWITTNatural",
   "CalcNusseltJurges",
+  "CalcPipeTransBeam",
   "CalcRelativeAirVelocity",
   "CalcSatVapPressFromTemp",
   "CalcSatVapPressFromTempTorr",
-  "CalcWindSurfaceTheta",
-  "CalculatePartRuntimeFraction",
-  "Fahrenheit2Celsius",
-  "FanSpdResidualCool",
-  "FanSpdResidualHeat",
-  "GetIEEREquationResult",
-  "InterpolateBetweenFourValues",
-  "InterpolateBetweenTwoValues",
-  "LDSumMax",
-  "LDSumMean",
-  "Le",
-  "MakeUpWaterVolFlowFunct",
-  "MakeUpWaterVolFunct",
-  "Ra",
-  "Ra_bar",
-  "Ra_un",
-  "SafeDiv",
-  "SafeDivide",
-  "TempIPtoSI",
-  "TempSItoIP",
-  "WVDC",
-  "WaterConversionFunct",
-  "Zs",
-  "calcFluxWeightingFactor",
-  "calculateOperationalFraction",
-  "calculateThirdOrderFloorTemperature",
-  "calculateWaterBoundaryConvectionCoefficient"
+  "CalcTankTemp"
  ],
  "layer_sizes": [
-  45,
-  3
+  124,
+  10
  ],
+ "layers_full": [
+  [
+   "AbsoluteAirMass",
+   "AdjustCBF",
+   "AirMass",
+   "BoundValueToWithinTwoValues",
+   "CSplineint",
+   "CalcASHRAESimpleIntConvCoeff",
+   "CalcASHRAEVerticalWall",
+   "CalcAlamdariHammondStableHorizontal",
+   "CalcAlamdariHammondUnstableHorizontal",
+   "CalcAlamdariHammondVerticalWall",
+   "CalcAwbiHattonHeatedFloor",
+   "CalcAwbiHattonHeatedWall",
+   "CalcBeausoleilMorrisonMixedAssistedWall",
+   "CalcBeausoleilMorrisonMixedOpposingWall",
+   "CalcBeausoleilMorrisonMixedStableCeiling",
+   "CalcBeausoleilMorrisonMixedStableFloor",
+   "CalcBeausoleilMorrisonMixedUnstableCeiling",
+   "CalcBeausoleilMorrisonMixedUnstableFloor",
+   "CalcConvCoeffBetweenPlates",
+   "CalcDetIceStorLMTDstar",
+   "CalcFangerPPD",
+   "CalcFohannoPolidoriVerticalWall",
+   "CalcGoldsteinNovoselacCeilingDiffuserFloor",
+   "CalcKaradagChilledCeiling",
+   "CalcKhalifaEq3WallAwayFromHeat",
+   "CalcKhalifaEq4CeilingAwayFromHeat",
+   "CalcKhalifaEq5WallsNearHeat",
+   "CalcKhalifaEq6NonHeatedWalls",
+   "CalcKhalifaEq7Ceiling",
+   "CalcMcAdams",
+   "CalcMitchell",
+   "CalcMoWITTForcedLeeward",
+   "CalcMoWITTForcedWindward",
+   "CalcMoWITTNatural",
+   "CalcNusseltJurges",
+   "CalcPipeTransBeam",
+   "CalcRelativeAirVelocity",
+   "CalcSatVapPressFromTemp",
+   "CalcSatVapPressFromTempTorr",
+   "CalcTankTemp",
+   "CalcTempIntegral",
+   "CalcTimeNeeded",
+   "CalcWaltonStableHorizontalOrTilt",
+   "CalcWaltonUnstableHorizontalOrTilt",
+   "CalcWindSurfaceTheta",
+   "CalculatePartRuntimeFraction",
+   "DayltgGlarePositionFactor",
+   "F6",
+   "F7",
+   "FNU",
+   "Fahrenheit2Celsius",
+   "FanSpdResidualCool",
+   "FanSpdResidualHeat",
+   "FuncDetermineCoolantWaterExitTemp",
+   "FuncDetermineEngineTemp",
+   "GetIEEREquationResult",
+   "GetInterpValue",
+   "HIC_ASHRAE",
+   "HRadPar",
+   "IS_DSRATIO",
+   "IS_OPENNESS",
+   "Interp",
+   "InterpSw",
+   "InterpolateBetweenFourValues",
+   "InterpolateBetweenTwoValues",
+   "LDSumMax",
+   "LDSumMean",
+   "Le",
+   "MakeUpWaterVolFlowFunct",
+   "MakeUpWaterVolFunct",
+   "OutdoorDryBulbGrad",
+   "PassiveGapNusseltNumber",
+   "PsyCpAirFnW",
+   "PsyCpAirFnW_fast",
+   "PsyDeltaHSenFnTdb2Tdb1W",
+   "PsyHFnTdbW",
+   "PsyHFnTdbW_fast",
+   "PsyRhovFnTdbRhLBnd0C",
+   "PsyRhovFnTdbWPb",
+   "PsyRhovFnTdbWPb_fast",
+   "PsyTdbFnHW",
+   "Ra",
+   "Ra_bar",
+   "Ra_un",
+   "RhoH2O",
+   "SafeDiv",
+   "SafeDivide",
+   "SandiaCellTemperature",
+   "SandiaEffectiveIrradiance",
+   "SandiaF1",
+   "SandiaF2",
+   "SandiaImp",
+   "SandiaIsc",
+   "SandiaIx",
+   "SandiaIxx",
+   "SandiaModuleTemperature",
+   "SandiaTcellFromTmodule",
+   "SandiaVmp",
+   "SandiaVoc",
+   "TRadC",
+   "TempIPtoSI",
+   "TempSItoIP",
+   "VB_CriticalSlatAngle",
+   "VB_SLAT_RADIUS_RATIO",
+   "WVDC",
+   "WaterConversionFunct",
+   "Zs",
+   "add",
+   "angle_2dvector",
+   "applyTermUnitSizingCoolFlow",
+   "applyTermUnitSizingHeatFlow",
+   "calcFluxWeightingFactor",
+   "calc_taoalpha",
+   "calculateOperationalFraction",
+   "calculateThirdOrderFloorTemperature",
+   "calculateWaterBoundaryConvectionCoefficient",
+   "epexp",
+   "fclamp",
+   "interpSetPoint",
+   "interpolateWindDirection",
+   "pos",
+   "pvstar",
+   "rotAzmDiffDeg",
+   "subtract"
+  ],
+  [
+   "CalcASHRAETARPNatural",
+   "CalcEmmelRoof",
+   "CalcEmmelVertical",
+   "CalcMoWITTLeeward",
+   "CalcMoWITTWindward",
+   "GetSTM",
+   "PsyDeltaHSenFnTdb2W2Tdb1W1",
+   "Qv",
+   "calcZoneSensibleOutput",
+   "calc_k_taoalpha"
+  ]
+ ],
+ "nonleaf_deps": {
+  "CalcASHRAETARPNatural": [
+   "CalcASHRAEVerticalWall",
+   "CalcWaltonStableHorizontalOrTilt",
+   "CalcWaltonUnstableHorizontalOrTilt"
+  ],
+  "CalcEmmelRoof": [
+   "CalcWindSurfaceTheta"
+  ],
+  "CalcEmmelVertical": [
+   "CalcWindSurfaceTheta"
+  ],
+  "CalcMoWITTLeeward": [
+   "CalcMoWITTForcedLeeward",
+   "CalcMoWITTNatural"
+  ],
+  "CalcMoWITTWindward": [
+   "CalcMoWITTForcedWindward",
+   "CalcMoWITTNatural"
+  ],
+  "GetSTM": [],
+  "PsyDeltaHSenFnTdb2W2Tdb1W1": [
+   "PsyDeltaHSenFnTdb2Tdb1W"
+  ],
+  "Qv": [
+   "Le",
+   "pvstar"
+  ],
+  "calcZoneSensibleOutput": [
+   "PsyDeltaHSenFnTdb2Tdb1W"
+  ],
+  "calc_k_taoalpha": [
+   "calc_taoalpha"
+  ]
+ },
  "still_blocked": 0,
  "cyclic_scc_count": 0,
  "cyclic_scc_sample": [],
@@ -58,6 +233,18 @@
    2
   ],
   [
+   "CalcWindSurfaceTheta",
+   2
+  ],
+  [
+   "PsyDeltaHSenFnTdb2Tdb1W",
+   2
+  ],
+  [
+   "CalcASHRAEVerticalWall",
+   1
+  ],
+  [
    "CalcMoWITTForcedLeeward",
    1
   ],
@@ -66,7 +253,19 @@
    1
   ],
   [
+   "CalcWaltonStableHorizontalOrTilt",
+   1
+  ],
+  [
+   "CalcWaltonUnstableHorizontalOrTilt",
+   1
+  ],
+  [
    "Le",
+   1
+  ],
+  [
+   "calc_taoalpha",
    1
   ],
   [
@@ -74,7 +273,23 @@
    1
   ],
   [
+   "AbsoluteAirMass",
+   0
+  ],
+  [
+   "AdjustCBF",
+   0
+  ],
+  [
+   "AirMass",
+   0
+  ],
+  [
    "BoundValueToWithinTwoValues",
+   0
+  ],
+  [
+   "CSplineint",
    0
   ],
   [
@@ -86,56 +301,28 @@
    0
   ],
   [
-   "CalcFangerPPD",
+   "CalcAlamdariHammondStableHorizontal",
    0
   ],
   [
-   "CalcMcAdams",
-   0
-  ],
-  [
-   "CalcMitchell",
-   0
-  ],
-  [
-   "CalcMoWITTLeeward",
-   0
-  ],
-  [
-   "CalcMoWITTWindward",
-   0
-  ],
-  [
-   "CalcNusseltJurges",
-   0
-  ],
-  [
-   "CalcRelativeAirVelocity",
-   0
-  ],
-  [
-   "CalcSatVapPressFromTemp",
-   0
-  ],
-  [
-   "CalcSatVapPressFromTempTorr",
-   0
-  ],
-  [
-   "CalcWindSurfaceTheta",
-   0
-  ],
-  [
-   "CalculatePartRuntimeFraction",
-   0
-  ],
-  [
-   "Fahrenheit2Celsius",
+   "CalcAlamdariHammondUnstableHorizontal",
    0
   ]
  ],
  "top_fanin_scaffolding": [
   [
+   "CalcASHRAETARPNatural",
+   0
+  ],
+  [
+   "CalcEmmelRoof",
+   0
+  ],
+  [
+   "CalcEmmelVertical",
+   0
+  ],
+  [
    "CalcMoWITTLeeward",
    0
   ],
@@ -144,7 +331,23 @@
    0
   ],
   [
+   "GetSTM",
+   0
+  ],
+  [
+   "PsyDeltaHSenFnTdb2W2Tdb1W1",
+   0
+  ],
+  [
    "Qv",
+   0
+  ],
+  [
+   "calcZoneSensibleOutput",
+   0
+  ],
+  [
+   "calc_k_taoalpha",
    0
   ]
  ]

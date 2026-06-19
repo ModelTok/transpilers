@@ -154,9 +154,9 @@ def main():
     # 1) discover all scalar Real64 functions across EnergyPlus
     funcs = {}   # name -> {file, scalar}
     allnames = set()
-    for cc in sorted(EP.glob("*.cc")):
+    for cc in sorted(EP.glob("*.cc")) + sorted(EP.glob("*.hh")):  # index headers too (inline defs)
         try:
-            txt = cc.read_text(errors="ignore")
+            txt = strip_comments(cc.read_text(errors="ignore"))
         except Exception:
             continue
         for m in SIG.finditer(txt):
@@ -168,9 +168,9 @@ def main():
 
     # 2) for scalar fns, extract body + find which OTHER EP functions they call
     scalar_fns = {n: v for n, v in funcs.items() if v["scalar"]}
-    for cc in sorted(EP.glob("*.cc")):
+    for cc in sorted(EP.glob("*.cc")) + sorted(EP.glob("*.hh")):  # index headers too (inline defs)
         try:
-            txt = cc.read_text(errors="ignore")
+            txt = strip_comments(cc.read_text(errors="ignore"))
         except Exception:
             continue
         for n in list(scalar_fns):
@@ -261,6 +261,8 @@ def main():
         "leaf_frontier_count": len(leaf),
         "leaf_frontier_sample": leaf[:40],
         "layer_sizes": [len(layer) for layer in layers],
+        "layers_full": layers,
+        "nonleaf_deps": {n: graph[n] for layer in layers[1:] for n in layer},
         "still_blocked": len(still_blocked),
         # --- #67: cycles ---
         "cyclic_scc_count": len(cycles),
@@ -282,6 +284,14 @@ def main():
     print(f"sample leaf frontier: {leaf[:15]}")
     print(f"directed graph: {len(digraph['nodes'])} nodes, {len(digraph['links'])} edges -> {GRAPH_OUT}")
     print(f"-> {OUT}")
+
+
+def strip_comments(text):
+    """Remove C/C++ comments so signature regexes aren't defeated by a comment
+    between `)` and `{` or inside a multi-line argument list (common in EP)."""
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"//[^\n]*", " ", text)
+    return text
 
 
 def extract_body(text, name):

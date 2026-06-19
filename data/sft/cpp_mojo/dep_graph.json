@@ -15,65 +15,35 @@
   {
    "id": "CalcASHRAETARPNatural",
    "file": "ConvectionCoefficients.cc",
-   "leaf": true,
+   "leaf": false,
    "recursive": false,
    "fan_in": 0,
-   "fan_out": 0,
-   "scc": 1,
-   "layer": 0
-  },
-  {
-   "id": "CalcMoWITTNatural",
-   "file": "ConvectionCoefficients.cc",
-   "leaf": true,
-   "recursive": false,
-   "fan_in": 2,
-   "fan_out": 0,
-   "scc": 2,
-   "layer": 0
-  },
-  {
-   "id": "CalcMoWITTForcedWindward",
-   "file": "ConvectionCoefficients.cc",
-   "leaf": true,
-   "recursive": false,
-   "fan_in": 1,
-   "fan_out": 0,
-   "scc": 3,
-   "layer": 0
-  },
-  {
-   "id": "CalcMoWITTForcedLeeward",
-   "file": "ConvectionCoefficients.cc",
-   "leaf": true,
-   "recursive": false,
-   "fan_in": 1,
-   "fan_out": 0,
+   "fan_out": 3,
    "scc": 4,
+   "layer": 1
+  },
+  {
+   "id": "CalcAlamdariHammondUnstableHorizontal",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 5,
    "layer": 0
   },
   {
-   "id": "CalcMoWITTWindward",
+   "id": "CalcAlamdariHammondStableHorizontal",
    "file": "ConvectionCoefficients.cc",
-   "leaf": false,
+   "leaf": true,
    "recursive": false,
    "fan_in": 0,
-   "fan_out": 2,
-   "scc": 5,
-   "layer": 1
-  },
-  {
-   "id": "CalcMoWITTLeeward",
-   "file": "ConvectionCoefficients.cc",
-   "leaf": false,
-   "recursive": false,
-   "fan_in": 0,
-   "fan_out": 2,
+   "fan_out": 0,
    "scc": 6,
-   "layer": 1
+   "layer": 0
   },
   {
-   "id": "CalcNusseltJurges",
+   "id": "CalcAlamdariHammondVerticalWall",
    "file": "ConvectionCoefficients.cc",
    "leaf": true,
    "recursive": false,
@@ -83,7 +53,7 @@
    "layer": 0
   },
   {
-   "id": "CalcMcAdams",
+   "id": "CalcKhalifaEq3WallAwayFromHeat",
    "file": "ConvectionCoefficients.cc",
    "leaf": true,
    "recursive": false,
@@ -93,7 +63,7 @@
    "layer": 0
   },
   {
-   "id": "CalcMitchell",
+   "id": "CalcKhalifaEq4CeilingAwayFromHeat",
    "file": "ConvectionCoefficients.cc",
    "leaf": true,
    "recursive": false,
@@ -103,7 +73,7 @@
    "layer": 0
   },
   {
-   "id": "CalcWindSurfaceTheta",
+   "id": "CalcKhalifaEq5WallsNearHeat",
    "file": "ConvectionCoefficients.cc",
    "leaf": true,
    "recursive": false,
@@ -113,13 +83,263 @@
    "layer": 0
   },
   {
+   "id": "CalcKhalifaEq6NonHeatedWalls",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 11,
+   "layer": 0
+  },
+  {
+   "id": "CalcKhalifaEq7Ceiling",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 12,
+   "layer": 0
+  },
+  {
+   "id": "CalcAwbiHattonHeatedFloor",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 13,
+   "layer": 0
+  },
+  {
+   "id": "CalcAwbiHattonHeatedWall",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 14,
+   "layer": 0
+  },
+  {
+   "id": "CalcBeausoleilMorrisonMixedAssistedWall",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 15,
+   "layer": 0
+  },
+  {
+   "id": "CalcBeausoleilMorrisonMixedOpposingWall",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 16,
+   "layer": 0
+  },
+  {
+   "id": "CalcBeausoleilMorrisonMixedStableFloor",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 17,
+   "layer": 0
+  },
+  {
+   "id": "CalcBeausoleilMorrisonMixedUnstableFloor",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 18,
+   "layer": 0
+  },
+  {
+   "id": "CalcBeausoleilMorrisonMixedStableCeiling",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 19,
+   "layer": 0
+  },
+  {
+   "id": "CalcBeausoleilMorrisonMixedUnstableCeiling",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 20,
+   "layer": 0
+  },
+  {
+   "id": "CalcFohannoPolidoriVerticalWall",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 21,
+   "layer": 0
+  },
+  {
+   "id": "CalcKaradagChilledCeiling",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 22,
+   "layer": 0
+  },
+  {
+   "id": "CalcGoldsteinNovoselacCeilingDiffuserFloor",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 23,
+   "layer": 0
+  },
+  {
+   "id": "CalcMoWITTNatural",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 2,
+   "fan_out": 0,
+   "scc": 24,
+   "layer": 0
+  },
+  {
+   "id": "CalcMoWITTForcedWindward",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 1,
+   "fan_out": 0,
+   "scc": 25,
+   "layer": 0
+  },
+  {
+   "id": "CalcMoWITTForcedLeeward",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 1,
+   "fan_out": 0,
+   "scc": 26,
+   "layer": 0
+  },
+  {
+   "id": "CalcMoWITTWindward",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": false,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 2,
+   "scc": 27,
+   "layer": 1
+  },
+  {
+   "id": "CalcMoWITTLeeward",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": false,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 2,
+   "scc": 28,
+   "layer": 1
+  },
+  {
+   "id": "CalcNusseltJurges",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 29,
+   "layer": 0
+  },
+  {
+   "id": "CalcMcAdams",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 30,
+   "layer": 0
+  },
+  {
+   "id": "CalcMitchell",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 31,
+   "layer": 0
+  },
+  {
+   "id": "CalcWindSurfaceTheta",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 2,
+   "fan_out": 0,
+   "scc": 32,
+   "layer": 0
+  },
+  {
+   "id": "CalcEmmelVertical",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": false,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 1,
+   "scc": 33,
+   "layer": 1
+  },
+  {
+   "id": "CalcEmmelRoof",
+   "file": "ConvectionCoefficients.cc",
+   "leaf": false,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 1,
+   "scc": 34,
+   "layer": 1
+  },
+  {
+   "id": "AdjustCBF",
+   "file": "DXCoils.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 35,
+   "layer": 0
+  },
+  {
    "id": "FanSpdResidualCool",
    "file": "DXCoils.cc",
    "leaf": true,
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 11,
+   "scc": 36,
    "layer": 0
   },
   {
@@ -129,7 +349,57 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 12,
+   "scc": 37,
+   "layer": 0
+  },
+  {
+   "id": "angle_2dvector",
+   "file": "DXFEarClipping.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 38,
+   "layer": 0
+  },
+  {
+   "id": "applyTermUnitSizingCoolFlow",
+   "file": "DataSizing.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 39,
+   "layer": 0
+  },
+  {
+   "id": "applyTermUnitSizingHeatFlow",
+   "file": "DataSizing.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 40,
+   "layer": 0
+  },
+  {
+   "id": "CalcPipeTransBeam",
+   "file": "DaylightingDevices.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 41,
+   "layer": 0
+  },
+  {
+   "id": "DayltgGlarePositionFactor",
+   "file": "DaylightingManager.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 42,
    "layer": 0
   },
   {
@@ -139,7 +409,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 13,
+   "scc": 43,
    "layer": 0
   },
   {
@@ -149,7 +419,7 @@
    "recursive": false,
    "fan_in": 1,
    "fan_out": 0,
-   "scc": 14,
+   "scc": 44,
    "layer": 0
   },
   {
@@ -159,7 +429,7 @@
    "recursive": false,
    "fan_in": 1,
    "fan_out": 0,
-   "scc": 15,
+   "scc": 45,
    "layer": 0
   },
   {
@@ -169,7 +439,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 2,
-   "scc": 16,
+   "scc": 46,
    "layer": 1
   },
   {
@@ -179,7 +449,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 17,
+   "scc": 47,
    "layer": 0
   },
   {
@@ -189,7 +459,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 18,
+   "scc": 48,
    "layer": 0
   },
   {
@@ -199,7 +469,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 19,
+   "scc": 49,
    "layer": 0
   },
   {
@@ -209,7 +479,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 20,
+   "scc": 50,
    "layer": 0
   },
   {
@@ -219,7 +489,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 21,
+   "scc": 51,
    "layer": 0
   },
   {
@@ -229,8 +499,18 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 22,
+   "scc": 52,
    "layer": 0
+  },
+  {
+   "id": "calcZoneSensibleOutput",
+   "file": "GeneralRoutines.cc",
+   "leaf": false,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 1,
+   "scc": 54,
+   "layer": 1
   },
   {
    "id": "WVDC",
@@ -239,7 +519,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 23,
+   "scc": 55,
    "layer": 0
   },
   {
@@ -249,7 +529,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 24,
+   "scc": 56,
    "layer": 0
   },
   {
@@ -259,7 +539,17 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 25,
+   "scc": 57,
+   "layer": 0
+  },
+  {
+   "id": "CalcDetIceStorLMTDstar",
+   "file": "IceThermalStorage.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 58,
    "layer": 0
   },
   {
@@ -269,7 +559,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 26,
+   "scc": 59,
    "layer": 0
   },
   {
@@ -279,7 +569,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 27,
+   "scc": 60,
    "layer": 0
   },
   {
@@ -289,7 +579,27 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 28,
+   "scc": 61,
+   "layer": 0
+  },
+  {
+   "id": "FuncDetermineEngineTemp",
+   "file": "MicroCHPElectricGenerator.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 62,
+   "layer": 0
+  },
+  {
+   "id": "FuncDetermineCoolantWaterExitTemp",
+   "file": "MicroCHPElectricGenerator.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 63,
    "layer": 0
   },
   {
@@ -299,7 +609,157 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 29,
+   "scc": 64,
+   "layer": 0
+  },
+  {
+   "id": "calc_taoalpha",
+   "file": "PhotovoltaicThermalCollectors.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 1,
+   "fan_out": 0,
+   "scc": 65,
+   "layer": 0
+  },
+  {
+   "id": "calc_k_taoalpha",
+   "file": "PhotovoltaicThermalCollectors.cc",
+   "leaf": false,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 1,
+   "scc": 66,
+   "layer": 1
+  },
+  {
+   "id": "SandiaModuleTemperature",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 67,
+   "layer": 0
+  },
+  {
+   "id": "SandiaTcellFromTmodule",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 68,
+   "layer": 0
+  },
+  {
+   "id": "SandiaCellTemperature",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 69,
+   "layer": 0
+  },
+  {
+   "id": "SandiaEffectiveIrradiance",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 70,
+   "layer": 0
+  },
+  {
+   "id": "AbsoluteAirMass",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 71,
+   "layer": 0
+  },
+  {
+   "id": "SandiaF1",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 72,
+   "layer": 0
+  },
+  {
+   "id": "SandiaF2",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 73,
+   "layer": 0
+  },
+  {
+   "id": "SandiaImp",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 74,
+   "layer": 0
+  },
+  {
+   "id": "SandiaIsc",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 75,
+   "layer": 0
+  },
+  {
+   "id": "SandiaIx",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 76,
+   "layer": 0
+  },
+  {
+   "id": "SandiaIxx",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 77,
+   "layer": 0
+  },
+  {
+   "id": "SandiaVmp",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 78,
+   "layer": 0
+  },
+  {
+   "id": "SandiaVoc",
+   "file": "Photovoltaics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 79,
    "layer": 0
   },
   {
@@ -309,7 +769,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 30,
+   "scc": 80,
    "layer": 0
   },
   {
@@ -319,7 +779,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 31,
+   "scc": 81,
    "layer": 0
   },
   {
@@ -329,7 +789,27 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 32,
+   "scc": 82,
+   "layer": 0
+  },
+  {
+   "id": "CSplineint",
+   "file": "Psychrometrics.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 83,
+   "layer": 0
+  },
+  {
+   "id": "OutdoorDryBulbGrad",
+   "file": "RoomAirModelUserTempPattern.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 84,
    "layer": 0
   },
   {
@@ -339,7 +819,17 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 33,
+   "scc": 85,
+   "layer": 0
+  },
+  {
+   "id": "CalcConvCoeffBetweenPlates",
+   "file": "SolarCollectors.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 86,
    "layer": 0
   },
   {
@@ -349,7 +839,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 34,
+   "scc": 87,
    "layer": 0
   },
   {
@@ -359,7 +849,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 35,
+   "scc": 88,
    "layer": 0
   },
   {
@@ -369,7 +859,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 36,
+   "scc": 89,
    "layer": 0
   },
   {
@@ -379,7 +869,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 37,
+   "scc": 90,
    "layer": 0
   },
   {
@@ -389,7 +879,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 38,
+   "scc": 91,
    "layer": 0
   },
   {
@@ -399,7 +889,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 39,
+   "scc": 92,
    "layer": 0
   },
   {
@@ -409,7 +899,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 40,
+   "scc": 93,
    "layer": 0
   },
   {
@@ -419,7 +909,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 41,
+   "scc": 94,
    "layer": 0
   },
   {
@@ -429,7 +919,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 42,
+   "scc": 95,
    "layer": 0
   },
   {
@@ -439,7 +929,47 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 43,
+   "scc": 96,
+   "layer": 0
+  },
+  {
+   "id": "PassiveGapNusseltNumber",
+   "file": "TranspiredCollector.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 97,
+   "layer": 0
+  },
+  {
+   "id": "CalcTimeNeeded",
+   "file": "WaterThermalTanks.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 98,
+   "layer": 0
+  },
+  {
+   "id": "CalcTankTemp",
+   "file": "WaterThermalTanks.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 99,
+   "layer": 0
+  },
+  {
+   "id": "CalcTempIntegral",
+   "file": "WaterThermalTanks.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 100,
    "layer": 0
   },
   {
@@ -449,7 +979,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 44,
+   "scc": 101,
    "layer": 0
   },
   {
@@ -459,7 +989,107 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 45,
+   "scc": 102,
+   "layer": 0
+  },
+  {
+   "id": "AirMass",
+   "file": "WeatherManager.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 103,
+   "layer": 0
+  },
+  {
+   "id": "GetSTM",
+   "file": "WeatherManager.cc",
+   "leaf": false,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 104,
+   "layer": 1
+  },
+  {
+   "id": "IS_OPENNESS",
+   "file": "WindowEquivalentLayer.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 105,
+   "layer": 0
+  },
+  {
+   "id": "IS_DSRATIO",
+   "file": "WindowEquivalentLayer.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 106,
+   "layer": 0
+  },
+  {
+   "id": "VB_SLAT_RADIUS_RATIO",
+   "file": "WindowEquivalentLayer.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 107,
+   "layer": 0
+  },
+  {
+   "id": "FNU",
+   "file": "WindowEquivalentLayer.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 108,
+   "layer": 0
+  },
+  {
+   "id": "HRadPar",
+   "file": "WindowEquivalentLayer.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 109,
+   "layer": 0
+  },
+  {
+   "id": "HIC_ASHRAE",
+   "file": "WindowEquivalentLayer.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 110,
+   "layer": 0
+  },
+  {
+   "id": "VB_CriticalSlatAngle",
+   "file": "WindowEquivalentLayer.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 111,
+   "layer": 0
+  },
+  {
+   "id": "TRadC",
+   "file": "WindowEquivalentLayer.cc",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 112,
    "layer": 0
   },
   {
@@ -469,7 +1099,7 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 46,
+   "scc": 113,
    "layer": 0
   },
   {
@@ -479,11 +1109,256 @@
    "recursive": false,
    "fan_in": 0,
    "fan_out": 0,
-   "scc": 47,
+   "scc": 114,
+   "layer": 0
+  },
+  {
+   "id": "CalcASHRAEVerticalWall",
+   "file": "ConvectionCoefficients.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 1,
+   "fan_out": 0,
+   "scc": 1,
+   "layer": 0
+  },
+  {
+   "id": "CalcWaltonUnstableHorizontalOrTilt",
+   "file": "ConvectionCoefficients.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 1,
+   "fan_out": 0,
+   "scc": 3,
+   "layer": 0
+  },
+  {
+   "id": "CalcWaltonStableHorizontalOrTilt",
+   "file": "ConvectionCoefficients.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 1,
+   "fan_out": 0,
+   "scc": 2,
+   "layer": 0
+  },
+  {
+   "id": "GetInterpValue",
+   "file": "FluidProperties.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 115,
+   "layer": 0
+  },
+  {
+   "id": "epexp",
+   "file": "General.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 116,
+   "layer": 0
+  },
+  {
+   "id": "Interp",
+   "file": "General.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 117,
+   "layer": 0
+  },
+  {
+   "id": "add",
+   "file": "PlantLoopHeatPumpEIR.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 118,
+   "layer": 0
+  },
+  {
+   "id": "subtract",
+   "file": "PlantLoopHeatPumpEIR.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 119,
+   "layer": 0
+  },
+  {
+   "id": "PsyHFnTdbW",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 120,
+   "layer": 0
+  },
+  {
+   "id": "PsyHFnTdbW_fast",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 121,
+   "layer": 0
+  },
+  {
+   "id": "PsyCpAirFnW",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 122,
+   "layer": 0
+  },
+  {
+   "id": "PsyCpAirFnW_fast",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 123,
+   "layer": 0
+  },
+  {
+   "id": "PsyTdbFnHW",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 124,
+   "layer": 0
+  },
+  {
+   "id": "PsyRhovFnTdbRhLBnd0C",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 125,
+   "layer": 0
+  },
+  {
+   "id": "PsyRhovFnTdbWPb",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 126,
+   "layer": 0
+  },
+  {
+   "id": "PsyRhovFnTdbWPb_fast",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 127,
+   "layer": 0
+  },
+  {
+   "id": "F6",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 128,
+   "layer": 0
+  },
+  {
+   "id": "F7",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 129,
+   "layer": 0
+  },
+  {
+   "id": "RhoH2O",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 130,
+   "layer": 0
+  },
+  {
+   "id": "PsyDeltaHSenFnTdb2Tdb1W",
+   "file": "Psychrometrics.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 2,
+   "fan_out": 0,
+   "scc": 53,
+   "layer": 0
+  },
+  {
+   "id": "PsyDeltaHSenFnTdb2W2Tdb1W1",
+   "file": "Psychrometrics.hh",
+   "leaf": false,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 1,
+   "scc": 131,
+   "layer": 1
+  },
+  {
+   "id": "fclamp",
+   "file": "UtilityRoutines.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 132,
+   "layer": 0
+  },
+  {
+   "id": "InterpSw",
+   "file": "WindowManager.hh",
+   "leaf": true,
+   "recursive": false,
+   "fan_in": 0,
+   "fan_out": 0,
+   "scc": 133,
    "layer": 0
   }
  ],
  "links": [
+  {
+   "source": "CalcASHRAETARPNatural",
+   "target": "CalcASHRAEVerticalWall",
+   "type": "calls"
+  },
+  {
+   "source": "CalcASHRAETARPNatural",
+   "target": "CalcWaltonStableHorizontalOrTilt",
+   "type": "calls"
+  },
+  {
+   "source": "CalcASHRAETARPNatural",
+   "target": "CalcWaltonUnstableHorizontalOrTilt",
+   "type": "calls"
+  },
   {
    "source": "CalcMoWITTWindward",
    "target": "CalcMoWITTForcedWindward",
@@ -505,6 +1380,16 @@
    "type": "calls"
   },
   {
+   "source": "CalcEmmelVertical",
+   "target": "CalcWindSurfaceTheta",
+   "type": "calls"
+  },
+  {
+   "source": "CalcEmmelRoof",
+   "target": "CalcWindSurfaceTheta",
+   "type": "calls"
+  },
+  {
    "source": "Qv",
    "target": "Le",
    "type": "calls"
@@ -512,6 +1397,21 @@
   {
    "source": "Qv",
    "target": "pvstar",
+   "type": "calls"
+  },
+  {
+   "source": "calcZoneSensibleOutput",
+   "target": "PsyDeltaHSenFnTdb2Tdb1W",
+   "type": "calls"
+  },
+  {
+   "source": "calc_k_taoalpha",
+   "target": "calc_taoalpha",
+   "type": "calls"
+  },
+  {
+   "source": "PsyDeltaHSenFnTdb2W2Tdb1W1",
+   "target": "PsyDeltaHSenFnTdb2Tdb1W",
    "type": "calls"
   }
  ]
