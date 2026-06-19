@@ -18,7 +18,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SFT = REPO / "data/sft/cpp_mojo"
 OUT = Path(os.environ.get("DIFF_OUT", str(REPO / "data/sft/diverse/verified_ep.jsonl")))
-EPMOJO = "/home/bart/Github/energyplus-mojo/.pixi/envs/default"
+EPMOJO = os.environ.get("MOJO_HOME", "/home/bart/Github/NuMojo/.pixi/envs/default")
 MOJO_BIN = f"{EPMOJO}/bin/mojo"
 MOJO_ENV = dict(os.environ, MODULAR_HOME=f"{EPMOJO}/share/max", PATH="/usr/bin:/bin:" + f"{EPMOJO}/bin")
 ORACLE = (SFT / "ep_oracle.h").read_text()
