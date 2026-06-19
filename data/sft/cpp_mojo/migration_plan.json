@@ -47,5 +47,105 @@
   45,
   3
  ],
- "still_blocked": 0
+ "still_blocked": 0,
+ "cyclic_scc_count": 0,
+ "cyclic_scc_sample": [],
+ "blocked_by_cycle_count": 0,
+ "blocked_by_cycle_sample": [],
+ "top_fanin": [
+  [
+   "CalcMoWITTNatural",
+   2
+  ],
+  [
+   "CalcMoWITTForcedLeeward",
+   1
+  ],
+  [
+   "CalcMoWITTForcedWindward",
+   1
+  ],
+  [
+   "Le",
+   1
+  ],
+  [
+   "pvstar",
+   1
+  ],
+  [
+   "BoundValueToWithinTwoValues",
+   0
+  ],
+  [
+   "CalcASHRAESimpleIntConvCoeff",
+   0
+  ],
+  [
+   "CalcASHRAETARPNatural",
+   0
+  ],
+  [
+   "CalcFangerPPD",
+   0
+  ],
+  [
+   "CalcMcAdams",
+   0
+  ],
+  [
+   "CalcMitchell",
+   0
+  ],
+  [
+   "CalcMoWITTLeeward",
+   0
+  ],
+  [
+   "CalcMoWITTWindward",
+   0
+  ],
+  [
+   "CalcNusseltJurges",
+   0
+  ],
+  [
+   "CalcRelativeAirVelocity",
+   0
+  ],
+  [
+   "CalcSatVapPressFromTemp",
+   0
+  ],
+  [
+   "CalcSatVapPressFromTempTorr",
+   0
+  ],
+  [
+   "CalcWindSurfaceTheta",
+   0
+  ],
+  [
+   "CalculatePartRuntimeFraction",
+   0
+  ],
+  [
+   "Fahrenheit2Celsius",
+   0
+  ]
+ ],
+ "top_fanin_scaffolding": [
+  [
+   "CalcMoWITTLeeward",
+   0
+  ],
+  [
+   "CalcMoWITTWindward",
+   0
+  ],
+  [
+   "Qv",
+   0
+  ]
+ ]
 }
