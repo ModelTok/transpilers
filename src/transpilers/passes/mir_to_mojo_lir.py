@@ -55,6 +55,15 @@ _BUILTIN_MAP = {
 }
 
 
+def _zero_literal(elem: str):
+    """Default element value for a sized container (vector<T>(n))."""
+    if elem in ("Float64", "Float32", "Float16"):
+        return lir.MojoFloatLiteral(value=0.0)
+    if elem == "Bool":
+        return lir.MojoBoolLiteral(value=False)
+    return lir.MojoIntLiteral(value=0)
+
+
 class _MojoLowering(MirLoweringBase):
     prefix = "Mojo"
     module_cls = lir.MojoModule
@@ -123,14 +132,26 @@ class _MojoLowering(MirLoweringBase):
             return lir.MojoReassign(name=node.target, value=self.lower_expr(node.value))
         declared.add(node.target)
         ty = _mojo_type(node.ty) if not isinstance(node.ty, UnknownT) else None
-        # `std::vector<int> v;` / `std::string s;` default-construct reaches MIR
-        # as the unmapped-op placeholder; emit a typed empty constructor instead.
-        if (ty and isinstance(node.value, mir.MirCall)
-                and node.value.func == "__cpp_overloaded_op__" and not node.value.args):
-            value = lir.MojoCall(func=ty, args=[])
-        else:
+        value = self._lower_container_ctor(node, ty)
+        if value is None:
             value = self.lower_expr(node.value)
         return lir.MojoVar(name=node.target, ty=ty, value=value)
+
+    def _lower_container_ctor(self, node, ty):
+        """C++ container construction -> Mojo, using the declared var type.
+        `vector<T> v;` -> List[T](); `vector<T> v(n[, fill])` -> [fill_or_0] * n.
+        """
+        v = node.value
+        if not (ty and isinstance(v, mir.MirCall)):
+            return None
+        if v.func == "__cpp_overloaded_op__" and not v.args:
+            return lir.MojoCall(func=ty, args=[])          # empty default-construct
+        if v.func == "__vector_fill__" and v.args:
+            elem = ty[5:-1] if ty.startswith("List[") else ""
+            size = self.lower_expr(v.args[0])
+            fill = self.lower_expr(v.args[1]) if len(v.args) >= 2 else _zero_literal(elem)
+            return lir.MojoBinOp(op="*", left=lir.MojoList(elements=[fill]), right=size)
+        return None
 
     # -- expressions ------------------------------------------------------- #
 
