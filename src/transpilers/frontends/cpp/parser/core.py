@@ -1122,6 +1122,15 @@ def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
 def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
 
+    # std::vector<T> sized constructor: (n) or (n, fill). Emit a marker the Mojo
+    # lowering turns into `[fill] * n` using the declared element type. The empty
+    # `vector<T> v;` default-ctor has no kids and is handled below as a placeholder.
+    if cursor.spelling == "vector":
+        cargs = [_convert_expr(k) for k in kids
+                 if k.kind not in (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF)]
+        if cargs:
+            return hir.HirCall(func="__vector_fill__", args=cargs)
+
     # const `vec[i]` READS come through the operator[] overload as a CALL_EXPR
     # (non-const reads are ARRAY_SUBSCRIPT_EXPR, handled elsewhere). Mirror the
     # assign-side handling and lower to a subscript.
