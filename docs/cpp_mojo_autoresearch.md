@@ -67,3 +67,24 @@ Next lever (ranked #2): model **member access in extracted methods** — either
 map `this->field` to an added parameter, or keep the receiving struct's fields
 in scope. Unlocks stateful scalar methods and is the gateway to the Array/state
 tier.
+
+## Container tier progress (loop iterations, std::vector subsystem)
+The strict engine gained broad std::vector support, raising transpilation-bench
+from 10/40 -> 16/40 while real-EnergyPlus regression held (leaf 111/111, closure
+7/7 re-verified). Each fix is also a real EnergyPlus capability:
+- indexing read+write, const + non-const, nested 2D (operator[] callee filtering)
+- 1D + 2D construction: vector<T>(n[, fill]) -> [fill]*n, vector<vector<T>>(m,..) -> [[..]*n]*m
+- push_back/emplace_back -> List.append; .size()/.length() -> len()
+- compound subscript-assign arr[i] op= v; return-by-value (copy ctor + v.copy())
+- std::sort(v.begin(),v.end()) -> sort(v); by-value container params mutated via
+  call -> `var` (owned, accepts literal args)
+
+Bench shape now: t1 3/9, t2 9/13, t3 3/13, t4 1/5. Scalar/array done; remaining
+gates are other container families.
+
+## Next major lever: std::map / unordered_map -> Mojo Dict
+Requires a new DictT IR type plumbed end-to-end (types.py spelling->text, the
+text->Type parser, infer_types, the Mojo emitter) + a map shadow with
+operator[]/count/find + count/find idioms (m.count(k) -> k in m). Larger than a
+single incremental fix; gates frequency_count/two_sum/set_ops/min_stack. After
+that: std::tuple multi-return, and graph/struct DP.
