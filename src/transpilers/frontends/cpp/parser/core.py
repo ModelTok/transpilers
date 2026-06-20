@@ -1012,29 +1012,28 @@ def _convert_assignment_stmt(cursor: ci.Cursor) -> hir.HirNode:
         lhs_kids = list(lhs.get_children())
         obj = _convert_expr(lhs_kids[0]) if lhs_kids else hir.HirName(name="self")
         return hir.HirFieldAssign(obj=obj, field=lhs.spelling, value=rhs)
-    if lhs.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR and op == "=":
-        lhs_kids = list(lhs.get_children())
-        if len(lhs_kids) == 2:
-            return hir.HirSubscriptAssign(
-                obj=_convert_expr(lhs_kids[0]),
-                index=_convert_expr(lhs_kids[1]),
-                value=rhs,
-            )
-    # libclang re-parses `vec[i] = v` through the operator[] overload as
-    # `vec.operator[](i) = v`, surfaced as a CALL_EXPR LHS. Treat it as a
-    # subscript-assign best-effort (operator[] semantics aren't modelled).
-    if lhs.kind == CursorKind.CALL_EXPR and op == "=":
-        # operator[] overload children may be [obj, operator[]-ref, index];
-        # filter the callee ref so index is the real subscript, not 'operator[]'.
-        lhs_kids = [c for c in lhs.get_children()
-                    if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)
-                    and not (c.spelling or "").startswith("operator")]
-        if len(lhs_kids) >= 2:
-            return hir.HirSubscriptAssign(
-                obj=_convert_expr(lhs_kids[0]),
-                index=_convert_expr(lhs_kids[-1]),
-                value=rhs,
-            )
+    # Subscript assign, plain (`arr[i] = v`) or compound (`arr[i] += v`).
+    # ARRAY_SUBSCRIPT for native arrays; CALL_EXPR for the std::vector operator[]
+    # overload (children may be [obj, operator[]-ref, index]).
+    sub = None
+    if lhs.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR:
+        lk = list(lhs.get_children())
+        if len(lk) == 2:
+            sub = (_convert_expr(lk[0]), _convert_expr(lk[1]))
+    elif lhs.kind == CursorKind.CALL_EXPR:
+        lk = [c for c in lhs.get_children()
+              if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)
+              and not (c.spelling or "").startswith("operator")]
+        if len(lk) >= 2:
+            sub = (_convert_expr(lk[0]), _convert_expr(lk[-1]))
+    if sub is not None:
+        obj, index = sub
+        if op == "=":
+            value = rhs
+        else:  # compound: arr[i] op= v  ->  arr[i] = arr[i] op v
+            value = hir.HirBinOp(
+                op=op[:-1], left=hir.HirSubscript(value=obj, index=index), right=rhs)
+        return hir.HirSubscriptAssign(obj=obj, index=index, value=value)
     target = _decl_name(lhs)
     if target is None:
         raise UnsupportedConstruct(f"assignment target {lhs.kind.name}")
