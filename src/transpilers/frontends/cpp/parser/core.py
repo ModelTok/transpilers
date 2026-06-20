@@ -1131,6 +1131,19 @@ def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
         return hir.HirFieldAccess(value=obj, field=lhs.spelling)
     return _convert_expr(lhs)
 
+def _iter_index(node: "hir.HirNode"):
+    """Interpret a vector iterator expr as (container, index): c.begin() -> (c,0),
+    c.end() -> (c, len(c)), c.begin()+k -> (c, k). Returns None otherwise."""
+    if isinstance(node, hir.HirMethodCall) and node.method in ("begin", "end") and not node.args:
+        idx = hir.HirIntLiteral(value=0) if node.method == "begin" \
+            else hir.HirCall(func="len", args=[node.receiver])
+        return (node.receiver, idx)
+    if (isinstance(node, hir.HirBinOp) and node.op == "+"
+            and isinstance(node.left, hir.HirMethodCall) and node.left.method == "begin"):
+        return (node.left.receiver, node.right)
+    return None
+
+
 def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
 
@@ -1150,6 +1163,11 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
         # on assign/return). Distinguish from the sized ctor by the arg type.
         if len(real) == 1 and "vector" in (real[0].type.spelling or ""):
             return _convert_expr(real[0])
+        if len(real) == 2:  # iterator-range ctor: vector<T>(c.begin()[+a], c.end()|c.begin()+b)
+            a_hir, b_hir = _convert_expr(real[0]), _convert_expr(real[1])
+            ia, ib = _iter_index(a_hir), _iter_index(b_hir)
+            if ia and ib:
+                return hir.HirCall(func="__vector_slice__", args=[ia[0], ia[1], ib[1]])
         if real:  # sized ctor: (n) or (n, fill)
             return hir.HirCall(func="__vector_fill__", args=[_convert_expr(k) for k in real])
 
