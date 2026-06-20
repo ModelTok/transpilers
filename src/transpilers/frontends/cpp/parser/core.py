@@ -1140,6 +1140,15 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
         if real:  # sized ctor: (n) or (n, fill)
             return hir.HirCall(func="__vector_fill__", args=[_convert_expr(k) for k in real])
 
+    # map/set copy/move ctor (e.g. `return freq;` for a map return) -> the arg;
+    # the empty default-ctor (no args) falls through to the placeholder below.
+    if cursor.spelling in ("map", "unordered_map", "_mapbase", "set", "unordered_set"):
+        real = [k for k in kids
+                if k.kind not in (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF)]
+        if len(real) == 1 and any(s in (real[0].type.spelling or "")
+                                  for s in ("map", "set")):
+            return _convert_expr(real[0])
+
     # const `vec[i]` READS come through the operator[] overload as a CALL_EXPR
     # (non-const reads are ARRAY_SUBSCRIPT_EXPR, handled elsewhere). Mirror the
     # assign-side handling and lower to a subscript.
