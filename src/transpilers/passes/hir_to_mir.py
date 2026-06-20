@@ -13,6 +13,7 @@ from transpilers.ir.types import (
     BoolT,
     DictT,
     FloatT,
+    TupleT,
     IntT,
     ListT,
     NoneT,
@@ -415,6 +416,19 @@ def _resolve_annotation(ann: str | None) -> Type:
     if ann.startswith("list[") and ann.endswith("]"):
         inner = ann[len("list[") : -1]
         return ListT(elem=_resolve_annotation(inner))
+    if ann.startswith("tuple[") and ann.endswith("]"):
+        inner = ann[len("tuple[") : -1]
+        parts, depth, last = [], 0, 0
+        for i, ch in enumerate(inner):
+            if ch in "[<":
+                depth += 1
+            elif ch in "]>":
+                depth -= 1
+            elif ch == "," and depth == 0:
+                parts.append(inner[last:i].strip())
+                last = i + 1
+        parts.append(inner[last:].strip())
+        return TupleT(elems=tuple(_resolve_annotation(p) for p in parts))
     if ann.startswith("dict[") and ann.endswith("]"):
         inner = ann[len("dict[") : -1]
         depth = 0

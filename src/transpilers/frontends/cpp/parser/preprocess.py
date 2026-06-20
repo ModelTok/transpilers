@@ -64,7 +64,7 @@ namespace std {
     template <typename T> struct equality_comparable { static const bool value = true; };
     template <typename T, typename Alloc = int> class list {};
     template <typename K, typename V> struct pair { K first; V second; };
-    template <typename... T> struct tuple {};
+    template <typename... T> struct tuple { tuple(); tuple(T...); };
     template <typename K, typename V> class _mapbase {
     public:
         _mapbase();

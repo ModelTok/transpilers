@@ -184,6 +184,9 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.MojoList):
         items = ", ".join(_emit_expr(e) for e in node.elements)
         return f"[{items}]"
+    if isinstance(node, lir.MojoTuple):
+        items = ", ".join(_emit_expr(e) for e in node.elements)
+        return f"({items})"
     if isinstance(node, lir.MojoFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
     if isinstance(node, lir.MojoStructInit):

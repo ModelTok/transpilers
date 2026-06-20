@@ -23,6 +23,7 @@ from transpilers.ir.types import (
     FloatT,
     IntT,
     ListT,
+    TupleT,
     NoneT,
     SimdT,
     StrT,
@@ -247,6 +248,9 @@ class _MojoLowering(MirLoweringBase):
         args = [self.lower_expr(a) for a in node.args]
         if node.func == "__ternary__" and len(args) == 3:
             return _MojoIfExpr(test=args[0], then_=args[1], else_=args[2])
+        # tuple/pair construction: frontend emits tuple(MirList([...])) -> (a, b)
+        if node.func == "tuple" and len(node.args) == 1 and isinstance(node.args[0], mir.MirList):
+            return lir.MojoTuple(elements=[self.lower_expr(e) for e in node.args[0].elements])
         # std::vector sized ctor as an expression (e.g. the inner fill of a 2D
         # `vector<vector<int>>(m, vector<int>(n,0))`): `[fill] * size`. The
         # type-aware assign path handles the outer one; this enables nesting.
@@ -405,6 +409,8 @@ def _mojo_type(ty: Type) -> str:
         return f"List[{_mojo_type(ty.elem)}]"
     if isinstance(ty, DictT):
         return f"Dict[{_mojo_type(ty.key)}, {_mojo_type(ty.value)}]"
+    if isinstance(ty, TupleT):
+        return "Tuple[" + ", ".join(_mojo_type(e) for e in ty.elems) + "]"
     if isinstance(ty, StructT):
         return ty.name
     if isinstance(ty, SimdT):

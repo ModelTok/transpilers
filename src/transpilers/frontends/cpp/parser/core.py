@@ -1158,6 +1158,13 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     # Detect tuple/pair constructor: cursor.spelling is the type name ('tuple',
     # 'pair', etc.) and the first child is NOT a callee reference but an argument.
     if cursor.spelling in _TUPLE_CONSTRUCTORS and kids:
+        real = [k for k in kids if k.kind not in
+                (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF)]
+        # brace-init `{a, b}` (tokens contain `{`) is always an element list, even
+        # when the first element is a variable (DECL_REF). Otherwise fall back to
+        # the "first child isn't a callee ref" heuristic for make_pair/make_tuple.
+        if "{" in [t.spelling for t in cursor.get_tokens()]:
+            return hir.HirCall(func="tuple", args=[hir.HirList(elements=[_convert_expr(c) for c in real])])
         first = _strip_unexposed(kids[0])
         if first.kind not in (CursorKind.DECL_REF_EXPR, CursorKind.MEMBER_REF_EXPR):
             elements = [_convert_expr(c) for c in kids]
