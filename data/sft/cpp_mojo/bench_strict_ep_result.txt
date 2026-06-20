@@ -11,3 +11,7 @@ PASS 111/111 verifiable  (111/124 of all leaves)   [100% of in-scope leaves]
 # progression this session:
 #   first 30 leaves:   22/27 -> 27/27   (after from-std.math + -lm + constant-value fixes)
 #   full 124 leaves:  108/111 -> 111/111 (after std::clamp support + SMALL decl + NaN-equality)
+
+=== non-leaf closure tier (scripts/sft/bench_strict_ep_closure.py) ===
+  PASS 7/7 verifiable   (3 skip_cpp: Qv/GetSTM/calcZoneSensibleOutput need non-scalar/redefine a shim)
+  transpiles target + transitive scalar-dep closure together, then verifies.
