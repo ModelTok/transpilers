@@ -254,6 +254,9 @@ class _MojoLowering(MirLoweringBase):
         args = [self.lower_expr(a) for a in node.args]
         if node.func == "__ternary__" and len(args) == 3:
             return _MojoIfExpr(test=args[0], then_=args[1], else_=args[2])
+        # vector(it1, it2) iterator-range ctor -> c[lo:hi]
+        if node.func == "__vector_slice__" and len(args) == 3:
+            return lir.MojoSlice(value=args[0], lo=args[1], hi=args[2])
         # std::min({a,b,c}) / max -> fold to nested min(a, min(b, c)) (Mojo is 2-arg)
         if node.func in ("min", "max") and len(node.args) == 1 and isinstance(node.args[0], mir.MirList):
             elems = [self.lower_expr(e) for e in node.args[0].elements]

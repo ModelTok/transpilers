@@ -141,6 +141,15 @@ class MojoTuple(LirNode):
 
     elements: list[LirNode]
 
+
+@dataclass
+class MojoSlice(LirNode):
+    """`v[lo:hi]` — list slice."""
+
+    value: LirNode
+    lo: LirNode
+    hi: LirNode
+
 @dataclass
 class MojoIndex(LirNode):
     value: LirNode
@@ -177,4 +186,4 @@ class MojoRaw(LirNode):
     snippet: str
 
 
-__all__ = ['MojoFieldAssign', 'MojoStructInit', 'MojoSubscriptAssign', 'MojoStruct', 'MojoFieldAccess', 'MojoModule', 'MojoFn', 'MojoReturn', 'MojoBinOp', 'MojoCompare', 'MojoBoolOp', 'MojoUnary', 'MojoName', 'MojoIntLiteral', 'MojoFloatLiteral', 'MojoBoolLiteral', 'MojoStringLiteral', 'MojoIf', 'MojoWhile', 'MojoForRange', 'MojoVar', 'MojoReassign', 'MojoList', 'MojoTuple', 'MojoIndex', 'MojoCall', 'MojoMethodCall', 'MojoBreak', 'MojoContinue', 'MojoRaw']
+__all__ = ['MojoFieldAssign', 'MojoStructInit', 'MojoSubscriptAssign', 'MojoStruct', 'MojoFieldAccess', 'MojoModule', 'MojoFn', 'MojoReturn', 'MojoBinOp', 'MojoCompare', 'MojoBoolOp', 'MojoUnary', 'MojoName', 'MojoIntLiteral', 'MojoFloatLiteral', 'MojoBoolLiteral', 'MojoStringLiteral', 'MojoIf', 'MojoWhile', 'MojoForRange', 'MojoVar', 'MojoReassign', 'MojoList', 'MojoTuple', 'MojoSlice', 'MojoIndex', 'MojoCall', 'MojoMethodCall', 'MojoBreak', 'MojoContinue', 'MojoRaw']

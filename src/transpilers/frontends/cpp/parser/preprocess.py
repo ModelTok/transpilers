@@ -46,6 +46,7 @@ namespace std {
     template <typename T> class vector {
     public:
         vector(); vector(int); vector(int, const T&);
+        vector(const T*, const T*); vector(T*, T*);   // iterator-range ctor
         T& operator[](int);
         const T& operator[](int) const;   // const-vector indexing (very common)
         T& at(int); const T& at(int) const;

@@ -199,6 +199,10 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.MojoTuple):
         items = ", ".join(_emit_expr(e) for e in node.elements)
         return f"({items})"
+    if isinstance(node, lir.MojoSlice):
+        # Mojo slicing returns a Span; the C++ iterator-range ctor copies, so
+        # materialize into a List.
+        return f"List({_emit_expr(node.value)}[{_emit_expr(node.lo)}:{_emit_expr(node.hi)}])"
     if isinstance(node, lir.MojoFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
     if isinstance(node, lir.MojoStructInit):
