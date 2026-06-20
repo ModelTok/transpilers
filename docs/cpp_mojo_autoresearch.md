@@ -88,3 +88,42 @@ text->Type parser, infer_types, the Mojo emitter) + a map shadow with
 operator[]/count/find + count/find idioms (m.count(k) -> k in m). Larger than a
 single incremental fix; gates frequency_count/two_sum/set_ops/min_stack. After
 that: std::tuple multi-return, and graph/struct DP.
+
+## Final state & complete reachability analysis (transbench 22/40)
+
+Deterministic strict engine, real-EnergyPlus scalar tier 100% (leaves 111/111,
+closures 7/7) throughout. transbench 10 -> 22/40 by tier: t1 4/9, t2 11/13,
+t3 5/13, t4 2/5.
+
+Subsystems built+verified this campaign: std::vector (1D/2D construction,
+const/nested indexing read+write, push_back, .size()->len, compound-assign,
+return-by-value, sort, var-params, iterator-range slice), Dict/map (ops,
+count->in, by-value), std::tuple/pair, string indexing (s[byte=i]), init-list
+min/max, postfix ++/-- on subscripts, reserved-ident renaming, raises detection,
+out-of-line member functions, the math/linking fixes.
+
+### The remaining 18 are NOT incremental — each surveyed:
+
+UNREACHABLE-BY-DESIGN (no clean fix):
+- frequency_count: Mojo Dict[String,Int] prints `{h: 1}`, expected `{'h': 1}`.
+- set_ops: std::set iterates sorted; Mojo Set is unordered -> output order differs.
+- merge_sort: conditional postfix `left[i++] : right[j++]` — C++ increments only
+  the taken branch; the deferred-effect model needs CFG-aware desugaring.
+- fibonacci_memo: file-scope mutable map (no clean Mojo global-mutable-state).
+
+LARGE SUBSYSTEM each (multi-feature for +1):
+- vector2d: operator overloading + struct brace-init.
+- min_stack: stateful class with std::stack members + method-mutation.
+- bst_insert_search / has_cycle / bfs_shortest_path / dijkstra / union_find:
+  recursive/pointer structs, graph adjacency.
+- is_palindrome / string_reverse / to_upper / first_nonspace / run_length_encode /
+  fizzbuzz: in-place string ops, char<->int arithmetic, string building — Mojo
+  strings are immutable-ish (byte indexing, StringSlice, no char type).
+
+### Conclusion
+The high-ROI deterministic-engine work is complete: scalar EnergyPlus 100% and
+all major STL container families (vector/Dict/tuple/string-index/slice) handled
+end-to-end. The remaining tail yields +1 per multi-feature subsystem or is
+unreachable; per-iteration ROI is low. Next real levers are elsewhere: the
+GPU-gated model retrain (needs hardware), or applying the engine to the broader
+EnergyPlus non-scalar corpus via record/replay (#65) + the dep graph.
