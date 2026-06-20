@@ -192,6 +192,12 @@ class _MojoLowering(MirLoweringBase):
         args = [self.lower_expr(a) for a in node.args]
         if node.func == "__ternary__" and len(args) == 3:
             return _MojoIfExpr(test=args[0], then_=args[1], else_=args[2])
+        # std::vector sized ctor as an expression (e.g. the inner fill of a 2D
+        # `vector<vector<int>>(m, vector<int>(n,0))`): `[fill] * size`. The
+        # type-aware assign path handles the outer one; this enables nesting.
+        if node.func == "__vector_fill__" and args:
+            fill = args[1] if len(args) >= 2 else lir.MojoIntLiteral(value=0)
+            return lir.MojoBinOp(op="*", left=lir.MojoList(elements=[fill]), right=args[0])
         # ObjexxFCL integer-power helpers (pervasive in EnergyPlus): pow_2(x) -> x**2.
         _pn = re.fullmatch(r"pow_(\d+)", node.func)
         if _pn and len(args) == 1:
