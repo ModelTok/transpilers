@@ -10,6 +10,18 @@ from transpilers.ir import lir
 
 INDENT = "    "
 
+# Mojo reserved words that are valid C++ identifiers — rename on emit (append _)
+# so e.g. a C++ variable named `var`/`ref`/`out` doesn't collide. Deterministic,
+# so declaration and uses stay consistent without a rename map.
+_MOJO_KEYWORDS = frozenset({
+    "var", "ref", "mut", "out", "read", "owned", "deinit", "fn", "def",
+    "alias", "let", "in", "raises", "comptime", "trait", "struct",
+})
+
+
+def _safe(name: str) -> str:
+    return name + "_" if name in _MOJO_KEYWORDS else name
+
 
 def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | None:
     if not isinstance(value, lir.MojoBinOp):
@@ -53,7 +65,7 @@ def _emit_struct(s: lir.MojoStruct) -> str:
         lines.append(INDENT + "pass")
         return "\n".join(lines)
     for name, ty in s.fields:
-        lines.append(f"{INDENT}var {name}: {ty}")
+        lines.append(f"{INDENT}var {_safe(name)}: {ty}")
     for m in s.methods:
         lines.append("")
         lines.append(_emit_fn(m, depth=1))
@@ -69,7 +81,7 @@ def _emit_fn(fn: lir.MojoFn, *, depth: int = 0) -> str:
     )
     ret = f" -> {fn.return_type}" if fn.return_type != "None" else ""
     raises = " raises" if getattr(fn, "raises", False) else ""
-    header = f"{indent}def {fn.name}({params}){raises}{ret}:"
+    header = f"{indent}def {_safe(fn.name)}({params}){raises}{ret}:"
     body = _emit_block(fn.body, depth + 1) or (indent + INDENT + "pass")
     return f"{header}\n{body}"
 
@@ -77,7 +89,7 @@ def _emit_fn(fn: lir.MojoFn, *, depth: int = 0) -> str:
 def _emit_param(name: str, ty: str) -> str:
     if name == "self":
         return "self"
-    return f"{name}: {ty}"
+    return f"{_safe(name)}: {ty}"
 
 
 def _emit_block(nodes: list[lir.LirNode], depth: int) -> str:
@@ -102,13 +114,13 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         return f"{pad}return {_emit_expr(node.value)}" if node.value else f"{pad}return"
     if isinstance(node, lir.MojoVar):
         ann = f": {node.ty}" if node.ty else ""
-        return f"{pad}var {node.name}{ann} = {_emit_expr(node.value)}"
+        return f"{pad}var {_safe(node.name)}{ann} = {_emit_expr(node.value)}"
     if isinstance(node, lir.MojoReassign):
         aug = _augmented_form(node.name, node.value)
         if aug is not None:
             op, rhs = aug
-            return f"{pad}{node.name} {op}= {_emit_expr(rhs)}"
-        return f"{pad}{node.name} = {_emit_expr(node.value)}"
+            return f"{pad}{_safe(node.name)} {op}= {_emit_expr(rhs)}"
+        return f"{pad}{_safe(node.name)} = {_emit_expr(node.value)}"
     if isinstance(node, lir.MojoFieldAssign):
         return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)}"
     if isinstance(node, lir.MojoSubscriptAssign):
@@ -135,7 +147,7 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
             args = f"{_emit_expr(node.start)}, {_emit_expr(node.stop)}"
         else:
             args = f"{_emit_expr(node.start)}, {_emit_expr(node.stop)}, {_emit_expr(node.step)}"
-        head = f"{pad}for {node.target} in range({args}):"
+        head = f"{pad}for {_safe(node.target)} in range({args}):"
         body = _emit_block(node.body, depth + 1) or (pad + INDENT + "pass")
         return f"{head}\n{body}"
     return f"{pad}{_emit_expr(node)}"
@@ -170,7 +182,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         operand = _paren(node.operand, "__unary__", on_right=False)
         return f"{node.op} {operand}" if node.op == "not" else f"{node.op}{operand}"
     if isinstance(node, lir.MojoName):
-        return node.name
+        return _safe(node.name)
     if isinstance(node, lir.MojoIntLiteral):
         return str(node.value)
     if isinstance(node, lir.MojoFloatLiteral):
