@@ -45,6 +45,12 @@ class ListT(Type):
 
 
 @dataclass(frozen=True)
+class DictT(Type):
+    key: Type
+    value: Type
+
+
+@dataclass(frozen=True)
 class RangeT(Type):
     """The result of Python `range(...)`. Only valid as a for-loop iterator —
     using a range outside that context is unsupported until we have a real

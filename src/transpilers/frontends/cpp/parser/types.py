@@ -121,6 +121,21 @@ def _type_text(t: ci.Type) -> str:
         else:
             inner = _VECTOR_ELEM_ALIASES.get(inner, inner)
         return f"list[{inner}]"
+    # std::unordered_map<K,V> / std::map<K,V> -> dict[K, V]
+    for _pre in ("unordered_map<", "std::unordered_map<", "map<", "std::map<"):
+        if cleaned.startswith(_pre) and cleaned.endswith(">"):
+            inner = cleaned.split("<", 1)[1][:-1].strip()
+            depth = 0
+            for i, ch in enumerate(inner):  # top-level comma between K and V
+                if ch in "[<":
+                    depth += 1
+                elif ch in "]>":
+                    depth -= 1
+                elif ch == "," and depth == 0:
+                    k = _VECTOR_ELEM_ALIASES.get(inner[:i].strip(), inner[:i].strip())
+                    v = _VECTOR_ELEM_ALIASES.get(inner[i + 1:].strip(), inner[i + 1:].strip())
+                    return f"dict[{k}, {v}]"
+            break
     # Array types — `int[]`, `int[10]`, `int[n]`. Drop the size; carry the
     # element type as a list.
     if "[" in cleaned and cleaned.endswith("]"):
