@@ -1117,6 +1117,21 @@ def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
 def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
 
+    # const `vec[i]` READS come through the operator[] overload as a CALL_EXPR
+    # (non-const reads are ARRAY_SUBSCRIPT_EXPR, handled elsewhere). Mirror the
+    # assign-side handling and lower to a subscript.
+    if cursor.spelling == "operator[]" or any(
+        k.kind == CursorKind.DECL_REF_EXPR and "operator[]" in (k.spelling or "") for k in kids
+    ):
+        meaningful = [
+            c for c in kids
+            if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)
+            and not (c.kind == CursorKind.DECL_REF_EXPR and "operator" in (c.spelling or ""))
+        ]
+        if len(meaningful) >= 2:
+            return hir.HirSubscript(
+                value=_convert_expr(meaningful[0]), index=_convert_expr(meaningful[-1]))
+
     # Detect tuple/pair constructor: cursor.spelling is the type name ('tuple',
     # 'pair', etc.) and the first child is NOT a callee reference but an argument.
     if cursor.spelling in _TUPLE_CONSTRUCTORS and kids:

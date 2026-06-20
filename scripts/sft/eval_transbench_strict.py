@@ -36,7 +36,10 @@ def lit(a):
         return str(a)
     if isinstance(a, str):
         return '"' + a + '"'
-    return None  # list/other -> non-scalar, skip
+    if isinstance(a, list) and a:  # non-empty list -> Mojo list literal (typed by elems)
+        inner = [lit(x) for x in a]
+        return None if any(x is None for x in inner) else "[" + ", ".join(inner) + "]"
+    return None  # empty list / other -> skip (untyped literal)
 
 
 def eval_task(task, d):
