@@ -42,6 +42,26 @@ def lit(a):
     return None  # empty list / other -> skip (untyped literal)
 
 
+def _param_types(mojo, name):
+    """Param type strings of the target `def name(...)`, for typing empty args."""
+    sig = next((ln for ln in mojo.splitlines() if ln.startswith(f"def {name}(")), "")
+    if "(" not in sig:
+        return []
+    inside = sig[sig.find("(") + 1: sig.rfind(")")]
+    parts, depth, last = [], 0, 0
+    for i, ch in enumerate(inside):
+        if ch in "[(":
+            depth += 1
+        elif ch in "])":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(inside[last:i])
+            last = i + 1
+    if inside.strip():
+        parts.append(inside[last:])
+    return [p.split(":", 1)[1].strip() if ":" in p else "" for p in parts]
+
+
 def eval_task(task, d):
     (d / "f.cpp").write_text(task["cpp_source"] + "\n")
     r = run(["uv", "run", "transpile", str(d / "f.cpp"), "--target", "mojo"], cwd=str(REPO))
@@ -54,9 +74,20 @@ def eval_task(task, d):
     if not defs:
         return "transpile_fail"
     name = defs[-1]
+    ptypes = _param_types(mojo, name)  # to type empty-list args (e.g. List[Int]())
     for test in task["tests"]:
-        args = [lit(a) for a in test["args"]]
-        if any(a is None for a in args):
+        args = []
+        bad = False
+        for i, a in enumerate(test["args"]):
+            if isinstance(a, list) and not a and i < len(ptypes) and ptypes[i]:
+                args.append(f"{ptypes[i]}()")   # empty container -> typed ctor
+            else:
+                lv = lit(a)
+                if lv is None:
+                    bad = True
+                    break
+                args.append(lv)
+        if bad:
             return "nonscalar_args"
         (d / "m.mojo").write_text(mojo + f"\n\ndef main() raises:\n    print({name}({', '.join(args)}))\n")
         c = run([MOJO_BIN, "build", "-Xlinker", "-ldl", "-Xlinker", "-lm", str(d / "m.mojo"), "-o", str(d / "m")], env=MOJO_ENV)
