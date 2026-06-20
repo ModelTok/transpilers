@@ -1127,6 +1127,12 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     if cursor.spelling == "vector":
         real = [k for k in kids
                 if k.kind not in (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF)]
+        # Brace-init `vector<T>{a, b}` / `return {a, b}` is an ELEMENT list, not a
+        # sized ctor (identical cursor shape — distinguish by `{` in the tokens).
+        if "{" in [t.spelling for t in cursor.get_tokens()]:
+            if not real:                       # `{}` -> typed empty (lower_* knows the type)
+                return hir.HirCall(func="__cpp_overloaded_op__", args=[])
+            return hir.HirList(elements=[_convert_expr(k) for k in real])
         # copy/move ctor: vector<T>(otherVector) -> just the argument (Mojo copies
         # on assign/return). Distinguish from the sized ctor by the arg type.
         if len(real) == 1 and "vector" in (real[0].type.spelling or ""):
