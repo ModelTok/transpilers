@@ -1071,6 +1071,13 @@ def _convert_unary_expr(cursor: ci.Cursor) -> hir.HirNode:
                 augmented_op=sign,
             ))
             return operand
+        # subscript postfix: `arr[i]++` / `m[k]++` -> defer `arr[i] = arr[i] + 1`
+        if isinstance(operand, hir.HirSubscript):
+            sign = "+" if op == "++" else "-"
+            _record_postfix_effect(hir.HirSubscriptAssign(
+                obj=operand.value, index=operand.index,
+                value=hir.HirBinOp(op=sign, left=operand, right=hir.HirIntLiteral(value=1))))
+            return operand
         raise UnsupportedConstruct(f"postfix {op!r} on complex expression")
     raise UnsupportedConstruct(f"unary op {op!r} as expression")
 
@@ -1081,15 +1088,21 @@ def _convert_unary_stmt(cursor: ci.Cursor) -> hir.HirNode:
         raise UnsupportedConstruct(f"unary stmt {op!r}")
     kids = list(cursor.get_children())
     target = _decl_name(kids[0])
-    if target is None:
-        raise UnsupportedConstruct(f"++/-- on {kids[0].kind.name}")
     sign = "+" if op == "++" else "-"
-    return hir.HirAssign(
-        target=target,
-        value=hir.HirIntLiteral(value=1),
-        annotation=None,
-        augmented_op=sign,
-    )
+    if target is not None:
+        return hir.HirAssign(
+            target=target,
+            value=hir.HirIntLiteral(value=1),
+            annotation=None,
+            augmented_op=sign,
+        )
+    # `arr[i]++` / `m[k]++` as a statement -> arr[i] = arr[i] + 1
+    operand = _convert_expr(kids[0])
+    if isinstance(operand, hir.HirSubscript):
+        return hir.HirSubscriptAssign(
+            obj=operand.value, index=operand.index,
+            value=hir.HirBinOp(op=sign, left=operand, right=hir.HirIntLiteral(value=1)))
+    raise UnsupportedConstruct(f"++/-- on {kids[0].kind.name}")
 
 _TUPLE_CONSTRUCTORS = frozenset({"tuple", "pair", "make_pair", "make_tuple"})
 
