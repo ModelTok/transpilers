@@ -52,3 +52,18 @@ failure taxonomy. GPU-free; reproducible.
 3. **Refuse-or-warn instead of silent 0** for unresolved constants.
 4. **Psychrometric `Psy*` functions** (5 of the 13 skips) — high-value, need a
    richer shim/reference context.
+
+## Member-function tier (out-of-line `Class::method`) — validated
+After adding out-of-line `CXX_METHOD` support (free-function lowering), the 10
+real scalar out-of-line member functions in EnergyPlus went **0/10 → 7/10
+transpile** (were all crashing on `top-level CXX_METHOD`). The 3 remaining are:
+`TermUnitSizingData::applyTermUnitSizing{Cool,Heat}Flow` and
+`CollectorData::CalcConvCoeffBetweenPlates` — they read **member fields**
+(`this->member`), the next real blocker. (A 4th apparent failure,
+`calc_k_taoalpha`, is harness-only: it calls a sibling method; it verifies in
+the closure benchmark.)
+
+Next lever (ranked #2): model **member access in extracted methods** — either
+map `this->field` to an added parameter, or keep the receiving struct's fields
+in scope. Unlocks stateful scalar methods and is the gateway to the Array/state
+tier.
