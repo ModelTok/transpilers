@@ -210,8 +210,13 @@ class _MojoLowering(MirLoweringBase):
         return f
 
     def lower_return(self, node: mir.MirReturn):
-        val = self.lower_expr(node.value) if node.value else None
         ret = getattr(self, "_cur_ret", None) or ""
+        # `return {};` -> typed empty container constructor (List[T]()/Dict[K,V]()).
+        if (isinstance(node.value, mir.MirCall) and node.value.func == "__cpp_overloaded_op__"
+                and not node.value.args
+                and (ret.startswith("List[") or ret.startswith("Dict[") or ret == "String")):
+            return lir.MojoReturn(value=lir.MojoCall(func=ret, args=[]))
+        val = self.lower_expr(node.value) if node.value else None
         # List/Dict/String aren't ImplicitlyCopyable: `return localVar` needs an
         # explicit copy (or `^`). Only a bare name needs it — rvalues (`[0]*n`,
         # calls) are already owned temporaries.
@@ -226,6 +231,11 @@ class _MojoLowering(MirLoweringBase):
         # idiom is the free `len(x)`. Common in C++ container/string code.
         if node.method in ("size", "length") and not node.args:
             return lir.MojoCall(func="len", args=[self.lower_expr(node.receiver)])
+        # map/set membership: m.count(k) -> `k in m` (C++ count is 0/1, used as
+        # a bool in `if (m.count(k))`; Mojo `in` returns Bool).
+        if node.method == "count" and len(node.args) == 1:
+            return lir.MojoCompare(op="in", left=self.lower_expr(node.args[0]),
+                                   right=self.lower_expr(node.receiver))
         # std::vector::push_back / emplace_back -> Mojo List.append
         if node.method in ("push_back", "emplace_back") and len(node.args) == 1:
             return lir.MojoMethodCall(
