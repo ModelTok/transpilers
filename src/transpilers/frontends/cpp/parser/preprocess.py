@@ -65,8 +65,18 @@ namespace std {
     template <typename T, typename Alloc = int> class list {};
     template <typename K, typename V> struct pair { K first; V second; };
     template <typename... T> struct tuple {};
-    template <typename K, typename V> class unordered_map {};
-    template <typename K, typename V> class map {};
+    template <typename K, typename V> class _mapbase {
+    public:
+        _mapbase();
+        V& operator[](const K&);
+        const V& operator[](const K&) const;
+        V& at(const K&); const V& at(const K&) const;
+        unsigned long size() const; bool empty() const;
+        unsigned long count(const K&) const;
+        void clear();
+    };
+    template <typename K, typename V> class unordered_map : public _mapbase<K, V> {};
+    template <typename K, typename V> class map : public _mapbase<K, V> {};
     template <typename K, typename Cmp = int> class set {};
     template <typename K, typename Cmp = int> class unordered_set {};
     template <class T, class Container = int, class Cmp = int> class priority_queue {};

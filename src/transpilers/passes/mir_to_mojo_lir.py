@@ -56,6 +56,27 @@ _BUILTIN_MAP = {
 }
 
 
+def _uses_dict(fn) -> bool:
+    """True if the function signature or body involves a Dict (whose subscript
+    read raises in Mojo, requiring `raises`)."""
+    if isinstance(getattr(fn, "return_type", None), DictT):
+        return True
+    if any(isinstance(p.ty, DictT) for p in fn.params):
+        return True
+
+    def walk(nodes) -> bool:
+        for n in nodes:
+            if isinstance(getattr(n, "ty", None), DictT):
+                return True
+            for attr in ("body", "orelse"):
+                sub = getattr(n, attr, None)
+                if isinstance(sub, list) and walk(sub):
+                    return True
+        return False
+
+    return walk(fn.body)
+
+
 def _zero_literal(elem: str):
     """Default element value for a sized container (vector<T>(n))."""
     if elem in ("Float64", "Float32", "Float16"):
@@ -180,6 +201,13 @@ class _MojoLowering(MirLoweringBase):
     def lower_function(self, fn: mir.MirFunction):
         self._cur_ret = self.return_type(fn)
         return super().lower_function(fn)
+
+    def make_function(self, fn, params, ret, body):
+        f = super().make_function(fn, params, ret, body)
+        # Mojo Dict subscript reads raise (KeyError); a function using a Dict
+        # needs `raises`. Over-declaring raises is harmless.
+        f.raises = _uses_dict(fn)
+        return f
 
     def lower_return(self, node: mir.MirReturn):
         val = self.lower_expr(node.value) if node.value else None

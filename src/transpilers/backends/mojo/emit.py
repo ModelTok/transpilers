@@ -68,7 +68,8 @@ def _emit_fn(fn: lir.MojoFn, *, depth: int = 0) -> str:
         for n, t in fn.params
     )
     ret = f" -> {fn.return_type}" if fn.return_type != "None" else ""
-    header = f"{indent}def {fn.name}({params}){ret}:"
+    raises = " raises" if getattr(fn, "raises", False) else ""
+    header = f"{indent}def {fn.name}({params}){raises}{ret}:"
     body = _emit_block(fn.body, depth + 1) or (indent + INDENT + "pass")
     return f"{header}\n{body}"
 
