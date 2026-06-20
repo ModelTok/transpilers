@@ -254,6 +254,14 @@ class _MojoLowering(MirLoweringBase):
         args = [self.lower_expr(a) for a in node.args]
         if node.func == "__ternary__" and len(args) == 3:
             return _MojoIfExpr(test=args[0], then_=args[1], else_=args[2])
+        # std::min({a,b,c}) / max -> fold to nested min(a, min(b, c)) (Mojo is 2-arg)
+        if node.func in ("min", "max") and len(node.args) == 1 and isinstance(node.args[0], mir.MirList):
+            elems = [self.lower_expr(e) for e in node.args[0].elements]
+            if elems:
+                acc = elems[-1]
+                for e in reversed(elems[:-1]):
+                    acc = lir.MojoCall(func=node.func, args=[e, acc])
+                return acc
         # tuple/pair construction: frontend emits tuple(MirList([...])) -> (a, b)
         if node.func == "tuple" and len(node.args) == 1 and isinstance(node.args[0], mir.MirList):
             return lir.MojoTuple(elements=[self.lower_expr(e) for e in node.args[0].elements])

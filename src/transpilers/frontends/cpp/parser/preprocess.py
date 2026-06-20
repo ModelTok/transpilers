@@ -102,6 +102,10 @@ namespace std {
     template <bool B, typename T = void> struct enable_if {};
     template <typename T> T min(const T&, const T&);
     template <typename T> T max(const T&, const T&);
+    template <typename T> class initializer_list { public:
+        const T* begin() const; const T* end() const; unsigned long size() const; };
+    template <typename T> T min(initializer_list<T>);
+    template <typename T> T max(initializer_list<T>);
     // Math intrinsics -- the existing strict engine (cmath
     // detection) routes these to `from math import <name>` in
     // Mojo / Rust. The original frontend declared them at TU
