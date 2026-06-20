@@ -43,7 +43,7 @@ _MATH_FNS = frozenset({
     "exp", "log", "log2", "log10", "sqrt", "cbrt", "pow", "hypot",
     "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
     "sinh", "cosh", "tanh", "ceil", "floor", "trunc",
-    "expm1", "log1p", "erf",  # used in EnergyPlus; present in Mojo std.math
+    "expm1", "log1p", "erf", "copysign",  # used in EnergyPlus; present in Mojo std.math
 })
 # Python numeric constructors map to Mojo's scalar types. `float`/`int`/`bool`
 # are not Mojo builtins (`use of unknown declaration 'float'`); `Float64(x)` /

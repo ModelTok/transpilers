@@ -1,5 +1,0 @@
-﻿results/*.json
-!results/.gitkeep
-__pycache__/
-*.pyc
-.env

@@ -96,7 +96,7 @@ namespace std {
     double round(double); double trunc(double);
     double fmod(double, double); double hypot(double, double);
     double fmin(double, double); double fmax(double, double);
-    double fma(double, double, double);
+    double fma(double, double, double); double copysign(double, double);
     double expm1(double); double log1p(double); double erf(double);
     int abs(int); long labs(long);
     double clamp(double, double, double); int clamp(int, int, int);

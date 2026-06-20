@@ -14,7 +14,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 REPO = Path(__file__).resolve().parents[2]; SFT = REPO / "data/sft/cpp_mojo"
-BENCH = Path("/home/bart/Github/transpilers/benchmarks/transpilation-bench/benchmarks/tasks")
+BENCH = REPO / "benchmarks/tasks"  # task set moved here from transpilation-bench/benchmarks/tasks
 rh = (lambda s: (s.loader.exec_module(__import__('types').ModuleType('rh')) or None))  # placeholder
 def _load(n,p):
     s=importlib.util.spec_from_file_location(n,REPO/p); m=importlib.util.module_from_spec(s); sys.modules[n]=m; s.loader.exec_module(m); return m
