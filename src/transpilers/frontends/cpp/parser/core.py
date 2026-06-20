@@ -1125,10 +1125,14 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     # lowering turns into `[fill] * n` using the declared element type. The empty
     # `vector<T> v;` default-ctor has no kids and is handled below as a placeholder.
     if cursor.spelling == "vector":
-        cargs = [_convert_expr(k) for k in kids
-                 if k.kind not in (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF)]
-        if cargs:
-            return hir.HirCall(func="__vector_fill__", args=cargs)
+        real = [k for k in kids
+                if k.kind not in (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF)]
+        # copy/move ctor: vector<T>(otherVector) -> just the argument (Mojo copies
+        # on assign/return). Distinguish from the sized ctor by the arg type.
+        if len(real) == 1 and "vector" in (real[0].type.spelling or ""):
+            return _convert_expr(real[0])
+        if real:  # sized ctor: (n) or (n, fill)
+            return hir.HirCall(func="__vector_fill__", args=[_convert_expr(k) for k in real])
 
     # const `vec[i]` READS come through the operator[] overload as a CALL_EXPR
     # (non-const reads are ARRAY_SUBSCRIPT_EXPR, handled elsewhere). Mirror the

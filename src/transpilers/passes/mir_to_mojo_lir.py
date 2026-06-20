@@ -176,6 +176,22 @@ class _MojoLowering(MirLoweringBase):
     def lower_list(self, node: mir.MirList):
         return lir.MojoList(elements=[self.lower_expr(e) for e in node.elements])
 
+    def lower_function(self, fn: mir.MirFunction):
+        self._cur_ret = self.return_type(fn)
+        return super().lower_function(fn)
+
+    def lower_return(self, node: mir.MirReturn):
+        val = self.lower_expr(node.value) if node.value else None
+        ret = getattr(self, "_cur_ret", None) or ""
+        # List/Dict/String aren't ImplicitlyCopyable: `return localVar` needs an
+        # explicit copy (or `^`). Only a bare name needs it — rvalues (`[0]*n`,
+        # calls) are already owned temporaries.
+        if isinstance(val, lir.MojoName) and (
+            ret.startswith("List[") or ret.startswith("Dict[") or ret == "String"
+        ):
+            val = lir.MojoMethodCall(receiver=val, method="copy", args=[])
+        return lir.MojoReturn(value=val)
+
     def lower_method_call(self, node: mir.MirMethodCall):
         # Mojo containers and String have no `.size()`/`.length()` method — the
         # idiom is the free `len(x)`. Common in C++ container/string code.
