@@ -87,7 +87,13 @@ namespace std {
     class exception {};
     using size_t = unsigned long;
     using ptrdiff_t = long;
-    class string { public: unsigned long size() const; };
+    class string { public:
+        string(); unsigned long size() const; unsigned long length() const; bool empty() const;
+        char& operator[](unsigned long); const char& operator[](unsigned long) const;
+        char& at(unsigned long); const char& at(unsigned long) const;
+        const char* begin() const; const char* end() const;
+        void push_back(char); void clear();
+    };
     class string_view {};
     template <typename T> T numeric_limits_min() { return T(); }
     template <typename T> T numeric_limits_max() { return T(); }

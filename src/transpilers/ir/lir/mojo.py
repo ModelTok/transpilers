@@ -145,6 +145,7 @@ class MojoTuple(LirNode):
 class MojoIndex(LirNode):
     value: LirNode
     index: LirNode
+    byte: bool = False  # String indexing uses `s[byte=i]` in Mojo
 
 @dataclass
 class MojoCall(LirNode):
