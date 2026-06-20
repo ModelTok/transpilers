@@ -45,6 +45,7 @@ class MojoFn(LirNode):
     params: list[tuple[str, str]]
     return_type: str
     body: list[LirNode]
+    raises: bool = False
 
 @dataclass
 class MojoReturn(LirNode):
