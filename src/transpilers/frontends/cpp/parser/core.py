@@ -242,6 +242,14 @@ def _convert_top_level(c: ci.Cursor, body: list[hir.HirNode]) -> None:
     if c.kind == CursorKind.FUNCTION_DECL and c.is_definition():
         body.append(_set_loc(c, _convert_function(c)))
         return
+    if c.kind == CursorKind.CXX_METHOD and c.is_definition():
+        # Out-of-line member definition `Real64 Class::method(...) {...}`.
+        # Transpile as a free function: scalar EnergyPlus methods use only their
+        # explicit params (get_arguments excludes the implicit `this`), so this
+        # migrates them standalone. A `this->member` ref becomes an unresolved
+        # name downstream — no worse than refusing the whole function.
+        body.append(_set_loc(c, _convert_function(c)))
+        return
     if c.kind == CursorKind.FUNCTION_TEMPLATE and c.is_definition():
         # The IR doesn't model templates, so the function body becomes a
         # HirRaw hole. The signature (param / return types) is still
