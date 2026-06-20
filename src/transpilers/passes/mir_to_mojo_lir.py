@@ -151,6 +151,13 @@ class _MojoLowering(MirLoweringBase):
     def lower_list(self, node: mir.MirList):
         return lir.MojoList(elements=[self.lower_expr(e) for e in node.elements])
 
+    def lower_method_call(self, node: mir.MirMethodCall):
+        # Mojo containers and String have no `.size()`/`.length()` method — the
+        # idiom is the free `len(x)`. Common in C++ container/string code.
+        if node.method in ("size", "length") and not node.args:
+            return lir.MojoCall(func="len", args=[self.lower_expr(node.receiver)])
+        return super().lower_method_call(node)
+
     def lower_call(self, node: mir.MirCall):
         args = [self.lower_expr(a) for a in node.args]
         if node.func == "__ternary__" and len(args) == 3:
