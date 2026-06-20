@@ -19,6 +19,7 @@ import re
 from transpilers.ir import lir, mir
 from transpilers.ir.types import (
     BoolT,
+    DictT,
     FloatT,
     IntT,
     ListT,
@@ -364,6 +365,8 @@ def _mojo_type(ty: Type) -> str:
         return "None"
     if isinstance(ty, ListT):
         return f"List[{_mojo_type(ty.elem)}]"
+    if isinstance(ty, DictT):
+        return f"Dict[{_mojo_type(ty.key)}, {_mojo_type(ty.value)}]"
     if isinstance(ty, StructT):
         return ty.name
     if isinstance(ty, SimdT):

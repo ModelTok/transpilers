@@ -11,6 +11,7 @@ from __future__ import annotations
 from transpilers.ir import hir, mir
 from transpilers.ir.types import (
     BoolT,
+    DictT,
     FloatT,
     IntT,
     ListT,
@@ -414,6 +415,18 @@ def _resolve_annotation(ann: str | None) -> Type:
     if ann.startswith("list[") and ann.endswith("]"):
         inner = ann[len("list[") : -1]
         return ListT(elem=_resolve_annotation(inner))
+    if ann.startswith("dict[") and ann.endswith("]"):
+        inner = ann[len("dict[") : -1]
+        depth = 0
+        for i, ch in enumerate(inner):  # split K, V at the top-level comma
+            if ch in "[<":
+                depth += 1
+            elif ch in "]>":
+                depth -= 1
+            elif ch == "," and depth == 0:
+                return DictT(key=_resolve_annotation(inner[:i].strip()),
+                             value=_resolve_annotation(inner[i + 1:].strip()))
+        return UnknownT(hint=f"malformed dict annotation {ann!r}")
     if ann.startswith("simd[") and ann.endswith("]"):
         # `simd[<elem>, <lanes>]` — a SIMD vector type. The C++ frontend
         # produces these strings when it sees Intel/ARM vector typedefs.
