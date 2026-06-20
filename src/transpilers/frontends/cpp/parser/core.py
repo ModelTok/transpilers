@@ -1023,7 +1023,7 @@ def _convert_assignment_stmt(cursor: ci.Cursor) -> hir.HirNode:
     elif lhs.kind == CursorKind.CALL_EXPR:
         lk = [c for c in lhs.get_children()
               if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)
-              and not (c.spelling or "").startswith("operator")]
+              and not ((c.spelling or "").startswith("operator") and c.kind != CursorKind.CALL_EXPR)]
         if len(lk) >= 2:
             sub = (_convert_expr(lk[0]), _convert_expr(lk[-1]))
     if sub is not None:
@@ -1109,7 +1109,7 @@ def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
         args = [c for c in lk if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)]
         # First is typically the object; last meaningful arg is the index.
         # Filter the operator[] callee ref (any cursor kind) by spelling.
-        meaningful = [a for a in args if not (a.spelling or "").startswith("operator")]
+        meaningful = [a for a in args if not ((a.spelling or "").startswith("operator") and a.kind != CursorKind.CALL_EXPR)]
         if len(meaningful) >= 2:
             return hir.HirSubscript(value=_convert_expr(meaningful[0]), index=_convert_expr(meaningful[-1]))
     if lhs.kind == CursorKind.MEMBER_REF_EXPR:
@@ -1139,7 +1139,7 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
         meaningful = [
             c for c in kids
             if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)
-            and not (c.spelling or "").startswith("operator")
+            and not ((c.spelling or "").startswith("operator") and c.kind != CursorKind.CALL_EXPR)
         ]
         if len(meaningful) >= 2:
             return hir.HirSubscript(
