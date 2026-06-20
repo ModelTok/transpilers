@@ -302,6 +302,11 @@ def _params_reassigned(
     var_out: set[str] = set()
     mut_out: set[str] = set()
 
+    _MUTATING = {"append", "push_back", "emplace_back", "clear", "pop_back", "resize"}
+
+    def _param_of(node):
+        return node.name if isinstance(node, mir.MirName) and node.name in param_names else None
+
     def _scan(nodes: list[mir.MirNode]) -> None:
         for n in nodes:
             if isinstance(n, mir.MirAssign) and n.target in param_names:
@@ -312,6 +317,14 @@ def _params_reassigned(
                 and n.obj.name in param_names
             ):
                 mut_out.add(n.obj.name)
+            # in-place mutation via call: `v.append(x)` / `sort(v.begin(),..)` on a
+            # by-value param -> needs an owned `var` (also accepts literal args).
+            elif isinstance(n, mir.MirMethodCall) and n.method in _MUTATING and _param_of(n.receiver):
+                var_out.add(_param_of(n.receiver))
+            elif (isinstance(n, mir.MirCall) and n.func == "sort" and n.args
+                  and isinstance(n.args[0], mir.MirMethodCall)
+                  and _param_of(n.args[0].receiver)):
+                var_out.add(_param_of(n.args[0].receiver))
             elif isinstance(n, mir.MirIf):
                 _scan(n.body)
                 _scan(n.orelse)
