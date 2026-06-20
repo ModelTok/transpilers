@@ -122,11 +122,15 @@ class _MojoLowering(MirLoweringBase):
         if node.target in declared:
             return lir.MojoReassign(name=node.target, value=self.lower_expr(node.value))
         declared.add(node.target)
-        return lir.MojoVar(
-            name=node.target,
-            ty=_mojo_type(node.ty) if not isinstance(node.ty, UnknownT) else None,
-            value=self.lower_expr(node.value),
-        )
+        ty = _mojo_type(node.ty) if not isinstance(node.ty, UnknownT) else None
+        # `std::vector<int> v;` / `std::string s;` default-construct reaches MIR
+        # as the unmapped-op placeholder; emit a typed empty constructor instead.
+        if (ty and isinstance(node.value, mir.MirCall)
+                and node.value.func == "__cpp_overloaded_op__" and not node.value.args):
+            value = lir.MojoCall(func=ty, args=[])
+        else:
+            value = self.lower_expr(node.value)
+        return lir.MojoVar(name=node.target, ty=ty, value=value)
 
     # -- expressions ------------------------------------------------------- #
 
@@ -156,6 +160,11 @@ class _MojoLowering(MirLoweringBase):
         # idiom is the free `len(x)`. Common in C++ container/string code.
         if node.method in ("size", "length") and not node.args:
             return lir.MojoCall(func="len", args=[self.lower_expr(node.receiver)])
+        # std::vector::push_back / emplace_back -> Mojo List.append
+        if node.method in ("push_back", "emplace_back") and len(node.args) == 1:
+            return lir.MojoMethodCall(
+                receiver=self.lower_expr(node.receiver), method="append",
+                args=[self.lower_expr(node.args[0])])
         return super().lower_method_call(node)
 
     def lower_call(self, node: mir.MirCall):
