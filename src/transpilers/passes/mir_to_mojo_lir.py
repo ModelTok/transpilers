@@ -214,6 +214,11 @@ class _MojoLowering(MirLoweringBase):
         if node.func == "__vector_fill__" and args:
             fill = args[1] if len(args) >= 2 else lir.MojoIntLiteral(value=0)
             return lir.MojoBinOp(op="*", left=lir.MojoList(elements=[fill]), right=args[0])
+        # std::sort(v.begin(), v.end()) -> Mojo `sort(v)` (in-place, prelude builtin)
+        if node.func == "sort" and len(node.args) == 2:
+            a0 = node.args[0]
+            if isinstance(a0, mir.MirMethodCall) and a0.method == "begin":
+                return lir.MojoCall(func="sort", args=[self.lower_expr(a0.receiver)])
         # ObjexxFCL integer-power helpers (pervasive in EnergyPlus): pow_2(x) -> x**2.
         _pn = re.fullmatch(r"pow_(\d+)", node.func)
         if _pn and len(args) == 1:
