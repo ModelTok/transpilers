@@ -199,6 +199,12 @@ class _MojoLowering(MirLoweringBase):
     def lower_list(self, node: mir.MirList):
         return lir.MojoList(elements=[self.lower_expr(e) for e in node.elements])
 
+    def lower_subscript(self, node: mir.MirSubscript):
+        # Mojo String indexing is `s[byte=i]` (returns a StringSlice), not `s[i]`.
+        byte = isinstance(getattr(node.value, "ty", None), StrT)
+        return lir.MojoIndex(value=self.lower_expr(node.value),
+                             index=self.lower_expr(node.index), byte=byte)
+
     def lower_function(self, fn: mir.MirFunction):
         self._cur_ret = self.return_type(fn)
         return super().lower_function(fn)

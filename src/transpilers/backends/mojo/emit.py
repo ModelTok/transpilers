@@ -207,6 +207,8 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         args = ", ".join(_emit_expr(v) for _, v in node.field_values)
         return f"{node.name}({args})"
     if isinstance(node, lir.MojoIndex):
+        if getattr(node, "byte", False):
+            return f"{_emit_expr(node.value)}[byte={_emit_expr(node.index)}]"
         return f"{_emit_expr(node.value)}[{_emit_expr(node.index)}]"
     if isinstance(node, lir.MojoCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
