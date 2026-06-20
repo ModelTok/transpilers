@@ -121,6 +121,22 @@ def _type_text(t: ci.Type) -> str:
         else:
             inner = _VECTOR_ELEM_ALIASES.get(inner, inner)
         return f"list[{inner}]"
+    # std::tuple<...> / std::pair<A,B> -> tuple[...] (Mojo tuple)
+    for _pre in ("tuple<", "std::tuple<", "pair<", "std::pair<"):
+        if cleaned.startswith(_pre) and cleaned.endswith(">"):
+            inner = cleaned.split("<", 1)[1][:-1].strip()
+            parts, depth, last = [], 0, 0
+            for i, ch in enumerate(inner):
+                if ch in "[<":
+                    depth += 1
+                elif ch in "]>":
+                    depth -= 1
+                elif ch == "," and depth == 0:
+                    parts.append(inner[last:i].strip())
+                    last = i + 1
+            parts.append(inner[last:].strip())
+            parts = [_VECTOR_ELEM_ALIASES.get(p, p) for p in parts]
+            return f"tuple[{', '.join(parts)}]"
     # std::unordered_map<K,V> / std::map<K,V> -> dict[K, V]
     for _pre in ("unordered_map<", "std::unordered_map<", "map<", "std::map<"):
         if cleaned.startswith(_pre) and cleaned.endswith(">"):
