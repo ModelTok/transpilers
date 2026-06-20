@@ -1,0 +1,13 @@
+# strict-engine real-EnergyPlus C++->Mojo benchmark
+# scripts/sft/bench_strict_ep.py 124  | Mojo 1.0.0b1 | deterministic strict engine (no model)
+# transpile (transpile --target mojo) -> compile (mojo build -ldl -lm) -> numeric-verify vs C++ oracle
+
+=== funnel (of 124 migration-plan scalar leaves) ===
+  skip_cpp         13     # C++ reference needs non-scalar types / redefines a shim — out of scalar scope
+  PASS            111
+
+PASS 111/111 verifiable  (111/124 of all leaves)   [100% of in-scope leaves]
+
+# progression this session:
+#   first 30 leaves:   22/27 -> 27/27   (after from-std.math + -lm + constant-value fixes)
+#   full 124 leaves:  108/111 -> 111/111 (after std::clamp support + SMALL decl + NaN-equality)
