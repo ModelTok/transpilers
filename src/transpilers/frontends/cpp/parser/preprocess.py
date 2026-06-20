@@ -45,11 +45,18 @@ PARSER_PREAMBLE: Final[str] = """
 namespace std {
     template <typename T> class vector {
     public:
+        vector(); vector(int); vector(int, const T&);
         T& operator[](int);
+        const T& operator[](int) const;   // const-vector indexing (very common)
+        T& at(int); const T& at(int) const;
         unsigned long size() const;
+        bool empty() const;
         void push_back(const T&);
-        T* begin();
-        T* end();
+        void pop_back(); void clear();
+        void resize(int); void resize(int, const T&);
+        T& back(); T& front();
+        T* begin(); T* end();
+        const T* begin() const; const T* end() const;
     };
     template <typename T, typename U> T exchange(T&, U&&);
     template <typename T> void swap(T&, T&);
