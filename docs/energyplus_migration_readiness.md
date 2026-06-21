@@ -69,11 +69,13 @@ stateful classes and graph/pointer structs are *"unreachable."*
 
 ### 3. The two numbers that look like "yes" both fail on inspection
 
-- **GPU model "51% diverse held-out"** — this is *transpile-rate on a curated
+- **GPU model "72% diverse held-out"** (1.5B adapter; 88% on the scalar set, per
+  the leakage-free frozen ruler — corrected from an earlier 51% figure on
+  transpilers-agent's note) — this is *exec-match@1 on a curated diverse
   benchmark*, categorically easier than production EP (god-object methods,
-  templates, stateful physics), and transpile-success ≠ verified migration. It
-  also cannot run in this environment (no CUDA). Even at face value,
-  51%-on-a-benchmark ≠ 50%-of-the-EP-migration.
+  templates, stateful physics), and exec-match ≠ verified migration. It also
+  cannot run in this environment (no CUDA). Even at face value,
+  72%-on-a-benchmark ≠ 50%-of-the-EP-migration.
 - **Lift "96% mechanical"** — the dangerous one: 96%-mechanical = a **skeleton
   with `# TODO[lift]` stubs**, and the stubs are *exactly where the semantic
   work lives*. It targets **Python, not Mojo**, and the lifted trees do not
