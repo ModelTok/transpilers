@@ -1128,6 +1128,11 @@ _OVERLOAD_BINOPS = frozenset({
     "operator>=", "operator&&", "operator||",
 })
 
+_OVERLOAD_AUGOPS = {
+    "operator+=": "+", "operator-=": "-", "operator*=": "*",
+    "operator/=": "/", "operator%=": "%",
+}
+
 def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
     """Convert an assignment LHS cursor to an expression for use in `return lhs`."""
     lhs = _strip_unexposed(lhs)
@@ -1183,6 +1188,16 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
                 return hir.HirBoolOp(op="and" if op == "&&" else "or", left=lhs, right=rhs)
             return hir.HirBinOp(op=op, left=lhs, right=rhs)
 
+    # Overloaded compound assignment `r += x` (e.g. std::string concat) arrives as
+    # CALL_EXPR 'operator+='. Desugar to an augmented assignment on a bare-name lhs.
+    if cursor.spelling in _OVERLOAD_AUGOPS:
+        operands = [k for k in kids if (k.spelling or "") != cursor.spelling]
+        if len(operands) == 2:
+            target = _decl_name(operands[0])
+            if target is not None:
+                return hir.HirAssign(target=target, value=_convert_expr(operands[1]),
+                                     annotation=None, augmented_op=_OVERLOAD_AUGOPS[cursor.spelling])
+
     # Struct constructor call `Vec2(a, b)` — including the implicit ctor libclang
     # materializes for brace-init `return {a, b};` when the type is fully known
     # (CALL_EXPR whose spelling is a known struct name). Emit a StructInit.
@@ -1221,6 +1236,15 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
                 if k.kind not in (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF)]
         if len(real) == 1 and any(s in (real[0].type.spelling or "")
                                   for s in ("map", "set")):
+            return _convert_expr(real[0])
+
+    # std::string copy / construct-from-value (`return r;`, `string(other)`,
+    # `string("lit")`) -> the single argument; lower_return adds `.copy()` for a
+    # bare String name. The 0-arg default ctor falls through to empty-string below.
+    if cursor.spelling in ("string", "basic_string"):
+        real = [k for k in kids
+                if k.kind not in (CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF, CursorKind.NAMESPACE_REF)]
+        if len(real) == 1:
             return _convert_expr(real[0])
 
     # const `vec[i]` READS come through the operator[] overload as a CALL_EXPR
