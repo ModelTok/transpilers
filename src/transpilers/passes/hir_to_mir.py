@@ -68,7 +68,10 @@ def _default_init_for(ty: Type) -> mir.MirNode:
         return mir.MirBoolLiteral(value=False, ty=BoolT())
     if isinstance(ty, StrT):
         return mir.MirStringLiteral(value="", ty=StrT())
-    # Unknown / struct / list defaults aren't expressible as one literal;
+    if isinstance(ty, ListT):
+        # empty typed list (e.g. a std::stack/vector member's default ctor)
+        return mir.MirList(elements=[], ty=ty)
+    # Unknown / struct / dict defaults aren't expressible as one literal;
     # fall back to int 0 (common case).
     return mir.MirIntLiteral(value=0, ty=IntT())
 
