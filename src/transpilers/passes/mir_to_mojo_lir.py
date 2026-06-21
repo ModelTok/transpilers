@@ -224,6 +224,14 @@ class _MojoLowering(MirLoweringBase):
                 and (ret.startswith("List[") or ret.startswith("Dict[") or ret == "String")):
             return lir.MojoReturn(value=lir.MojoCall(func=ret, args=[]))
         val = self.lower_expr(node.value) if node.value else None
+        # `return {a, b};` where the function returns a struct -> Type(a, b). The
+        # init-list lowers to a MojoList; a struct return type (not a container /
+        # primitive) means it's really a fieldwise constructor.
+        if (isinstance(val, lir.MojoList) and ret
+                and not ret.startswith(("List[", "Dict[", "Tuple[", "SIMD["))
+                and ret not in ("Int", "Float64", "Bool", "String", "None")):
+            return lir.MojoReturn(value=lir.MojoStructInit(
+                name=ret, field_values=[("", e) for e in val.elements]))
         # List/Dict/String aren't ImplicitlyCopyable: `return localVar` needs an
         # explicit copy (or `^`). Only a bare name needs it — rvalues (`[0]*n`,
         # calls) are already owned temporaries.
