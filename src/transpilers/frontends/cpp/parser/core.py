@@ -619,8 +619,15 @@ def _convert_var_decl(cursor: ci.Cursor) -> hir.HirNode:
             init: hir.HirNode = hir.HirStructInit(name=annotation, args=[])
         else:
             ctor = kids[-1]
-            args: list[hir.HirNode] = []
-            if ctor.kind in (ci.CursorKind.CALL_EXPR, ci.CursorKind.INIT_LIST_EXPR):
+            # Genuine constructor: brace-init `{...}` or an explicit `Type(...)`
+            # call. An `auto`-typed var whose initializer is an expression that
+            # *returns* the struct (operator call `a+b`, factory `makeVec()`) must
+            # NOT be re-read as a constructor — convert it as an expression.
+            is_ctor = (ctor.kind == ci.CursorKind.INIT_LIST_EXPR
+                       or (ctor.kind == ci.CursorKind.CALL_EXPR
+                           and (ctor.spelling or "") == annotation))
+            if is_ctor:
+                args: list[hir.HirNode] = []
                 for c in ctor.get_children():
                     if c.kind == ci.CursorKind.TYPE_REF:
                         continue
@@ -630,7 +637,9 @@ def _convert_var_decl(cursor: ci.Cursor) -> hir.HirNode:
                             args.append(_convert_expr(inner[0]))
                             continue
                     args.append(_convert_expr(c))
-            init = hir.HirStructInit(name=annotation, args=args)
+                init = hir.HirStructInit(name=annotation, args=args)
+            else:
+                init = _convert_expr(ctor)
         return hir.HirAssign(target=cursor.spelling, value=init, annotation=annotation)
     init = _convert_expr(kids[-1]) if kids else hir.HirIntLiteral(value=0)
     # `auto x = expr;` — drop the (deduced) annotation so the IR's own type
@@ -1113,6 +1122,12 @@ _TUPLE_CONSTRUCTORS = frozenset({"tuple", "pair", "make_pair", "make_tuple"})
 
 _LIST_CONSTRUCTORS = frozenset({"vector", "array", "deque", "list"})
 
+_OVERLOAD_BINOPS = frozenset({
+    "operator+", "operator-", "operator*", "operator/", "operator%",
+    "operator==", "operator!=", "operator<", "operator>", "operator<=",
+    "operator>=", "operator&&", "operator||",
+})
+
 def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
     """Convert an assignment LHS cursor to an expression for use in `return lhs`."""
     lhs = _strip_unexposed(lhs)
@@ -1151,6 +1166,29 @@ def _iter_index(node: "hir.HirNode"):
 
 def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     kids = list(cursor.get_children())
+
+    # Overloaded binary operator `a + b` arrives as CALL_EXPR 'operator+' with
+    # kids [lhs, operator-ref, rhs]. Map to a real binop/compare so Mojo's struct
+    # operator methods (__add__/__eq__/...) drive it. Unary forms (1 operand
+    # after filtering) fall through.
+    if cursor.spelling in _OVERLOAD_BINOPS:
+        op = cursor.spelling[len("operator"):]
+        operands = [k for k in kids if (k.spelling or "") != cursor.spelling]
+        if len(operands) == 2:
+            lhs = _convert_expr(operands[0])
+            rhs = _convert_expr(operands[1])
+            if op in ("==", "!=", "<", ">", "<=", ">="):
+                return hir.HirCompare(op=op, left=lhs, right=rhs)
+            if op in ("&&", "||"):
+                return hir.HirBoolOp(op="and" if op == "&&" else "or", left=lhs, right=rhs)
+            return hir.HirBinOp(op=op, left=lhs, right=rhs)
+
+    # Struct constructor call `Vec2(a, b)` — including the implicit ctor libclang
+    # materializes for brace-init `return {a, b};` when the type is fully known
+    # (CALL_EXPR whose spelling is a known struct name). Emit a StructInit.
+    if cursor.spelling in _KNOWN_STRUCT_NAMES:
+        args = [_convert_expr(c) for c in kids if c.kind != CursorKind.TYPE_REF]
+        return hir.HirStructInit(name=cursor.spelling, args=args)
 
     # std::vector<T> sized constructor: (n) or (n, fill). Emit a marker the Mojo
     # lowering turns into `[fill] * n` using the declared element type. The empty

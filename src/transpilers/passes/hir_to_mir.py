@@ -346,7 +346,12 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         field_types = _STRUCT_FIELD_TYPES.get(node.name, {})
         lowered_args = [_lower_expr(a, env) for a in node.args]
         pairs: list[tuple[str, mir.MirNode]] = []
-        for i, fname in enumerate(field_names):
+        # Pair positionally; when field names aren't registered yet (e.g. a
+        # struct's own method constructs the struct before its fields are
+        # recorded), keep the args positionally (name "") rather than dropping
+        # them. Trailing fields with no arg get a default (C++ partial init).
+        for i in range(max(len(field_names), len(lowered_args))):
+            fname = field_names[i] if i < len(field_names) else ""
             if i < len(lowered_args):
                 pairs.append((fname, lowered_args[i]))
             else:
