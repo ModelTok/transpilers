@@ -101,7 +101,10 @@ namespace std {
         char& at(unsigned long); const char& at(unsigned long) const;
         const char* begin() const; const char* end() const;
         void push_back(char); void clear();
+        string operator+(const string&) const; string operator+(const char*) const;
+        string& operator+=(const string&); string& operator+=(const char*); string& operator+=(char);
     };
+    string operator+(const char*, const string&);
     class string_view {};
     template <typename T> T numeric_limits_min() { return T(); }
     template <typename T> T numeric_limits_max() { return T(); }
@@ -114,6 +117,9 @@ namespace std {
         const T* begin() const; const T* end() const; unsigned long size() const; };
     template <typename T> T min(initializer_list<T>);
     template <typename T> T max(initializer_list<T>);
+    string to_string(int); string to_string(long); string to_string(long long);
+    string to_string(unsigned); string to_string(unsigned long);
+    string to_string(float); string to_string(double);
     // Math intrinsics -- the existing strict engine (cmath
     // detection) routes these to `from math import <name>` in
     // Mojo / Rust. The original frontend declared them at TU

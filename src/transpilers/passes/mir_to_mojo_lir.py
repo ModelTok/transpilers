@@ -280,6 +280,9 @@ class _MojoLowering(MirLoweringBase):
         args = [self.lower_expr(a) for a in node.args]
         if node.func == "__ternary__" and len(args) == 3:
             return _MojoIfExpr(test=args[0], then_=args[1], else_=args[2])
+        # std::to_string(x) -> String(x) (int/float -> string, common in EP output)
+        if node.func == "to_string" and len(args) == 1:
+            return lir.MojoCall(func="String", args=args)
         # vector(it1, it2) iterator-range ctor -> c[lo:hi]
         if node.func == "__vector_slice__" and len(args) == 3:
             return lir.MojoSlice(value=args[0], lo=args[1], hi=args[2])
