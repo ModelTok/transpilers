@@ -244,10 +244,15 @@ def _convert_top_level(c: ci.Cursor, body: list[hir.HirNode]) -> None:
         return
     if c.kind == CursorKind.CXX_METHOD and c.is_definition():
         # Out-of-line member definition `Real64 Class::method(...) {...}`.
-        # Transpile as a free function: scalar EnergyPlus methods use only their
-        # explicit params (get_arguments excludes the implicit `this`), so this
-        # migrates them standalone. A `this->member` ref becomes an unresolved
-        # name downstream — no worse than refusing the whole function.
+        # If its class is present in this TU, attach it to that struct as a real
+        # method (with `self`), so `this->field` resolves. Otherwise (standalone
+        # extraction) fall back to a free function — scalar methods use only their
+        # explicit params; a `this->member` ref then becomes an unresolved name.
+        cls = c.semantic_parent.spelling if c.semantic_parent else None
+        for node in body:
+            if isinstance(node, hir.HirStruct) and node.name == cls:
+                node.methods.append(_convert_method(c, struct_name=cls))
+                return
         body.append(_set_loc(c, _convert_function(c)))
         return
     if c.kind == CursorKind.FUNCTION_TEMPLATE and c.is_definition():
