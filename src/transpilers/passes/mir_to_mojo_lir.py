@@ -224,6 +224,9 @@ class _MojoLowering(MirLoweringBase):
                 and (ret.startswith("List[") or ret.startswith("Dict[") or ret == "String")):
             return lir.MojoReturn(value=lir.MojoCall(func=ret, args=[]))
         val = self.lower_expr(node.value) if node.value else None
+        # `return {a, b};` for a tuple/pair return -> (a, b).
+        if isinstance(val, lir.MojoList) and ret.startswith("Tuple["):
+            return lir.MojoReturn(value=lir.MojoTuple(elements=val.elements))
         # `return {a, b};` where the function returns a struct -> Type(a, b). The
         # init-list lowers to a MojoList; a struct return type (not a container /
         # primitive) means it's really a fieldwise constructor.
@@ -242,20 +245,35 @@ class _MojoLowering(MirLoweringBase):
         return lir.MojoReturn(value=val)
 
     def lower_method_call(self, node: mir.MirMethodCall):
-        # Mojo containers and String have no `.size()`/`.length()` method — the
-        # idiom is the free `len(x)`. Common in C++ container/string code.
-        if node.method in ("size", "length") and not node.args:
-            return lir.MojoCall(func="len", args=[self.lower_expr(node.receiver)])
-        # map/set membership: m.count(k) -> `k in m` (C++ count is 0/1, used as
-        # a bool in `if (m.count(k))`; Mojo `in` returns Bool).
-        if node.method == "count" and len(node.args) == 1:
-            return lir.MojoCompare(op="in", left=self.lower_expr(node.args[0]),
-                                   right=self.lower_expr(node.receiver))
-        # std::vector::push_back / emplace_back -> Mojo List.append
-        if node.method in ("push_back", "emplace_back") and len(node.args) == 1:
-            return lir.MojoMethodCall(
-                receiver=self.lower_expr(node.receiver), method="append",
-                args=[self.lower_expr(node.args[0])])
+        # These STL-container method rewrites key off the method NAME, so they
+        # must NOT fire when the receiver is a user struct that happens to have a
+        # method of the same name (push/top/empty/size/...). Guard by receiver type.
+        is_struct = isinstance(getattr(node.receiver, "ty", None), StructT)
+        if not is_struct:
+            # Mojo containers/String have no `.size()`/`.length()` — use `len(x)`.
+            if node.method in ("size", "length") and not node.args:
+                return lir.MojoCall(func="len", args=[self.lower_expr(node.receiver)])
+            # map/set membership: m.count(k) -> `k in m`.
+            if node.method == "count" and len(node.args) == 1:
+                return lir.MojoCompare(op="in", left=self.lower_expr(node.args[0]),
+                                       right=self.lower_expr(node.receiver))
+            # vector::push_back / emplace_back / stack::push -> List.append
+            if node.method in ("push_back", "emplace_back", "push") and len(node.args) == 1:
+                return lir.MojoMethodCall(
+                    receiver=self.lower_expr(node.receiver), method="append",
+                    args=[self.lower_expr(node.args[0])])
+            # stack/queue: top()/back() -> v[len(v)-1]; front() -> v[0]
+            # (Mojo has no negative indexing on List).
+            if node.method in ("top", "back") and not node.args:
+                recv = self.lower_expr(node.receiver)
+                return lir.MojoIndex(value=recv, index=lir.MojoBinOp(
+                    op="-", left=lir.MojoCall(func="len", args=[recv]), right=lir.MojoIntLiteral(value=1)))
+            if node.method == "front" and not node.args:
+                return lir.MojoIndex(value=self.lower_expr(node.receiver), index=lir.MojoIntLiteral(value=0))
+            # empty() -> len(v) == 0
+            if node.method == "empty" and not node.args:
+                return lir.MojoCompare(op="==", left=lir.MojoCall(
+                    func="len", args=[self.lower_expr(node.receiver)]), right=lir.MojoIntLiteral(value=0))
         return super().lower_method_call(node)
 
     def lower_call(self, node: mir.MirCall):

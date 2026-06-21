@@ -81,8 +81,15 @@ namespace std {
     template <typename K, typename Cmp = int> class set {};
     template <typename K, typename Cmp = int> class unordered_set {};
     template <class T, class Container = int, class Cmp = int> class priority_queue {};
-    template <class T> class queue {};
-    template <class T> class stack {};
+    template <class T> class queue { public:
+        queue(); void push(const T&); void pop();
+        T& front(); const T& front() const; T& back(); const T& back() const;
+        bool empty() const; unsigned long size() const;
+    };
+    template <class T> class stack { public:
+        stack(); void push(const T&); void pop();
+        T& top(); const T& top() const; bool empty() const; unsigned long size() const;
+    };
     template <class T> class deque {};
     template <typename R, typename... A> class function {};
     class exception {};

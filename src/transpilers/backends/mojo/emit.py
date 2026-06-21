@@ -72,11 +72,55 @@ def _emit_struct(s: lir.MojoStruct) -> str:
     return "\n".join(lines)
 
 
+_MUTATING_METHODS = frozenset({
+    "append", "pop", "clear", "insert", "extend", "resize", "remove", "reverse", "sort",
+})
+
+
+def _is_self(node: object) -> bool:
+    return isinstance(node, lir.MojoName) and node.name == "self"
+
+
+def _touches_self(node: object) -> bool:
+    """A receiver/target rooted at `self` (self, self.field, self.field[i])."""
+    if _is_self(node):
+        return True
+    if isinstance(node, lir.MojoFieldAccess):
+        return _touches_self(node.value)
+    if isinstance(node, lir.MojoIndex):
+        return _touches_self(node.value)
+    return False
+
+
+def _mutates_self(nodes: object) -> bool:
+    """Does this method body mutate `self`? (assign self.field, self.field[i]=…,
+    or call a mutating method on a self-rooted receiver). Such methods need
+    `mut self` in Mojo (default borrow is immutable)."""
+    import dataclasses
+    if isinstance(nodes, list):
+        return any(_mutates_self(n) for n in nodes)
+    if not dataclasses.is_dataclass(nodes):
+        return False
+    if isinstance(nodes, lir.MojoFieldAssign) and _touches_self(nodes.obj):
+        return True
+    if isinstance(nodes, lir.MojoSubscriptAssign) and _touches_self(nodes.obj):
+        return True
+    if (isinstance(nodes, lir.MojoMethodCall) and nodes.method in _MUTATING_METHODS
+            and _touches_self(nodes.receiver)):
+        return True
+    return any(_mutates_self(getattr(nodes, f.name)) for f in dataclasses.fields(nodes))
+
+
 def _emit_fn(fn: lir.MojoFn, *, depth: int = 0) -> str:
     indent = INDENT * depth
-    # `__init__` takes `out self` (uninitialized output) rather than a borrow.
+    # `__init__` takes `out self`; a method that mutates self takes `mut self`;
+    # otherwise the default immutable borrow `self`.
+    mut_self = (fn.params and fn.params[0][0] == "self"
+                and fn.name != "__init__" and _mutates_self(fn.body))
     params = ", ".join(
-        ("out self" if (n == "self" and fn.name == "__init__") else _emit_param(n, t))
+        ("out self" if (n == "self" and fn.name == "__init__")
+         else "mut self" if (n == "self" and mut_self)
+         else _emit_param(n, t))
         for n, t in fn.params
     )
     ret = f" -> {fn.return_type}" if fn.return_type != "None" else ""
