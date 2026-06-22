@@ -1,0 +1,60 @@
+# LLaMA-Factory SFT config — Qwen2.5-Coder-7B, Phase 1: Mojo acquisition.
+# CLOUD / CUDA edition — portable relative paths, flash-attn 2, no ROCm hacks.
+#
+# This is the 7B analog of sft_3b_phase1_cloud.yaml. The 7B model in bf16 LoRA
+# (not 4-bit) needs ~24-40 GB VRAM with gradient checkpointing — use an A100
+# (40/80 GB) or H100. On a 24 GB card (A10/L4/4090) use the QLoRA variant
+# qwen7b_qlora.yaml instead (4-bit, cutoff 1024).
+#
+# Two-phase recipe (same as the proven 3B recipe):
+#   Phase 1 (this): mojo_acquisition (1163 samples), 2 epochs -> ./out/adapter_7b_phase1/
+#   Phase 2 (sft_7b_phase2_cloud.yaml): warm-start, cpp_mojo_translation_v2
+#     (1065 pairs), 4 epochs -> ./out/adapter_7b/
+#
+# Run from the bundle root (the dir you rsync'd to the box):
+#   llamafactory-cli train data/sft/cpp_mojo/sft_7b_phase1_cloud.yaml
+# Or use the one-shot launcher: bash scripts/sft/train_7b.sh
+
+### model
+model_name_or_path: Qwen/Qwen2.5-Coder-7B-Instruct
+trust_remote_code: true
+# Flash-attention 2 — pip install flash-attn --no-build-isolation (Ampere+).
+# On Turing (T4) set this to sdpa.
+flash_attn: fa2
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+
+### dataset
+dataset_dir: ./data/sft/cpp_mojo
+dataset: mojo_acquisition
+template: qwen
+cutoff_len: 4096
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: ./out/adapter_7b_phase1
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+# Effective batch = 1 * 8 = 8. On 80 GB you can raise per_device to 2-4.
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+use_reentrant_gc: false
+learning_rate: 1.5e-4
+num_train_epochs: 2.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
