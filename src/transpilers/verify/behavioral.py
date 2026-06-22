@@ -93,6 +93,14 @@ class IOSample:
         return ", ".join(repr(a) for a in self.args)
 
 
+# Recognized divergence classes. Naming the *kind* of behavioral difference —
+# not just "they differ" — gives the repair loop (#47) a sharper hint and lets a
+# sweep bucket failures by root cause instead of one opaque "wrong" pile.
+DIV_FLOORED_MOD = "floored_vs_truncated_intdiv"
+DIV_TARGET_ERROR = "target_errored"
+DIV_VALUE = "value_mismatch"
+
+
 @dataclass
 class Divergence:
     """A single input on which target behavior differs from the source oracle."""
@@ -106,6 +114,36 @@ class Divergence:
         return f"f({inp}): expected {self.expected!r}, got {self.actual!r}"
 
 
+def classify_divergence(div: Divergence, ret_tag: str) -> str:
+    """Categorize a single divergence by likely root cause.
+
+    The headline class is the C-family integer-semantics gap: Python's ``%``/
+    ``//`` are *floored* (sign follows the divisor) while Rust/C/Zig/Mojo are
+    *truncated* (sign follows the dividend). On a negative operand the two
+    disagree (``-1 % 2`` → ``1`` vs ``-1``), and the difference is exactly a
+    multiple of one of the inputs — the fingerprint we test for here. This is
+    the divergence the behavioral harness most often surfaces on real numeric
+    leaves, so it is worth naming explicitly.
+    """
+    if div.actual.startswith(("compile:", "runtime:")) or "<no result>" in div.actual:
+        return DIV_TARGET_ERROR
+    if ret_tag == "int":
+        try:
+            exp, act = int(div.expected), int(div.actual)
+        except (TypeError, ValueError):
+            return DIV_VALUE
+        # Floored/truncated mod & div differ by k*divisor for some integer arg.
+        delta = exp - act
+        if delta != 0 and any(
+            isinstance(a, int) and a != 0 and delta % a == 0 for a in div.args
+        ):
+            # Require at least one negative operand — the only case where
+            # floored and truncated integer ops actually disagree.
+            if any(isinstance(a, int) and a < 0 for a in div.args):
+                return DIV_FLOORED_MOD
+    return DIV_VALUE
+
+
 @dataclass
 class BehavioralReport:
     """Outcome of a behavioral-equivalence check on one function."""
@@ -116,6 +154,7 @@ class BehavioralReport:
     divergences: list[Divergence] = field(default_factory=list)
     supported: bool = True  # False == harness could not drive this signature
     reason: str = ""  # why unsupported / why no samples
+    divergence_class: str = ""  # root-cause label of the first divergence
 
     @property
     def pass_rate(self) -> float:
@@ -129,6 +168,8 @@ class BehavioralReport:
         head = f"behavioral: {self.matched}/{self.total} inputs match"
         if self.divergences:
             head += f"; first divergence — {self.divergences[0]}"
+            if self.divergence_class:
+                head += f" [{self.divergence_class}]"
         return head
 
 
@@ -633,11 +674,13 @@ def check_behavioral_equivalence(
             divergences.append(Divergence(args=args, expected=expected_tok, actual=got.token))
 
     total = len(runnable)
+    div_class = classify_divergence(divergences[0], ret_tag) if divergences else ""
     return BehavioralReport(
         ok=(matched == total and total > 0),
         total=total,
         matched=matched,
         divergences=divergences,
+        divergence_class=div_class,
     )
 
 
