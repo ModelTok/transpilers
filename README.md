@@ -52,6 +52,37 @@ Verified end-to-end (compile + run + output match) on `examples/algorithms/`
 Real-world corpus (`examples/samples/`, transpile-only → Rust): JavaScript
 26/27, C++ 78/170, Python 32/57, Java 27/74, C 20/70, Go 1/9.
 
+The end-to-end Mojo and C++ numbers above are *compile-and-run* results that
+require those toolchains to be installed. The engine itself (parse → IR →
+emit, type inference, the verifiers, and all pure-Python paths) is exercised by
+the pytest suite, which runs without any target toolchain. Mojo target
+verification is gated on a working `mojo` install; where it is absent, the
+matrix reports those cells as `SKIP` rather than `PASS`, so don't read the
+Mojo figures as reproducible in a toolchain-less CI.
+
+## Mojo-target SFT toolchain
+
+Beyond the live engine, a toolchain-free data + fine-tune stack bootstraps the
+C++/Python → Mojo translator adapter (all pure-Python, exercised by pytest):
+
+- **Algorithm dataset generator** — `scripts/sft/build_algorithm_pairs.py`
+  emits verified C/C++/Python → Mojo (plus Rust/Zig bonus) SFT pairs into
+  `data/sft/algorithms/` from the seed corpus in `examples/`, with a rejects
+  channel for unmappable constructs.
+- **Qwen2.5-Coder-7B finetune** — `scripts/sft/train_7b.sh` plus the two-phase
+  cloud configs in `data/sft/cpp_mojo/sft_7b_phase{1,2}_cloud.yaml`; see
+  `docs/finetune_qwen7b.md`.
+- **Record/replay shims** — `scripts/sft/record_replay.py` with bool/int
+  normalization so captured fixtures replay deterministically.
+- **Psychrometric shims** — `scripts/sft/psychro_shims.py` provides a real
+  `PsyPsatFnTemp` implementation (replacing the prior `pvstar` stub) for
+  EnergyPlus-flavored ports.
+- **God-object slicing** — `scripts/sft/god_object_slice.py` emits per-module
+  sub-state Mojo structs from a god-object slice.
+- **Behavioral divergence classifier** — `src/transpilers/verify/behavioral.py`
+  classifies semantic divergences (e.g. floored-vs-truncated integer division)
+  in verified output.
+
 ## Layout
 
 ```
@@ -59,7 +90,7 @@ src/transpilers/   frontends · ir (hir/mir/lir) · passes · backends · llm ·
 scripts/           dataset builders · sft/ (fine-tune + eval) · rag/
 data/              datasets · the shipped Mojo LoRA adapter · codebase RAG index
 examples/          verified corpus (algorithms/ + per-language samples)
-tests/             engine test suite (218 tests)
+tests/             engine test suite (537 tests; ML/torch cases auto-skip without GPU deps)
 benchmarks/        transpilation-bench (40-task C++/Python→Mojo)
 tools/             migraph (migration dashboard) · cloud (RunPod training bundle)
 ```
@@ -85,7 +116,7 @@ The project leans on a small set of core tools:
 direnv allow      # one-time: auto-activates .venv on cd
 just setup        # uv sync
 just example      # transpile examples/algorithms/fibonacci.py
-just check        # lint + 218 tests
+just check        # lint + full test suite
 ```
 
 Without `direnv`/`just`:
