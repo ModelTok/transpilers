@@ -101,3 +101,54 @@ def test_field_centric_owner_filter():
     assert m["owners_matched"] == 1
     assert set(m["owners"]) == {"StateB"}
     assert m["owners"]["StateB"]["fields"] == 2  # f3 (write) + f4 (write)
+
+
+# ---------------------------------------------------------------------------
+# Sub-state struct codegen (#69: split god-object into per-module sub-states)
+# ---------------------------------------------------------------------------
+
+
+def test_emit_substate_structs_one_struct_per_sub_state():
+    g = _graph()
+    code = gos.emit_substate_structs(gos.slice_manifest(g, ["entry"]))
+    # Reached sub-states StateA + StateB -> dataStateA / dataStateB structs.
+    assert "struct dataStateA:" in code
+    assert "struct dataStateB:" in code
+    # Sliced fields appear; the unreached f4 (StateB) does NOT.
+    assert "var f1:" in code and "var f2:" in code and "var f3:" in code
+    assert "f4" not in code
+
+
+def test_emit_substate_structs_compose_into_slice_container():
+    g = _graph()
+    code = gos.emit_substate_structs(gos.slice_manifest(g, ["entry"]))
+    assert "struct StateSlice:" in code
+    assert "var dataStateA: dataStateA" in code
+    assert "var dataStateB: dataStateB" in code
+    # Every struct gets a no-arg initializer (port pattern from the memory notes).
+    assert "fn __init__(out self):" in code
+    assert "self.dataStateA = dataStateA()" in code
+
+
+def test_emit_substate_dedups_read_plus_write_field():
+    g = _graph()
+    code = gos.emit_substate_structs(gos.slice_manifest(g, ["entry"]))
+    # f1 is both written (entry) and read (leaf) -> declared exactly once.
+    assert code.count("var f1:") == 1
+
+
+def test_mojo_type_heuristics():
+    assert gos._mojo_type_for("isWarmup") == "Bool"
+    assert gos._mojo_type_for("NumZones") == "Int"
+    assert gos._mojo_type_for("zoneTemp") == "Float64"
+
+
+def test_emit_empty_slice_is_safe():
+    code = gos.emit_substate_structs({"fields_by_owner": {}})
+    assert "empty slice" in code
+
+
+def test_struct_name_drops_leading_data_prefix():
+    # EnergyPlus owner DataHeatBalance -> member dataHeatBalance (no double Data).
+    assert gos._struct_name("ns.DataHeatBalance") == "dataHeatBalance"
+    assert gos._struct_name("ns.StateA") == "dataStateA"

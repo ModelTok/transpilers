@@ -167,6 +167,90 @@ def field_centric_slice(graph, owner_substr=""):
     }
 
 
+# ---------------------------------------------------------------------------
+# Sub-state struct codegen (the "split the god-object into per-module sub-states"
+# half of #69). Turns a slice manifest into Mojo struct scaffolds: one struct
+# per owning sub-state holding only the sliced fields, plus a thin sliced
+# container that composes them. A function then pulls in the sub-struct it uses
+# instead of the whole EnergyPlusData god-object.
+# ---------------------------------------------------------------------------
+
+# Field-name → Mojo type heuristics. The graph carries names, not C++ types, so
+# fall back to Float64 (the dominant scalar in the runtime path) unless the name
+# strongly signals a count/flag. Kept conservative: a wrong default is a
+# one-line edit, and the slice's value is the *structure*, not the type guess.
+def _mojo_type_for(name: str) -> str:
+    n = (name or "").lower()
+    if n.startswith(("is", "has", "do", "use")) or n.endswith(("flag", "_on")):
+        return "Bool"
+    if n.startswith(("num", "n_", "count", "index", "idx")) or n.endswith(
+        ("num", "count", "index", "idx", "_no")
+    ):
+        return "Int"
+    return "Float64"
+
+
+_MOJO_DEFAULT = {"Bool": "False", "Int": "0", "Float64": "0.0"}
+
+
+def _struct_name(owner_short: str) -> str:
+    """data<Module> — the EnergyPlus per-module sub-state convention.
+
+    EnergyPlus owners are typically named ``DataHeatBalance``/``DataSurfaces``;
+    the sub-state member is ``dataHeatBalance`` (the leading ``Data`` is dropped
+    so we don't emit ``dataDataHeatBalance``).
+    """
+    short = owner_short.rsplit(".", 1)[-1] or owner_short
+    if not short:
+        return "dataUnknown"
+    if short.startswith("Data") and len(short) > 4:
+        short = short[4:]
+    return "data" + short[0].upper() + short[1:]
+
+
+def emit_substate_structs(manifest: dict) -> str:
+    """Emit Mojo sub-state structs + a sliced container from a slice manifest.
+
+    Each owning sub-state becomes a ``struct data<Owner>`` holding only the
+    sliced fields (with a no-arg ``__init__`` defaulting each), and a
+    ``StateSlice`` struct composes them. This is scaffolding — types are
+    name-heuristic guesses (see ``_mojo_type_for``); the win is that a function
+    now depends on ``state.data<Owner>.<field>`` (one small struct) instead of
+    the full god-object.
+    """
+    by_owner = manifest.get("fields_by_owner", {})
+    if not by_owner:
+        return "# (empty slice — no sub-states)\n"
+    chunks: list[str] = ["# Auto-generated god-object sub-state slice (#69).",
+                         "# Per-module sub-states holding ONLY the sliced fields.\n"]
+    members: list[tuple[str, str]] = []
+    for owner, rows in by_owner.items():
+        struct = _struct_name(owner)
+        members.append((struct, struct))
+        # Dedup field names (a field can appear read+write); keep mode in comment.
+        seen: dict[str, str] = {}
+        for r in rows:
+            seen.setdefault(r["name"] or "field", r.get("mode", ""))
+        lines = [f"struct {struct}:"]
+        for fname, mode in seen.items():
+            ty = _mojo_type_for(fname)
+            lines.append(f"    var {fname}: {ty}  # {mode}")
+        lines.append("    fn __init__(out self):")
+        for fname in seen:
+            ty = _mojo_type_for(fname)
+            lines.append(f"        self.{fname} = {_MOJO_DEFAULT[ty]}")
+        chunks.append("\n".join(lines) + "\n")
+    # Composing container.
+    cont = ["struct StateSlice:"]
+    for var, ty in members:
+        cont.append(f"    var {var}: {ty}")
+    cont.append("    fn __init__(out self):")
+    for var, ty in members:
+        cont.append(f"        self.{var} = {ty}()")
+    chunks.append("\n".join(cont) + "\n")
+    return "\n".join(chunks)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Compute a god-object vertical slice.")
     ap.add_argument("--graph", help="node-link graph JSON (default: build live from cbm)")
@@ -175,6 +259,8 @@ def main():
     ap.add_argument("--owner", help="field-centric slice: sub-state owner substring (e.g. EnergyPlusData)")
     ap.add_argument("--max-depth", type=int, default=None, help="cap call-closure depth (--entry mode)")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--emit-mojo", default=None,
+                    help="write per-module sub-state Mojo struct scaffolds (--entry mode)")
     args = ap.parse_args()
     if not args.entry and args.owner is None:
         ap.error("provide --entry (reachability) or --owner (field-centric)")
@@ -201,6 +287,12 @@ def main():
     if args.out:
         Path(args.out).write_text(json.dumps(manifest, indent=1))
         print(f"-> {args.out}")
+
+    if args.emit_mojo:
+        if "fields_by_owner" not in manifest:
+            ap.error("--emit-mojo requires --entry (a reachability slice manifest)")
+        Path(args.emit_mojo).write_text(emit_substate_structs(manifest))
+        print(f"sub-state structs -> {args.emit_mojo}")
 
 
 if __name__ == "__main__":
