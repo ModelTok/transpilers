@@ -39,11 +39,29 @@ PRELUDE = (SFT / "ep_prelude.mojo").read_text()
 
 
 def _fmt(v):
-    """Format a float as a valid Mojo/C++ float literal at full precision."""
+    """Format a float as a valid Mojo/C++ float literal at full precision.
+
+    Used for F's input rows (always Float64 args), so an integer-valued input
+    like JSON `2` must still render as `2.0`. Typed dep literals go through
+    `_typed_lit`, not here.
+    """
     s = f"{float(v):.17g}"
     if not any(c in s for c in ".eEnN"):   # integer-looking -> force float
         s += ".0"
     return s
+
+
+def _typed_lit(v):
+    """Format a recorded dep value as a typed Mojo/C++ literal.
+
+    bool -> Bool literal, int -> Int literal, else full-precision float.
+    `bool` is a subclass of `int`, so it MUST be checked first.
+    """
+    if isinstance(v, bool):                # bool before int (bool < int in Python)
+        return "True" if v else "False"
+    if isinstance(v, int):
+        return str(v)                      # Int literal (no ".0")
+    return _fmt(v)
 
 
 def gen_recorder_cpp(item):
@@ -72,6 +90,19 @@ def gen_recorder_cpp(item):
     return "\n".join(parts)
 
 
+def _parse_cell(x):
+    """Parse one logged cell: True/False -> bool, else full-precision float.
+
+    Bare integer-looking cells stay floats (the scalar-Float64 default); only
+    explicit True/False are treated as the bool type so exact-match applies.
+    """
+    if x == "True":
+        return True
+    if x == "False":
+        return False
+    return float(x)
+
+
 def parse_fixtures(text):
     """Recorder log -> {dep_name: [(args_tuple, ret), ...]}."""
     fx = {}
@@ -81,25 +112,48 @@ def parse_fixtures(text):
             continue
         cells = line.split("\t")
         name, *nums = cells
-        vals = [float(x) for x in nums]
+        vals = [_parse_cell(x) for x in nums]
         fx.setdefault(name, []).append((tuple(vals[:-1]), vals[-1]))
     return fx
 
 
+def _mojo_type(v):
+    """Mojo type name for a recorded value (bool before int; default Float64)."""
+    if isinstance(v, bool):
+        return "Bool"
+    if isinstance(v, int):
+        return "Int"
+    return "Float64"
+
+
+def _match_cond(typ, j):
+    """Per-arg match condition: exact for Bool/Int, rel-1e-9 for Float64."""
+    if typ in ("Bool", "Int"):
+        return f"a{j} == k{j}[i]"
+    return f"abs(a{j} - k{j}[i]) <= 1e-9 * (1.0 + abs(a{j}))"
+
+
 def gen_replay_mojo(name, nparams, calls):
-    """Generate a Mojo replay shim: match recorded args -> recorded return."""
-    sig = ", ".join(f"a{i}: Float64" for i in range(nparams))
-    out = [f"def {name}({sig}) raises -> Float64:"]
+    """Generate a Mojo replay shim: match recorded args -> recorded return.
+
+    Per-column types are inferred from the recorded values: Bool/Int columns
+    get Bool/Int signatures + exact `==` matching; Float64 columns keep the
+    1e-9 relative tolerance. The return type follows the recorded return.
+    """
     if not calls:
+        sig = ", ".join(f"a{i}: Float64" for i in range(nparams))
+        out = [f"def {name}({sig}) raises -> Float64:"]
         out.append(f'    raise Error("{name}: no recorded calls")')
         return "\n".join(out)
+    arg_types = [_mojo_type(calls[0][0][i]) for i in range(nparams)]
+    ret_type = _mojo_type(calls[0][1])
+    sig = ", ".join(f"a{i}: {arg_types[i]}" for i in range(nparams))
+    out = [f"def {name}({sig}) raises -> {ret_type}:"]
     for i in range(nparams):
-        out.append(f"    var k{i} = [{', '.join(_fmt(c[0][i]) for c in calls)}]")
-    out.append(f"    var rv = [{', '.join(_fmt(c[1]) for c in calls)}]")
+        out.append(f"    var k{i} = [{', '.join(_typed_lit(c[0][i]) for c in calls)}]")
+    out.append(f"    var rv = [{', '.join(_typed_lit(c[1]) for c in calls)}]")
     out.append("    for i in range(len(rv)):")
-    cond = " and ".join(
-        f"abs(a{j} - k{j}[i]) <= 1e-9 * (1.0 + abs(a{j}))" for j in range(nparams)
-    ) or "True"
+    cond = " and ".join(_match_cond(arg_types[j], j) for j in range(nparams)) or "True"
     out.append(f"        if {cond}:")
     out.append("            return rv[i]")
     out.append(f'    raise Error("{name}: unrecorded args")')
