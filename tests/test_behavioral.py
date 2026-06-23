@@ -14,9 +14,14 @@ import shutil
 import pytest
 
 from transpilers.verify.behavioral import (
+    DIV_FLOORED_MOD,
+    DIV_TARGET_ERROR,
+    DIV_VALUE,
     BehavioralReport,
+    Divergence,
     canonical_token,
     check_behavioral_equivalence,
+    classify_divergence,
     generate_inputs,
     infer_param_tags,
     make_behavioral_verifier,
@@ -270,3 +275,54 @@ def test_verifier_unsupported_signature_does_not_fail_by_default():
 def test_report_summary_is_human_readable():
     r = BehavioralReport(ok=False, total=10, matched=7, divergences=[])
     assert "7/10" in r.summary()
+
+
+# ---------------------------------------------------------------------------
+# Divergence classification (issue #48 slice: name the root cause)
+# ---------------------------------------------------------------------------
+
+
+def test_classify_floored_mod_divergence():
+    # gcd(-1, 2): Python floored % gives 1; Rust/C truncated gives -1.
+    # The token delta (1 - (-1) = 2) is a multiple of the divisor 2, and an
+    # operand is negative -> the floored/truncated fingerprint.
+    div = Divergence(args=(-1, 2), expected="1", actual="-1")
+    assert classify_divergence(div, "int") == DIV_FLOORED_MOD
+
+
+def test_classify_target_error_is_not_floored_mod():
+    div = Divergence(args=(-1, 2), expected="1", actual="compile: error[E0428]")
+    assert classify_divergence(div, "int") == DIV_TARGET_ERROR
+
+
+def test_classify_no_result_is_target_error():
+    div = Divergence(args=(1,), expected="2", actual="<no result>")
+    assert classify_divergence(div, "int") == DIV_TARGET_ERROR
+
+
+def test_classify_positive_operands_is_plain_value_mismatch():
+    # No negative operand -> floored and truncated agree -> not the mod class.
+    div = Divergence(args=(5, 2), expected="2", actual="3")
+    assert classify_divergence(div, "int") == DIV_VALUE
+
+
+def test_classify_non_int_return_is_value_mismatch():
+    div = Divergence(args=(-1, 2), expected="true", actual="false")
+    assert classify_divergence(div, "bool") == DIV_VALUE
+
+
+def test_report_carries_divergence_class_on_int_mismatch():
+    # Source uses Python floored //; a "truncated" target diverges on negatives.
+    src = "def fdiv(a: int, b: int) -> int:\n    return a // b\n"
+    wrong = (
+        "def fdiv(a, b):\n"
+        "    q = abs(a) // abs(b)\n"
+        "    return q if (a < 0) == (b < 0) else -q\n"  # C-style truncation
+    )
+    rep = check_behavioral_equivalence(
+        src, source_lang="python", target="python",
+        target_code=wrong, func_name="fdiv",
+    )
+    assert not rep.ok
+    assert rep.divergence_class == DIV_FLOORED_MOD
+    assert DIV_FLOORED_MOD in rep.summary()
