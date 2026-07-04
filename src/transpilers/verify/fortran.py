@@ -31,5 +31,6 @@ def fortran_compiles(source: str) -> CompileResult:
             capture_output=True,
             text=True,
             cwd=td,
+            timeout=30,
         )
         return CompileResult(ok=out.returncode == 0, stderr=out.stderr)

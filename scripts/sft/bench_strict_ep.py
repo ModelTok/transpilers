@@ -25,7 +25,7 @@ from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-EP = Path("/home/bart/Github/EnergyPlus/src/EnergyPlus")
+EP = Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus"))
 SFT = REPO / "data/sft/cpp_mojo"
 PLAN = json.loads((SFT / "migration_plan.json").read_text())
 PRELUDE = (SFT / "ep_prelude.mojo").read_text()

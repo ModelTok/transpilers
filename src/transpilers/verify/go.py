@@ -30,6 +30,6 @@ def go_compiles(source: str) -> CompileResult:
         (Path(td) / "main.go").write_text(complete)
         (Path(td) / "go.mod").write_text("module check\n\ngo 1.21\n")
         out = subprocess.run(
-            ["go", "build", "./..."], capture_output=True, text=True, cwd=td
+            ["go", "build", "./..."], capture_output=True, text=True, cwd=td, timeout=30
         )
         return CompileResult(ok=out.returncode == 0, stderr=out.stderr)

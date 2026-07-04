@@ -37,5 +37,6 @@ def mojo_compiles(source: str) -> CompileResult:
             ["mojo", "build", str(src), "-o", str(Path(td) / "out")],
             capture_output=True,
             text=True,
+            timeout=30,
         )
         return CompileResult(ok=out.returncode == 0, stderr=out.stderr)

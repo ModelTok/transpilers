@@ -88,6 +88,27 @@ def test_range_arg_anchors_unannotated_param():
     assert "fn sum_to(n: i64) -> i64" in out
 
 
+def test_ambiguous_list_return_types_stay_unresolved():
+    """Two branches returning `list[int]` vs `list[str]` must NOT collapse
+    to one type just because both are `ListT` at the top level. A prior
+    version of `_resolve_return` compared `type(t) is type(first)`
+    (same dataclass) instead of value equality, so `ListT(elem=IntT())`
+    and `ListT(elem=StrT())` looked "the same" and it silently picked
+    whichever branch was seen first -- a miscompilation (the function gets
+    typed `-> list[i64]` even though the else-branch returns strings), not
+    just an unfilled hole."""
+    with pytest.raises(ValueError, match="unresolved type hole"):
+        _t(
+            """
+            def pick(flag: bool):
+                if flag:
+                    return [1, 2]
+                else:
+                    return ["a", "b"]
+            """
+        )
+
+
 def test_unresolvable_still_raises_without_llm():
     """`a + b` with no anchor can't be inferred — algorithmic path must surface
     the hole rather than guess. This is the contract."""

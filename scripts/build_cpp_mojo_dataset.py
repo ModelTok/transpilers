@@ -561,7 +561,7 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ep-src", type=Path,
-                    default=Path("/home/bart/Github/EnergyPlus/src/EnergyPlus"))
+                    default=Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus")))
     ap.add_argument("--out", type=Path, default=REPO / "data" / "cpp_mojo_pairs.jsonl")
     ap.add_argument("--limit", type=int, default=0, help="cap candidates (0=all)")
     ap.add_argument("--verbose", action="store_true")

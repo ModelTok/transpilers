@@ -24,7 +24,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SFT = REPO / "data/sft/cpp_mojo"
 PYV = Path(os.environ.get("PYV", str(REPO / "data/sft/diverse/py_verified.jsonl")))
-BENCH = Path("/home/bart/Github/transpilers/benchmarks/transpilation-bench/benchmarks/tasks")
+BENCH = REPO / "benchmarks/transpilation-bench/benchmarks/tasks"
 LEAK_J = float(os.environ.get("LEAK_J", "0.6"))
 
 MOJO_FENCE = re.compile(r"```mojo\s*\n(.*?)```", re.S)

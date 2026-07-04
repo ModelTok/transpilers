@@ -69,6 +69,29 @@ def test_rename_local_X_pattern():
     assert "while i <= n" in out
 
 
+def test_rename_covers_subscript_assign_target():
+    """A renamed opaque name used as the object of an indexed write
+    (`local_10[i] = v`) must have that occurrence renamed too. A prior
+    version of `_rewrite_node` had no case for `MirSubscriptAssign`, so
+    the indexed write kept referencing the old name after every other
+    occurrence (here, the parameter declaration) was renamed -- emitting
+    code that references an identifier that no longer exists."""
+    mir_mod = _to_mir(
+        """
+        def fill(local_10: list[int], i: int, v: int) -> None:
+            local_10[i] = v
+        """
+    )
+
+    def fake(old: str, _ctx: dict) -> str:
+        return {"local_10": "xs"}[old]
+
+    llm_rename(mir_mod, llm_fill=fake)
+    out = emit_rust(mir_to_rust_lir(mir_mod))
+    assert "local_10" not in out
+    assert "xs[" in out
+
+
 def test_rename_skips_non_opaque_names():
     """Real names — `total`, `i`, `xs` — must not be touched."""
     mir_mod = _to_mir(

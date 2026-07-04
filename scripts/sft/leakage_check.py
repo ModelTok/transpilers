@@ -4,7 +4,7 @@ training set (token-Jaccard on the C++ unit). High overlap => the eval measures
 interpolation, not generalization."""
 import json, re
 from pathlib import Path
-REPO = Path("/home/bart/Github/transpilers")
+REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
 SFT = REPO / "data/sft/cpp_mojo"
 FENCE = re.compile(r"```cpp\n(.*?)```", re.S)
 

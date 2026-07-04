@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from turbovec import TurboQuantIndex
 
-RAG = Path("/home/bart/Github/transpilers/data/rag")
+RAG = Path(__file__).resolve().parents[2] / "data" / "rag"  # scripts/rag/<this file> -> repo root
 MODELS = ["jinaai/jina-embeddings-v2-base-code", "BAAI/bge-small-en-v1.5"]
 
 def load_model():

@@ -16,7 +16,7 @@ Outputs (data/sft/benchmark/):
 """
 import json, re, collections
 from pathlib import Path
-REPO = Path("/home/bart/Github/transpilers")
+REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
 DIV = REPO / "data/sft/diverse/verified.jsonl"
 OUT = REPO / "data/sft/benchmark"; OUT.mkdir(parents=True, exist_ok=True)
 THRESH = 0.6

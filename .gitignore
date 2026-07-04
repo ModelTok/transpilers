@@ -63,6 +63,7 @@ data/sft/flywheel_promotions.jsonl
 docs/flywheel_metrics.md
 
 # secrets / embedded vendored clone (added 2026-06-19)
+.env
 stateless transpilation/.env
 transpyle/
 

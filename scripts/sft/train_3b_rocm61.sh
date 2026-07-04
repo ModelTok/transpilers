@@ -29,7 +29,7 @@ export PYTORCH_ALLOC_CONF=expandable_segments:True
 # Keep roctracer quiet during backward — belt-and-suspenders
 export HSA_ENABLE_INTERRUPT=0
 
-REPO="/home/bart/Github/transpilers"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV="/root/venvs/lf61"
 LF="$VENV/bin/llamafactory-cli"
 CFG_P1="$REPO/data/sft/cpp_mojo/sft_3b_phase1.yaml"

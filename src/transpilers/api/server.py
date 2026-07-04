@@ -19,7 +19,9 @@ LLM configuration:
 
 from __future__ import annotations
 
+import hmac
 import os
+import subprocess
 from functools import lru_cache
 from importlib.metadata import version
 
@@ -57,7 +59,7 @@ def _check_auth(credentials: HTTPAuthorizationCredentials | None = Security(_bea
     api_key = os.getenv("TRANSPILER_API_KEY")
     if not api_key:
         return
-    if credentials is None or credentials.credentials != api_key:
+    if credentials is None or not hmac.compare_digest(credentials.credentials, api_key):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key")
 
 
@@ -166,7 +168,10 @@ def transpile_verify(req: VerifyRequest, _auth=Depends(_check_auth)):
 
     output = trace.output
     _, _, verify_fn = TARGETS[req.target]
-    compile_result = verify_fn(output)
+    try:
+        compile_result = verify_fn(output)
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(504, f"{req.target} compiler timed out") from exc
 
     structural = None
     if compile_result.ok and req.fidelity == "structural":

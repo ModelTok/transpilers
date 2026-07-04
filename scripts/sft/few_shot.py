@@ -12,7 +12,7 @@ better recall, but token-TFIDF already captures most of the signal for code.
 import json, math, re, functools
 from collections import Counter
 from pathlib import Path
-REPO = Path("/home/bart/Github/transpilers")
+REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
 SRC = REPO / "data/sft/diverse/verified.jsonl"
 
 def toks(s): return re.findall(r"[A-Za-z_]\w+", s)

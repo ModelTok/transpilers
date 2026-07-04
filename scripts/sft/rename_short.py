@@ -13,7 +13,7 @@ that still pass are kept. Usage: rename_short.py <in.jsonl> <out.jsonl> [limit]
 """
 import json, re, sys, importlib.util
 from pathlib import Path
-REPO = Path("/home/bart/Github/transpilers")
+REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
 _d = importlib.util.spec_from_file_location("dv", REPO/"scripts/sft/diff_verify.py")
 dv = importlib.util.module_from_spec(_d); sys.modules["dv"] = dv; _d.loader.exec_module(dv)
 

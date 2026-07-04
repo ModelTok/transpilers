@@ -2,7 +2,10 @@
 import json
 import os
 
-DATASET_DIR = "/home/bart/Github/transpilers/data/sft/cpp_mojo"
+DATASET_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "sft", "cpp_mojo",
+)  # scripts/sft/<this file> -> repo root
 
 for ds_name in ["mojo_acquisition", "cpp_mojo_translation"]:
     # Find the dataset file

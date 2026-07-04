@@ -137,6 +137,24 @@ def test_inputs_where_source_raises_are_dropped():
     assert 0 < r.total < 12
 
 
+def test_python_runner_times_out_on_infinite_loop(monkeypatch):
+    """`PythonRunner.run()` execs untrusted-shaped source in-process with no
+    subprocess boundary to kill. Without a wall-clock guard, a pathological
+    input (here, an infinite loop) hangs the caller forever. The timeout is
+    monkeypatched down so this test itself runs fast rather than actually
+    waiting out the real 5s default."""
+    import transpilers.verify.behavioral as behavioral
+
+    monkeypatch.setattr(behavioral, "_PY_EXEC_TIMEOUT_S", 0.2)
+    src = "def spin(a, b):\n    while True:\n        pass\n"
+    samples = behavioral.PythonRunner().run(
+        src, "spin", [(1, 2)], param_tags=["int", "int"], ret_tag="int"
+    )
+    assert len(samples) == 1
+    assert samples[0].ok is False
+    assert "timeout" in samples[0].error
+
+
 def test_list_return_value_comparison():
     src = "def sq(xs):\n    return [x * x for x in xs]\n"
     bad = "def sq(xs):\n    return [x + x for x in xs]\n"

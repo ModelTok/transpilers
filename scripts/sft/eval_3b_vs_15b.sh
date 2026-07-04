@@ -8,7 +8,7 @@
 #   bash scripts/sft/eval_3b_vs_15b.sh 2>&1 | tee eval_3b_vs_15b.log
 set -euo pipefail
 
-REPO="/home/bart/Github/transpilers"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV="/root/venvs/lf"
 SCRIPT="$REPO/scripts/sft/eval_transbench.py"
 ADAPTER_15B="$REPO/data/sft/cpp_mojo/adapter_15b_v2"

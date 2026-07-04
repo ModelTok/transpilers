@@ -20,6 +20,7 @@ from transpilers.ir.types import (
     ListT,
     NoneT,
     StrT,
+    StructT,
     UnknownT,
 )
 from transpilers.passes.cpp_ground_truth import apply_ground_truth
@@ -192,7 +193,12 @@ def test_parse_cpp_ground_truth_records_template_signature():
     )
     assert qualified is not None, f"missing bubble_sort in {list(truth.func_returns)}"
     assert truth.func_returns[qualified] == NoneT()
-    assert truth.func_params[qualified][0] == ListT(elem="T")
+    # The element is an unresolved template parameter name ("T"), not a
+    # concrete type -- carried as StructT("T") (a real Type instance, per
+    # the ListT.elem: Type contract) rather than a bare Python str, which
+    # every backend's `isinstance(ty.elem, ...)` type-lattice walk would
+    # otherwise choke on.
+    assert truth.func_params[qualified][0] == ListT(elem=StructT(name="T"))
 
 
 # ---------------------------------------------------------------------------
@@ -294,3 +300,46 @@ def test_e2e_template_definition_emits_todo_stub():
         "T add(T a, T b) { return a + b; }\n"
     )
     assert "TODO[port]" in out
+
+
+# ---------------------------------------------------------------------------
+# _default_init_for: trailing struct-init fields without an explicit ctor arg
+# ---------------------------------------------------------------------------
+
+
+def test_default_init_for_unknown_field_type_stays_a_hole():
+    """`Foo f(1);` where `Foo` has a trailing field of a type that isn't
+    int/float/bool/str/list (here, a dict) must NOT fabricate an `IntT(0)`
+    default -- this is an algorithmic pass, which must not invent a value
+    for a type it doesn't know how to default-construct. A prior version
+    silently defaulted every such field to integer 0, so e.g. a later
+    `self.m["key"]`-style use on that field would emit code indexing an
+    integer. The fix emits a `MirRaw` hole (rendered as `TODO[port]` by
+    every backend) instead."""
+    module = hir.HirModule(
+        source_lang="cpp",
+        body=[
+            hir.HirStruct(
+                name="Foo",
+                fields=[
+                    hir.HirParam("x", "int"),
+                    hir.HirParam("m", "dict[str, int]"),
+                ],
+                methods=[],
+            ),
+            hir.HirFunction(
+                "make",
+                params=[],
+                return_annotation="Foo",
+                body=[hir.HirReturn(value=hir.HirStructInit(
+                    name="Foo", args=[hir.HirIntLiteral(value=1)],
+                ))],
+            ),
+        ],
+    )
+    mir_mod = hir_to_mir(module)
+    struct_init = mir_mod.functions[0].body[0].value
+    field_values = dict(struct_init.field_values)
+    default_val = field_values["m"]
+    assert isinstance(default_val, mir.MirRaw)
+    assert isinstance(default_val.ty, UnknownT)

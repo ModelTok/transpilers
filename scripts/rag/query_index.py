@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 from turbovec import TurboQuantIndex
 
-RAG = Path("/home/bart/Github/transpilers/data/rag")
+RAG = Path(__file__).resolve().parents[2] / "data" / "rag"  # scripts/rag/<this file> -> repo root
 
 @functools.lru_cache(maxsize=1)
 def _load():
