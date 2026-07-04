@@ -17,6 +17,7 @@ this works against any reasonably recent libclang.
 from __future__ import annotations
 
 import os as _os
+import re as _re
 
 import clang.cindex as ci
 
@@ -145,6 +146,35 @@ def _compute_user_first_line() -> int:
     from .preprocess import PARSER_PREAMBLE
     return len((PARSER_PREAMBLE + _project_preamble()).splitlines())
 
+_UNKNOWN_TYPE_NAME_RE = _re.compile(r"unknown type name '([A-Za-z_][A-Za-z0-9_]*)'")
+_SCREAMING_MACRO_RE = _re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
+def _macro_like_unknown_types(tu: ci.TranslationUnit) -> set[str]:
+    """Names from "unknown type name '...'" diagnostics that look like an
+    export / calling-convention macro (``FOO_API``, ``FOO_EXPORT``,
+    ``DLLEXPORT``, ``WINAPI``, ...) rather than a real missing type.
+
+    Real-world C++ libraries almost universally gate their public API with
+    a macro like this, defined in a header we never see (every #include is
+    stripped before libclang runs, by design -- see ``preprocess.py``). Left
+    alone, every function/class declaration in the file fails to parse on a
+    token that carries no type information at all. SCREAMING_CASE is a
+    near-universal C/C++ convention for macros and essentially never used
+    for a real type name, so treating it as an empty ``-D`` define is safe:
+    it can only remove a no-op qualifier, never rename or reinterpret real
+    user code.
+    """
+    names: set[str] = set()
+    for d in tu.diagnostics:
+        if d.severity < ci.Diagnostic.Error:
+            continue
+        m = _UNKNOWN_TYPE_NAME_RE.search(d.spelling)
+        if m and _SCREAMING_MACRO_RE.match(m.group(1)):
+            names.add(m.group(1))
+    return names
+
+
 def parse_cpp(source: str):
     """Parse C++ source to HIR.
 
@@ -189,12 +219,23 @@ def parse_cpp(source: str):
     # top of the parser preamble from preprocess_cpp. Both are no-ops
     # when empty.
     preprocessed = preprocess_cpp(source) + _project_preamble()
-    tu = index.parse(
-        INPUT_NAME,
-        args=parse_args,
-        unsaved_files=[(INPUT_NAME, preprocessed)],
-        options=ci.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
-    )
+    # Retry with unresolved export/calling-convention macros (TOPOLOGIC_API,
+    # DLLEXPORT, WINAPI, ...) neutralized -- see _macro_like_unknown_types.
+    # Bounded by the number of distinct macro names actually seen, so this
+    # always terminates; real parse errors just surface on the final attempt.
+    defined_macros: set[str] = set()
+    tu = None
+    for _attempt in range(4):
+        tu = index.parse(
+            INPUT_NAME,
+            args=parse_args + [f"-D{name}=" for name in sorted(defined_macros)],
+            unsaved_files=[(INPUT_NAME, preprocessed)],
+            options=ci.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
+        )
+        new_macros = _macro_like_unknown_types(tu) - defined_macros
+        if not new_macros:
+            break
+        defined_macros |= new_macros
     _check_diagnostics(tu)
     _KNOWN_STRUCT_NAMES.clear()
     # First pass: record struct/class names (recursing into namespaces) so

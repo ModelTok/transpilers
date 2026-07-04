@@ -83,6 +83,57 @@ def test_preprocess_cpp_falls_back_when_no_clang():
     assert "#include" not in out
 
 
+def test_preprocess_cpp_strips_header_guard_when_no_clang():
+    """The `#ifndef NAME` / `#define NAME` (bare) / `#endif` header-guard
+    idiom is removed by the no-clang fallback path, same as the primary
+    (real-preprocessor) path."""
+    out = preprocess_cpp(
+        "#ifndef FOO_H\n#define FOO_H\nint x = 1;\n#endif\n",
+        clang="/no/such/clang",
+    )
+    assert "#ifndef" not in out
+    assert "#define FOO_H" not in out
+    assert "#endif" not in out
+    assert "int x = 1" in out
+
+
+def test_preprocess_cpp_preserves_real_conditional_when_no_clang():
+    """A real `#ifdef`/`#else`/`#endif` block (e.g. a DLL export macro
+    defined differently per platform -- the near-universal real-world
+    idiom this project's own corpus testing against Topologic surfaced)
+    must survive the no-clang fallback intact rather than have its
+    `#endif` stripped as if it were a header guard. A prior version of
+    the fallback stripped every `#endif` (and every bare `#define`)
+    unconditionally, which desynced this block's nesting and produced
+    unparseable output ("#else after #else")."""
+    src = (
+        "#ifdef _WIN32\n"
+        "#define FOO_API __declspec(dllexport)\n"
+        "#else\n"
+        "#define FOO_API\n"
+        "#endif\n"
+        "FOO_API void f();\n"
+    )
+    out = preprocess_cpp(src, clang="/no/such/clang")
+    assert out.count("#ifdef") == 1
+    assert out.count("#else") == 1
+    assert out.count("#endif") == 1
+    assert "FOO_API void f();" in out
+
+
+def test_parse_cpp_neutralizes_unresolved_export_macro():
+    """Real C++ libraries almost universally gate their public API with a
+    SCREAMING_CASE export/calling-convention macro (`FOO_API`, `DLLEXPORT`,
+    `WINAPI`, ...) defined in a header we never see (every #include is
+    stripped by design). Without neutralizing it, every declaration using
+    it fails to parse with "unknown type name" -- discovered testing
+    against a real-world corpus (github.com/wassimj/Topologic)."""
+    src = "TOPOLOGIC_API int add(int a, int b) { return a + b; }\n"
+    hir_module, _ = parse_cpp(src)
+    names = [f.name for f in hir_module.body if isinstance(f, hir.HirFunction)]
+    assert "add" in names
+
+
 def test_parser_preamble_declares_math_intrinsics():
     """`std::sqrt` / `std::swap` / `std::max` need declarations in the
     parser preamble so libclang doesn't error on the corpus. This

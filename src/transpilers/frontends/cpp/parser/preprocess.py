@@ -63,7 +63,17 @@ namespace std {
     template <typename T> void swap(T&, T&);
     template <typename T> struct totally_ordered { static const bool value = true; };
     template <typename T> struct equality_comparable { static const bool value = true; };
-    template <typename T, typename Alloc = int> class list {};
+    template <typename T, typename Alloc = int> class list {
+    public:
+        list();
+        void push_back(const T&); void push_front(const T&);
+        void pop_back(); void pop_front(); void clear();
+        bool empty() const; unsigned long size() const;
+        T& front(); const T& front() const;
+        T& back(); const T& back() const;
+        T* begin(); T* end();
+        const T* begin() const; const T* end() const;
+    };
     template <typename K, typename V> struct pair { K first; V second; };
     template <typename... T> struct tuple { tuple(); tuple(T...); };
     template <typename K, typename V> class _mapbase {
@@ -96,7 +106,8 @@ namespace std {
     using size_t = unsigned long;
     using ptrdiff_t = long;
     class string { public:
-        string(); unsigned long size() const; unsigned long length() const; bool empty() const;
+        string(); string(const char*); string(const string&);
+        unsigned long size() const; unsigned long length() const; bool empty() const;
         char& operator[](unsigned long); const char& operator[](unsigned long) const;
         char& at(unsigned long); const char& at(unsigned long) const;
         const char* begin() const; const char* end() const;
@@ -257,9 +268,9 @@ _LINEMARKER_RE = re.compile(r"^#\s*\d+\s+\"[^\"]+\".*$", re.MULTILINE)
 # the header (`#include<string>` vs `#include <string>`). The
 # `\s*` after `include` is the only thing keeping both forms working.
 _INCLUDE_RE = re.compile(r"^#\s*include\s*[<\"][^\"<>]+[>\"]\s*$", re.MULTILINE)
-_IFNDEF_RE = re.compile(r"^\s*#\s*ifndef\s+\S+\s*$", re.MULTILINE)
-_DEFINE_GUARD_RE = re.compile(r"^\s*#\s*define\s+\S+\s*$", re.MULTILINE)
-_ENDIF_RE = re.compile(r"^\s*#\s*endif.*$", re.MULTILINE)
+_IFNDEF_RE = re.compile(r"^\s*#\s*ifndef\s+(\S+)\s*$")
+_DEFINE_GUARD_RE = re.compile(r"^\s*#\s*define\s+(\S+)\s*$")
+_ENDIF_RE = re.compile(r"^\s*#\s*endif\b")
 # C++20 `requires` constraints that confuse our libclang + template
 # combination (the parser confuses `void` with a type-cast). Match
 # both the standalone form (`requires std::foo<T>` on its own line) and
@@ -268,16 +279,67 @@ _REQUIRES_LINE_RE = re.compile(r"^\s*requires\s+std::\S.*$", re.MULTILINE)
 _REQUIRES_INLINE_RE = re.compile(r"requires\s+std::\w+<[^>]*>\s*")
 
 
+def _strip_header_guard(text: str) -> str:
+    """Remove the `#ifndef NAME` / `#define NAME` (bare) / matching `#endif`
+    header-guard idiom, leaving every other conditional directive
+    (`#ifdef`, `#if defined(...)`, `#else`, and their `#endif`) untouched.
+
+    This has to track nesting depth rather than regex-match `#endif`/bare
+    `#define` globally: real-world headers routinely wrap feature/export
+    macros in `#ifdef X ... #else ... #endif` (e.g. a DLL-export macro
+    defined differently per platform). A prior version of this function
+    stripped *every* `#endif` and *every* bare `#define` line unconditionally,
+    which silently deleted the `#endif` closing such a block while leaving
+    its `#if`/`#else` behind -- corrupting the directive nesting so badly
+    that libclang's own preprocessor (which handles `#ifdef`/`#else`/`#endif`
+    natively and would have gotten this right on its own) then rejected the
+    file with "#else after #else" / "unterminated conditional directive".
+    Only a *paired* `#ifndef`+bare-`#define`+`#endif` is guaranteed to be a
+    no-op guard; only that pairing is safe to remove.
+    """
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    # Each stack entry is True if this #if-family level is a stripped guard.
+    guard_stack: list[bool] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        m_ifndef = _IFNDEF_RE.match(line)
+        if m_ifndef:
+            j = i + 1
+            while j < n and lines[j].strip() == "":
+                j += 1
+            m_define = _DEFINE_GUARD_RE.match(lines[j]) if j < n else None
+            if m_define and m_define.group(1) == m_ifndef.group(1):
+                guard_stack.append(True)
+                i = j + 1  # drop both the #ifndef and the #define line
+                continue
+            guard_stack.append(False)
+            out.append(line)
+            i += 1
+            continue
+        if _ENDIF_RE.match(line):
+            is_guard = guard_stack.pop() if guard_stack else False
+            if not is_guard:
+                out.append(line)
+            i += 1
+            continue
+        out.append(line)
+        i += 1
+    return "".join(out)
+
+
 def _strip_directives(text: str) -> str:
     """Remove cpp directives libclang does not need: linemarkers, includes,
     header guards, and C++20 `requires` clauses. Everything else
-    (including user `#define`s that did not fire, blank lines, etc.) is
-    preserved."""
+    (including user `#define`s that did not fire, blank lines, and real
+    `#ifdef`/`#if`/`#else`/`#endif` conditionals) is preserved -- libclang's
+    own preprocessor (invoked when we hand it this text) evaluates those
+    correctly on its own."""
     out = _LINEMARKER_RE.sub("", text)
     out = _INCLUDE_RE.sub("", out)
-    out = _IFNDEF_RE.sub("", out)
-    out = _DEFINE_GUARD_RE.sub("", out)
-    out = _ENDIF_RE.sub("", out)
+    out = _strip_header_guard(out)
     out = _REQUIRES_LINE_RE.sub("", out)
     out = _REQUIRES_INLINE_RE.sub("", out)
     return out

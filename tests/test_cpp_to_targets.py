@@ -138,6 +138,33 @@ def test_cpp_for_loop_desugars():
     assert "i += 1;" in out
 
 
+def test_cpp_std_list_range_for_to_mojo():
+    # std::list<T> is a plain opaque shim in the parser preamble (unlike
+    # std::vector<T>, which has a full iterator surface) -- so a real-world
+    # function range-iterating a std::list (found testing against
+    # github.com/wassimj/Topologic) previously failed to even parse with
+    # "invalid range expression ... no viable 'begin' function available".
+    out = _mojo(
+        """
+        int sum(const std::list<int>& xs) {
+            int total = 0;
+            for (const int x : xs) { total = total + x; }
+            return total;
+        }
+        """
+    )
+    assert "def sum(xs: List[Int]) -> Int:" in out
+
+
+def test_cpp_std_string_from_char_literal():
+    # `std::string("literal")` (a functional-style cast, the common way to
+    # construct a std::string from a string literal) previously failed to
+    # parse: the preamble's std::string shim declared only a default
+    # constructor, so libclang rejected the conversion.
+    out = _mojo('std::string greet() { return std::string("hi"); }')
+    assert 'return "hi"' in out
+
+
 def test_cpp_logical_ops_to_mojo():
     out = _mojo("bool both(bool a, bool b) { return a && b; }")
     assert "return a and b" in out
