@@ -22,6 +22,8 @@ Future work
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from transpilers.ir import mir
 from transpilers.ir.contracts import (
     OverflowBehavior,
@@ -277,6 +279,18 @@ def _visit_expr(node: mir.MirNode, env: dict[str, SemanticContract]) -> Semantic
 
 def _propagate_interprocedural(fn: mir.MirFunction, fn_map: FnMap) -> None:
     _ip_walk_body(fn.body, fn_map)
+    # `_ip_walk_node`'s MirCall case (below) reads `callee.contract.pure` to
+    # decide whether a call site is pure -- but until this line, `fn.contract`
+    # itself was never written, so it stayed at the MirNode default
+    # (WILDCARD, pure=False) forever. Every callee looked impure regardless
+    # of its actual body, so the whole fixed-point loop in `infer_contracts`
+    # converged instantly on "everything is impure" without ever converging
+    # on real interprocedural purity. Computing it here from the (now
+    # call-site-updated) body is what makes convergence meaningful: on each
+    # outer iteration, a function's purity can only improve once its
+    # callees' purity has been determined, exactly the fixed point the
+    # MAX_ITER loop already exists to reach.
+    fn.contract = replace(fn.contract, pure=_body_is_pure(fn.body))
 
 
 def _ip_walk_body(nodes: list[mir.MirNode], fn_map: FnMap) -> None:
@@ -320,6 +334,55 @@ def _ip_walk_node(node: mir.MirNode, fn_map: FnMap) -> None:
         return
     for child in _node_children(node):
         _ip_walk_node(child, fn_map)
+
+
+def _body_is_pure(nodes: list[mir.MirNode]) -> bool:
+    """True iff no call reachable from *nodes* is known-impure, after
+    `_ip_walk_body` has already resolved known-callee call sites' purity
+    in place. Mirrors `_ip_walk_node`'s statement-level traversal (the
+    interprocedural walker doesn't recurse through `_node_children` for
+    statement kinds, only for expressions) so every call site is visited."""
+    for n in nodes:
+        if _stmt_or_expr_is_impure(n):
+            return False
+    return True
+
+
+def _stmt_or_expr_is_impure(node: mir.MirNode) -> bool:
+    if isinstance(node, (mir.MirCall, mir.MirMethodCall)) and not node.contract.pure:
+        return True
+    if isinstance(node, mir.MirCall):
+        return any(_stmt_or_expr_is_impure(a) for a in node.args)
+    if isinstance(node, mir.MirAssign):
+        return _stmt_or_expr_is_impure(node.value)
+    if isinstance(node, mir.MirReturn):
+        return node.value is not None and _stmt_or_expr_is_impure(node.value)
+    if isinstance(node, mir.MirIf):
+        return (
+            _stmt_or_expr_is_impure(node.test)
+            or any(_stmt_or_expr_is_impure(n) for n in node.body)
+            or any(_stmt_or_expr_is_impure(n) for n in node.orelse)
+        )
+    if isinstance(node, mir.MirWhile):
+        return _stmt_or_expr_is_impure(node.test) or any(
+            _stmt_or_expr_is_impure(n) for n in node.body
+        )
+    if isinstance(node, mir.MirForRange):
+        return (
+            _stmt_or_expr_is_impure(node.start)
+            or _stmt_or_expr_is_impure(node.stop)
+            or (node.step is not None and _stmt_or_expr_is_impure(node.step))
+            or any(_stmt_or_expr_is_impure(n) for n in node.body)
+        )
+    if isinstance(node, mir.MirFieldAssign):
+        return _stmt_or_expr_is_impure(node.obj) or _stmt_or_expr_is_impure(node.value)
+    if isinstance(node, mir.MirSubscriptAssign):
+        return (
+            _stmt_or_expr_is_impure(node.obj)
+            or _stmt_or_expr_is_impure(node.index)
+            or _stmt_or_expr_is_impure(node.value)
+        )
+    return any(_stmt_or_expr_is_impure(c) for c in _node_children(node))
 
 
 def _node_children(node: mir.MirNode) -> list[mir.MirNode]:
