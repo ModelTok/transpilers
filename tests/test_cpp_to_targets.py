@@ -347,6 +347,25 @@ def test_cpp_class_to_mojo_struct():
     assert "def sum(self) -> Int:" in out
 
 
+def test_cpp_unqualified_sibling_method_call_gets_self():
+    # `cube()` calls `square(x)` with no `this->`/qualifier -- valid C++ via
+    # implicit member lookup (works even for a *static* sibling method, as
+    # here). Every backend's struct methods aren't free functions, so the
+    # call must be qualified with `self.` or the emitted target can't reach
+    # the method at all (Mojo: "cannot access method directly").
+    src = """
+        class MathUtil {
+        public:
+            static int square(int x) { return x * x; }
+            static int cube(int x) { return x * square(x); }
+        };
+    """
+    out = _mojo(src)
+    assert "self.square(x)" in out
+    rust = _rust(src)
+    assert "self.square(x)" in rust
+
+
 _CLASS_SRC = """
 class Point {
 public:

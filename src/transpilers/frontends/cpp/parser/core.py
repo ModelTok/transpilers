@@ -1355,6 +1355,18 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
         # case above).
         return hir.HirCall(func="__cpp_overloaded_op__", args=[_convert_expr(a) for a in kids[1:]])
     args = [_convert_expr(a) for a in kids[1:]]
+    # Unqualified call to another method of the same class (`square(x)` inside
+    # `cube()`, relying on implicit `this->`/no-qualifier lookup — including
+    # calls to a *static* sibling method, which C++ also permits unqualified).
+    # libclang still resolves the callee to a CXX_METHOD even with no explicit
+    # receiver; every backend's struct methods take an explicit `self`
+    # (mirroring how an explicit `this->square(x)` / `self.square(x)` lowers
+    # here — see the MEMBER_REF_EXPR branch above), so without this the
+    # emitted call has no way to reach the method at all in a target where
+    # methods aren't free functions (Mojo: "cannot access method directly").
+    referenced = callee.referenced
+    if referenced is not None and referenced.kind == CursorKind.CXX_METHOD:
+        return hir.HirMethodCall(receiver=hir.HirName(name="self"), method=name, args=args)
     # SIMD intrinsic lifting: turn Intel `_mm*` calls into semantic HIR
     # operations on SIMD-typed values. Mojo will emit idiomatic `a + b`
     # on SIMD types; other targets fall back to the original call form.

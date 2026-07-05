@@ -216,6 +216,19 @@ def main(argv: list[str] | None = None) -> int:
             "verifier and targeted repair"
         ),
     )
+    parser.add_argument(
+        "--include-dir", "-I",
+        dest="include_dirs",
+        action="append",
+        default=[],
+        help=(
+            "cpp/c only: search directory for transitively resolving local "
+            "#include \"X.h\" headers (base classes, shared typedefs) so a "
+            "multi-file project's entry point becomes a self-contained "
+            "translation unit. Repeatable. The entry file's own directory is "
+            "always searched first, even without this flag."
+        ),
+    )
     args = parser.parse_args(argv)
 
     source_lang = args.source_lang or EXT_TO_SOURCE.get(args.source.suffix)
@@ -235,6 +248,14 @@ def main(argv: list[str] | None = None) -> int:
     # may be a non-UTF-8 binary that read_text would reject.
     if source_lang == "asm":
         src_input = str(args.source)
+    elif source_lang in ("c", "cpp") and args.include_dirs:
+        # Opt-in (only when -I is given, so every existing single-file/no-flag
+        # invocation is byte-for-byte unaffected): transitively inline local
+        # #include "X.h" headers reachable from the entry file, so a
+        # multi-file project's class declarations are visible to the parser
+        # instead of failing with "use of undeclared identifier".
+        from transpilers.frontends.cpp.parser.includes import resolve_local_includes
+        src_input = resolve_local_includes(args.source, include_dirs=args.include_dirs)
     else:
         # Legacy Fortran/C/C++ sources often carry non-UTF-8 bytes (e.g. the
         # © in author headers, latin-1 names), so decode leniently.
