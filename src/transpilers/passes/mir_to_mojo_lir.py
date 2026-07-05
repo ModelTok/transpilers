@@ -57,6 +57,36 @@ _BUILTIN_MAP = {
 }
 
 
+def _foreign_struct_names(module: mir.MirModule) -> set[str]:
+    """Every `StructT` name reachable from a function/method signature or a
+    struct field's declared type -- covers params, return types, and
+    fields, which is where a type the parser resolved via a project-
+    preamble shim (see docs/occt_preamble.hpp) but the user's own code
+    never declared as a struct will actually show up. Doesn't walk into
+    local-variable declarations inside function bodies; that would need a
+    param/field/return type carrying the same name too in every practical
+    case this is meant to catch."""
+    names: set[str] = set()
+
+    def note(ty) -> None:
+        if isinstance(ty, StructT):
+            names.add(ty.name)
+
+    def scan_fn(fn: mir.MirFunction) -> None:
+        note(fn.return_type)
+        for p in fn.params:
+            note(p.ty)
+
+    for fn in module.functions:
+        scan_fn(fn)
+    for struct in module.structs:
+        for f in struct.fields:
+            note(f.ty)
+        for m in struct.methods:
+            scan_fn(m)
+    return names
+
+
 def _uses_dict(fn) -> bool:
     """True if the function signature or body involves a Dict (whose subscript
     read raises in Mojo, requiring `raises`)."""
@@ -101,6 +131,17 @@ class _MojoLowering(MirLoweringBase):
     def lower_module(self, module: mir.MirModule) -> lir.MojoModule:
         self._used_math.clear()
         items: list[lir.LirNode] = []
+        # Struct types the parser resolved (e.g. via a project-preamble shim
+        # for a third-party library -- see docs/occt_preamble.hpp) but that
+        # the user's own code never declared: emit a minimal opaque
+        # placeholder for each, or every reference to it is a compile-time
+        # "use of unknown declaration" in the *output*, even though libclang
+        # itself was perfectly happy to resolve it during parsing. One dummy
+        # field (rather than none) matters: an empty struct doesn't satisfy
+        # `ImplicitlyCopyable` the same way in this Mojo version.
+        declared = {s.name for s in module.structs}
+        for name in sorted(_foreign_struct_names(module) - declared):
+            items.append(lir.MojoStruct(name=name, fields=[("_opaque", "Int")], methods=[]))
         for struct in module.structs:
             items.extend(self.lower_struct_items(struct))
         for fn in module.functions:

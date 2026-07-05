@@ -61,22 +61,57 @@ real class hierarchies.
    *zero* fields (e.g. a static-method-only utility class like `Bitwise`
    itself) — `struct Empty {\n,\n}` is a syntax error, not just cosmetic.
 
-## Honest current state
+7. **The Mojo backend now auto-emits a minimal opaque placeholder struct**
+   for any foreign type the parser resolved (e.g. via the OCCT preamble
+   shim above) but the user's own code never declared — otherwise every
+   reference to it in the *emitted* Mojo is "use of unknown declaration",
+   even though libclang parsed it fine. Verified working for the realistic
+   case of storing/passing an opaque value through without calling methods
+   on it directly (a struct field of the foreign type, e.g.).
 
-With every fix above, `TopologicCore/src/Bitwise.cpp` — a self-contained
-utility class with no OCCT-typed *parameters* of its own — transpiles to
-Mojo and compiles with the real compiler end-to-end
-(`--fidelity idiomatic --verify`).
+## Honest current state: 0/51 `TopologicCore` files transpile-and-compile
 
-The rest of `TopologicCore` remains blocked, and will stay blocked without
-substantially more investment: every non-trivial class's own logic (not
-just an incidental macro-header dependency) constructs and manipulates real
-OCCT geometry objects (`TopoDS_Vertex`, `Geom_Surface`, `BRepBuilderAPI_*`,
-...) — 111 distinct OCCT headers across the corpus, ~400 uses of
-`TopoDS_Shape` alone. Getting those files to a *compiling* Mojo output
-would need a real OCCT binding for Mojo (which doesn't exist) or a
-purpose-built, much larger opaque-type shim covering real method surfaces
-for dozens of OCCT classes — a project on the scale of the engine itself,
-not a bug-fixing pass. `transpilers.lift` (the never-refuse C++→Python
-engine) already handles this gracefully today by degrading unresolvable
-constructs to `# TODO[lift]` stubs, but only targets Python, not Mojo.
+Every one of the 51 files in `TopologicCore/src/` still fails end-to-end
+(`transpile ... --fidelity idiomatic --verify`), even with every fix above
+and the OCCT shim. But *why* they fail changed meaningfully, and the
+remaining wall is now precisely characterized rather than "everything dies
+at parse":
+
+- **~45 files**: still fail at `libclang parse errors` — they transitively
+  pull in an OCCT header the shim doesn't cover (only `TopoDS_Shape` /
+  `TopAbs_ShapeEnum` are declared; the corpus uses 111 distinct OCCT
+  headers, ~400 uses of `TopoDS_Shape` alone).
+- **`Bitwise.cpp`**: now parses *completely* (including `Utilities.h`'s
+  `OcctShapeComparator`) and reaches real Mojo compilation, failing only on
+  `rkOcctShape.TShape().operator->()` — the OCCT shim's `TopoDS_Shape` type
+  resolves for parsing, but its placeholder struct has no `TShape()` method
+  and `operator->()` has no Mojo/Python equivalent at all (there's no
+  transparent-dereference operator to map it to). Getting *this* to compile
+  needs per-method stubbing on every opaque OCCT type actually called into,
+  not just the type names — a materially bigger, unbounded-looking task
+  (every new file can call a new method on a new OCCT type) rather than a
+  fixed one, so it's left as future work rather than chased further here.
+- **5 files** (`IntAttribute`, `DoubleAttribute`, `ListAttribute`,
+  `Geometry`, `Surface`): now get past the OCCT wall entirely and hit a
+  *different*, pre-existing, unrelated engine limitation —
+  `class member TYPEDEF_DECL` (a nested type alias inside a class body,
+  e.g. `typedef std::shared_ptr<IntAttribute> Ptr;`, isn't modeled).
+
+None of this is specific to Topologic in the way it first looked: getting a
+real-world OCCT-based C++ project to a *compiling* Mojo target output would
+need a real OCCT binding for Mojo (which doesn't exist) or a purpose-built,
+much larger opaque-type shim covering real method surfaces for dozens of
+OCCT classes — a project on the scale of the engine itself, not a bug-
+fixing pass. `transpilers.lift` (the never-refuse C++→Python engine)
+already handles this gracefully today by degrading unresolvable constructs
+to `# TODO[lift]` stubs, but only targets Python, not Mojo.
+
+## What generalizes beyond Topologic
+
+Everything in this session except the OCCT shim itself is a real, general
+engine fix, each validated against the real Mojo 1.0.0b2 / rustc / zig /
+gfortran compilers (now installed in dev/CI environments that have them) —
+multi-file header resolution, the `_project_preamble()` ordering fix, the
+sibling-method-call and copy-constructor bugs, `operator()`, the overload
+dedup pass, the Rust empty-struct fix, and the foreign-struct placeholder
+all apply to *any* C++ input, not just this corpus.

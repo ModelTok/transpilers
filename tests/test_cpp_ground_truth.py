@@ -299,6 +299,35 @@ def test_project_preamble_declares_types_usable_by_source(monkeypatch):
     assert "def f(x: Float64) -> Float64:" in out
 
 
+def test_mojo_backend_emits_placeholder_for_foreign_preamble_struct(monkeypatch):
+    """A class declared only in a project-preamble shim (e.g. docs/occt_preamble.hpp
+    for a third-party library's opaque handle type) resolves fine during
+    parsing, but the user's own code never declares it as a MirStruct -- so
+    without this, every reference to it in the *emitted* Mojo is a "use of
+    unknown declaration" compile error, even though libclang itself parsed
+    it successfully. The Mojo backend now emits a minimal opaque placeholder
+    struct for any such foreign type actually used in a param/field/return
+    position. One dummy field (not zero) matters: an empty struct doesn't
+    satisfy Mojo's ImplicitlyCopyable the same way."""
+    from transpilers.cli.main import transpile_cpp_to_mojo
+    from transpilers.verify import mojo_compiles
+
+    monkeypatch.setenv("TRANSPILERS_CPP_PREAMBLE", "class ForeignType {};")
+    src = """
+        class Holder {
+        public:
+            ForeignType value;
+            int tag;
+            int getTag() { return tag; }
+        };
+    """
+    out = transpile_cpp_to_mojo(src)
+    assert "struct ForeignType(Copyable, Movable):" in out
+    assert "var value: ForeignType" in out
+    result = mojo_compiles(out)
+    assert result.ok, result.stderr
+
+
 def test_e2e_uses_clang_resolved_intrinsic_signature():
     """`std::sqrt(x)` -> Mojo emits `from std.math import sqrt`."""
     from transpilers.cli.main import transpile_cpp_to_mojo
