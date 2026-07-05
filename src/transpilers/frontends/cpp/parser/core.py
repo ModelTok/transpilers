@@ -1251,7 +1251,19 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     # materializes for brace-init `return {a, b};` when the type is fully known
     # (CALL_EXPR whose spelling is a known struct name). Emit a StructInit.
     if cursor.spelling in _KNOWN_STRUCT_NAMES:
-        args = [_convert_expr(c) for c in kids if c.kind != CursorKind.TYPE_REF]
+        real = [c for c in kids if c.kind != CursorKind.TYPE_REF]
+        # Copy/move ctor (`Vec(other)` -- including the implicit one libclang
+        # materializes for `return v;` / `Vec v2 = v1;`): a single arg whose
+        # own type is this same struct is a whole-value copy, not a partial
+        # fieldwise init. Collapse to just the argument (mirrors the
+        # copy/move-ctor handling for vector<T>/string/map below). Without
+        # this, hir_to_mir's trailing-field defaulting padded the "missing"
+        # fields with a fabricated value, e.g. `return v;` -> `Vec(v, 0)`.
+        if len(real) == 1:
+            arg_ty = (real[0].type.spelling or "").replace("const ", "").rstrip("&").strip()
+            if arg_ty == cursor.spelling:
+                return _convert_expr(real[0])
+        args = [_convert_expr(c) for c in real]
         return hir.HirStructInit(name=cursor.spelling, args=args)
 
     # std::vector<T> sized constructor: (n) or (n, fill). Emit a marker the Mojo

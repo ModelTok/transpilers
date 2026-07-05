@@ -235,12 +235,22 @@ class _MojoLowering(MirLoweringBase):
                 and ret not in ("Int", "Float64", "Bool", "String", "None")):
             return lir.MojoReturn(value=lir.MojoStructInit(
                 name=ret, field_values=[("", e) for e in val.elements]))
-        # List/Dict/String aren't ImplicitlyCopyable: `return localVar` needs an
-        # explicit copy (or `^`). Only a bare name needs it — rvalues (`[0]*n`,
-        # calls) are already owned temporaries.
-        if isinstance(val, lir.MojoName) and (
+        # List/Dict/String/struct values aren't ImplicitlyCopyable in this Mojo
+        # version: `return localVar` needs an explicit copy (or `^`). Only a
+        # bare name needs it — rvalues (`[0]*n`, calls, struct-init) are
+        # already owned temporaries. Struct-ness is checked off the returned
+        # value's own resolved type (not the return-type spelling), so this
+        # also covers passing a same-typed parameter straight through
+        # (confirmed against the real Mojo 1.0.0b2 compiler: even a plain
+        # `def f(v: Vec) -> Vec: return v` needs this, not just container/
+        # String types — a struct with real fields hits the exact same
+        # "cannot be implicitly copied, does not conform to
+        # 'ImplicitlyCopyable'" error).
+        needs_copy = (
             ret.startswith("List[") or ret.startswith("Dict[") or ret == "String"
-        ):
+            or isinstance(getattr(node.value, "ty", None), StructT)
+        )
+        if isinstance(val, lir.MojoName) and needs_copy:
             val = lir.MojoMethodCall(receiver=val, method="copy", args=[])
         return lir.MojoReturn(value=val)
 

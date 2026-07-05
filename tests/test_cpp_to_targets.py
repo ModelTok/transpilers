@@ -452,6 +452,43 @@ def test_cpp_class_compiles_as_rust():
     assert result.ok, result.stderr
 
 
+def test_cpp_return_struct_param_is_copy_not_fabricated_ctor():
+    # `return v;` where v is a struct-typed parameter is an implicit copy
+    # construction -- libclang materializes it as a CALL_EXPR to the
+    # struct's name with a single argument (the value being copied). The
+    # struct-constructor path mistook this for a *partial fieldwise* ctor
+    # call missing its trailing args, padding the missing `y` field with a
+    # fabricated 0: `return v;` emitted as `Vec(v, 0)`, silently wrong
+    # (and a compile error to boot, since `v` isn't an Int).
+    src = """
+        struct Vec {
+            int x;
+            int y;
+            Vec(int a, int b) : x(a), y(b) {}
+        };
+        Vec passthrough(Vec v) { return v; }
+    """
+    out = _mojo(src)
+    assert "Vec(v, 0)" not in out
+    assert "def passthrough(v: Vec) -> Vec:" in out
+    result = mojo_compiles(out)
+    assert result.ok, result.stderr
+
+
+def test_cpp_return_struct_param_compiles_in_rust_too():
+    src = """
+        struct Vec {
+            int x;
+            int y;
+            Vec(int a, int b) : x(a), y(b) {}
+        };
+        Vec passthrough(Vec v) { return v; }
+    """
+    out = _rust(src)
+    result = rust_compiles(out)
+    assert result.ok, result.stderr
+
+
 # ---------- refusals ----------
 
 def test_cpp_template_preserved_as_raw_hole():
