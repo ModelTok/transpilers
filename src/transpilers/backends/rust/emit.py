@@ -51,6 +51,12 @@ def _emit_item(item: lir.LirNode) -> str:
 
 
 def _emit_struct(s: lir.RustStruct) -> str:
+    if not s.fields:
+        # A fieldless struct (e.g. a class with only static methods) has no
+        # lines to join; the unconditional trailing ",\n}" below would
+        # otherwise emit "struct Empty {\n,\n}" -- a stray leading comma
+        # that's a syntax error, not just an empty-looking struct.
+        return f"struct {s.name} {{}}"
     field_lines = ",\n".join(f"{INDENT}{n}: {t}" for n, t in s.fields)
     return f"struct {s.name} {{\n{field_lines},\n}}"
 

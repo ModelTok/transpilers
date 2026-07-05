@@ -42,6 +42,7 @@ from transpilers.ir.lir.base import LirNode
 from transpilers.ir.mir import MirModule
 from transpilers.ir.provenance import ProvenanceMap
 from transpilers.passes import (
+    dedupe_overloads,
     hir_to_mir,
     infer_contracts,
     infer_types,
@@ -273,6 +274,10 @@ def run_stages(
     infer_contracts(mir_mod)
     if llm_rename_fill is not None:
         llm_rename(mir_mod, llm_fill=llm_rename_fill)
+    # Must run after type inference (needs resolved param/return types to
+    # detect a collision) and before lowering (every backend assumes unique
+    # names within a struct/module).
+    dedupe_overloads(mir_mod)
     lir_mod = lower(mir_mod)
     provenance = _build_provenance_map(hir_mod, mir_mod, lir_mod)
     return StageTrace(

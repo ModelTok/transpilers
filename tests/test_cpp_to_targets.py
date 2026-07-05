@@ -197,6 +197,21 @@ def test_cpp_operator_overloads_become_dunders():
     assert "fn __add__(&self, o: Vec) -> Vec" in rust
 
 
+def test_cpp_call_operator_becomes_dunder_call():
+    # `operator()` (functor call operator, e.g. a std::sort comparator) was
+    # missing from the operator->dunder table, so it fell through to the raw
+    # spelling `operator()` -- not a valid Mojo/Python identifier, breaking
+    # the emitted struct.
+    src = """
+        struct Comparator {
+            bool operator()(int a, int b) const { return a < b; }
+        };
+    """
+    out = _mojo(src)
+    assert "def __call__(self, a: Int, b: Int) -> Bool:" in out
+    assert "operator()" not in out
+
+
 def test_cpp_auto_var_type_inferred():
     # `auto x = expr;` carries no forced annotation, so the IR's own type
     # inference recovers x's type from the RHS: int from int+int, float from

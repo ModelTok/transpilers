@@ -283,6 +283,22 @@ def test_e2e_macro_expansion_flows_to_annotation():
     assert "var x: Int = 0" in out
 
 
+def test_project_preamble_declares_types_usable_by_source(monkeypatch):
+    """`$TRANSPILERS_CPP_PREAMBLE` (project-specific declarations, e.g. an
+    EnergyPlus-style `Real64` typedef) must be visible to the user's own
+    source -- a prior version appended it *after* the user code in the
+    combined translation unit, so any type/typedef it declared could never
+    actually be used by that code (C++ requires declare-before-use); it
+    only ever worked by coincidence for injections that don't need forward
+    visibility. Neither `TRANSPILERS_CPP_PREAMBLE` nor `_FILE` had any test
+    coverage before this fix."""
+    from transpilers.cli.main import transpile_cpp_to_mojo
+
+    monkeypatch.setenv("TRANSPILERS_CPP_PREAMBLE", "typedef double Real64;")
+    out = transpile_cpp_to_mojo("Real64 f(Real64 x) { return x * 2.0; }\n")
+    assert "def f(x: Float64) -> Float64:" in out
+
+
 def test_e2e_uses_clang_resolved_intrinsic_signature():
     """`std::sqrt(x)` -> Mojo emits `from std.math import sqrt`."""
     from transpilers.cli.main import transpile_cpp_to_mojo

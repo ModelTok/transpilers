@@ -217,8 +217,15 @@ def parse_cpp(source: str):
     parse_args = ["-std=c++20", "-x", "c++", "-nostdinc++"] + triple_args + predefs
     # Project-specific declarations (EnergyPlus-style Real64) layer on
     # top of the parser preamble from preprocess_cpp. Both are no-ops
-    # when empty.
-    preprocessed = preprocess_cpp(source) + _project_preamble()
+    # when empty. Must come BEFORE the user source (declare-before-use --
+    # a prior version appended this after preprocess_cpp(source), i.e.
+    # after the user's own code, so a type/typedef declared here could
+    # never actually be used by that code; only worked for cases that
+    # never exercised it, e.g. macro-only injections that the real `-E`
+    # step expands positionally regardless of preamble placement).
+    # _compute_user_first_line()'s line-count math is order-independent
+    # (same total line count either way), so this doesn't need updating.
+    preprocessed = _project_preamble() + preprocess_cpp(source)
     # Retry with unresolved export/calling-convention macros (TOPOLOGIC_API,
     # DLLEXPORT, WINAPI, ...) neutralized -- see _macro_like_unknown_types.
     # Bounded by the number of distinct macro names actually seen, so this
@@ -444,6 +451,7 @@ _OPERATOR_DUNDERS: dict[str, str] = {
     "&": "__and__", "|": "__or__", "^": "__xor__",
     "<<": "__lshift__", ">>": "__rshift__",
     "[]": "__getitem__",
+    "()": "__call__",
 }
 
 
