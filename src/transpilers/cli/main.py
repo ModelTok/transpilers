@@ -229,6 +229,19 @@ def main(argv: list[str] | None = None) -> int:
             "always searched first, even without this flag."
         ),
     )
+    parser.add_argument(
+        "--include-impls",
+        action="store_true",
+        help=(
+            "cpp/c only, requires --include-dir: also pull in each inlined "
+            "header's sibling .cxx/.cpp implementation file. A method "
+            "declared in a header but defined out-of-line in that header's "
+            "own .cxx is otherwise only a declaration in the amalgamated "
+            "translation unit this engine builds (no separate link step to "
+            "resolve the real body at) -- calling it from another inlined "
+            "method reports \"has no attribute\" without this."
+        ),
+    )
     args = parser.parse_args(argv)
 
     source_lang = args.source_lang or EXT_TO_SOURCE.get(args.source.suffix)
@@ -255,7 +268,8 @@ def main(argv: list[str] | None = None) -> int:
         # multi-file project's class declarations are visible to the parser
         # instead of failing with "use of undeclared identifier".
         from transpilers.frontends.cpp.parser.includes import resolve_local_includes
-        src_input = resolve_local_includes(args.source, include_dirs=args.include_dirs)
+        src_input = resolve_local_includes(
+            args.source, include_dirs=args.include_dirs, include_impls=args.include_impls)
     else:
         # Legacy Fortran/C/C++ sources often carry non-UTF-8 bytes (e.g. the
         # © in author headers, latin-1 names), so decode leniently.
