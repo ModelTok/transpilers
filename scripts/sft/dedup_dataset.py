@@ -10,7 +10,7 @@ Usage: dedup_dataset.py [threshold]   (analyze only if threshold omitted)
 """
 import json, re, sys, collections
 from pathlib import Path
-REPO = Path("/home/bart/Github/transpilers")
+REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
 SRC = REPO / "data/sft/diverse/verified.jsonl"
 OUT = REPO / "data/sft/diverse/verified_dedup.jsonl"
 

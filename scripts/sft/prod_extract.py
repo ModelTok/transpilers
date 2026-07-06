@@ -2,10 +2,10 @@
 """Extract FRESH EnergyPlus C++ functions (not in our training set) for a real
 production transpilation test of the best fine-tuned model. Brace-matched bodies,
 self-contained scalar signatures, a range of sizes. Writes prod_test_cpp.jsonl."""
-import json, re
+import json, os, re
 from pathlib import Path
-SRC = Path("/home/bart/Github/EnergyPlus/src/EnergyPlus")
-REPO = Path("/home/bart/Github/transpilers")
+SRC = Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus"))
+REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
 OUT = REPO / "data/sft/cpp_mojo/prod_test_cpp.jsonl"
 
 train = set()

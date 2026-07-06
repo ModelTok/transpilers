@@ -138,6 +138,33 @@ def test_cpp_for_loop_desugars():
     assert "i += 1;" in out
 
 
+def test_cpp_std_list_range_for_to_mojo():
+    # std::list<T> is a plain opaque shim in the parser preamble (unlike
+    # std::vector<T>, which has a full iterator surface) -- so a real-world
+    # function range-iterating a std::list (found testing against
+    # github.com/wassimj/Topologic) previously failed to even parse with
+    # "invalid range expression ... no viable 'begin' function available".
+    out = _mojo(
+        """
+        int sum(const std::list<int>& xs) {
+            int total = 0;
+            for (const int x : xs) { total = total + x; }
+            return total;
+        }
+        """
+    )
+    assert "def sum(xs: List[Int]) -> Int:" in out
+
+
+def test_cpp_std_string_from_char_literal():
+    # `std::string("literal")` (a functional-style cast, the common way to
+    # construct a std::string from a string literal) previously failed to
+    # parse: the preamble's std::string shim declared only a default
+    # constructor, so libclang rejected the conversion.
+    out = _mojo('std::string greet() { return std::string("hi"); }')
+    assert 'return "hi"' in out
+
+
 def test_cpp_logical_ops_to_mojo():
     out = _mojo("bool both(bool a, bool b) { return a && b; }")
     assert "return a and b" in out
@@ -168,6 +195,21 @@ def test_cpp_operator_overloads_become_dunders():
     # same rename flows to other targets from one HIR
     rust = _rust(src)
     assert "fn __add__(&self, o: Vec) -> Vec" in rust
+
+
+def test_cpp_call_operator_becomes_dunder_call():
+    # `operator()` (functor call operator, e.g. a std::sort comparator) was
+    # missing from the operator->dunder table, so it fell through to the raw
+    # spelling `operator()` -- not a valid Mojo/Python identifier, breaking
+    # the emitted struct.
+    src = """
+        struct Comparator {
+            bool operator()(int a, int b) const { return a < b; }
+        };
+    """
+    out = _mojo(src)
+    assert "def __call__(self, a: Int, b: Int) -> Bool:" in out
+    assert "operator()" not in out
 
 
 def test_cpp_auto_var_type_inferred():
@@ -229,6 +271,323 @@ def test_cpp_auto_var_type_inferred():
 )
 def test_cpp_to_mojo_compiles(src: str):
     out = _mojo(src)
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+# ---------- Real-world value-type idioms (found via OCCT's gp package) ----------
+
+def test_cpp_forward_declaration_not_double_registered():
+    # A forward decl (`class Vec;`) used only by-reference before the real
+    # definition, common in headers with circular type relationships, used
+    # to also get converted by _convert_top_level (no is_definition() guard)
+    # -- producing a second, empty HirStruct alongside the real one. Every
+    # backend then emitted the struct twice: a hard "invalid redefinition"
+    # compile error, not just a fidelity issue.
+    src = """
+        class Vec;
+        class Ax {
+        public:
+            Ax(const Vec& v) { }
+        };
+        class Vec {
+        public:
+            Vec() { }
+        };
+    """
+    out = _mojo(src)
+    assert out.count("struct Vec(") == 1
+
+
+def test_cpp_copy_ctor_in_var_decl_not_padded():
+    # `Vec aCopy = *this;` (copy-initialization, not a call expression) has
+    # its own struct-init detection path (_convert_var_decl) separate from
+    # _convert_call's -- fixing the copy/move-ctor collapse in one didn't
+    # fix the other. Left unfixed, hir_to_mir's trailing-field defaulting
+    # padded the "missing" second field with a fabricated 0, and even once
+    # padded, the Mojo backend emitted the non-compiling `Vec(self)`.
+    src = """
+        class Vec {
+        public:
+            Vec() { }
+            Vec(double x, double y) : myX(x), myY(y) { }
+            void Scale(double s) { myX = myX * s; myY = myY * s; }
+            Vec Scaled(double s) const {
+                Vec aCopy = *this;
+                aCopy.Scale(s);
+                return aCopy;
+            }
+        private:
+            double myX;
+            double myY;
+        };
+    """
+    out = _mojo(src)
+    assert "Vec(self)" not in out
+    assert "var aCopy: Vec = self.copy()" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_copy_ctor_in_var_decl_compiles():
+    src = """
+        class Vec {
+        public:
+            Vec() : myX(0), myY(0) { }
+            Vec(double x, double y) : myX(x), myY(y) { }
+            void Scale(double s) { myX = myX * s; myY = myY * s; }
+            Vec Scaled(double s) const {
+                Vec aCopy = *this;
+                aCopy.Scale(s);
+                return aCopy;
+            }
+        private:
+            double myX;
+            double myY;
+        };
+    """
+    out = _mojo(src)
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+def test_cpp_compound_assign_on_implicit_field():
+    # `myX *= s;` inside a method (implicit `this->`, no explicit `self.`)
+    # is a MEMBER_REF_EXPR lhs with a compound op -- the assignment-
+    # statement converter only special-cased plain `=` for MEMBER_REF_EXPR
+    # lhs, so `*=`/`+=`/etc on a bare field fell through to
+    # "assignment target MEMBER_REF_EXPR", silently degrading to a dropped
+    # `pass # TODO[port]` statement instead of the real mutation.
+    out = _mojo(
+        """
+        class Mat {
+        public:
+            Mat(double a) : myA(a) { }
+            void Scale(double s) { myA *= s; }
+        private:
+            double myA;
+        };
+        """
+    )
+    assert "self.myA = self.myA * s" in out
+    assert "TODO[port]" not in out
+
+
+def test_cpp_compound_assign_operator_overload_dunders():
+    # operator+=/-=/*=//=  were missing from the operator-> dunder table
+    # (only plain operator() had been added, for a different bug) -- every
+    # target emitted the literal invalid identifier `operator+=` etc.
+    out = _mojo(
+        """
+        class Vec {
+        public:
+            Vec(double x) : myX(x) { }
+            Vec& operator+=(const Vec& o) { myX += o.myX; return *this; }
+        private:
+            double myX;
+        };
+        """
+    )
+    assert "def __iadd__" in out
+    assert "def operator+=" not in out
+
+
+def test_cpp_unary_minus_is_neg_not_sub():
+    # A member `operator-()` with no explicit params (unary negation) was
+    # mapped to the same `__sub__` dunder as binary `operator-(other)` --
+    # producing a zero-argument `__sub__`, which every target's own
+    # arity-checked dunder machinery rejects (Mojo: "'__sub__' requires 2
+    # operands").
+    out = _mojo(
+        """
+        class Vec {
+        public:
+            Vec(double x) : myX(x) { }
+            Vec operator-() const { return Vec(-myX); }
+        private:
+            double myX;
+        };
+        """
+    )
+    assert "def __neg__" in out
+    assert "def __sub__" not in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_unary_minus_compiles():
+    out = _mojo(
+        """
+        class Vec {
+        public:
+            Vec(double x) : myX(x) { }
+            Vec operator-() const { return Vec(-myX); }
+        private:
+            double myX;
+        };
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+def test_cpp_qualified_static_call_not_treated_as_self_call():
+    # An unqualified sibling-method call (`square(x)` inside `cube()`) is
+    # deliberately rewritten to `self.square(x)` -- Mojo has no free-
+    # function fallback for methods. But `OtherClass::staticMethod()`
+    # (explicitly qualified) also resolves to a CXX_METHOD cursor, and
+    # without checking for the `::` token, got the identical rewrite:
+    # `self.staticMethod()` -- silently calling the *wrong* method (if one
+    # of that name even exists on self) instead of the real cross-class one.
+    out = _mojo(
+        """
+        class Tol {
+        public:
+            static double Small() { return 1e-9; }
+        };
+        class Foo {
+        public:
+            bool Check(double a) { return a <= Tol::Small(); }
+        };
+        """
+    )
+    assert "self.Small()" not in out
+
+
+def test_cpp_defaulted_special_member_skipped():
+    # `Vec& operator=(const Vec&) = default;` still reports
+    # is_definition() == True in libclang (it's compiler-generated, but a
+    # real definition) -- without checking is_default_method() too, the
+    # engine tried to convert a method with *no body at all*, producing a
+    # garbled/empty method instead of skipping it like any other
+    # declared-but-not-defined member.
+    out = _mojo(
+        """
+        class Vec {
+        public:
+            Vec() { }
+            Vec(double x) : myX(x) { }
+            Vec(const Vec&) = default;
+            Vec& operator=(const Vec&) = default;
+        private:
+            double myX;
+        };
+        """
+    )
+    assert "operator=" not in out
+
+
+def test_cpp_plain_operator_assign_on_implicit_field():
+    # `vxdir = theV;` inside a method, where vxdir's type has a user (even
+    # `= default`ed) operator=, desugars in the AST to a CALL_EXPR whose
+    # first child is the MEMBER_REF_EXPR *being assigned* (`vxdir`), not a
+    # normal `object.method(args)` receiver. Treating it as an ordinary
+    # method call (the pre-existing MEMBER_REF_EXPR-callee branch) produced
+    # nonsense: `self.vxdir(operator=, theV)` -- calling the field itself
+    # with the operator-name decl-ref as a bogus first argument.
+    out = _mojo(
+        """
+        class Dir {
+        public:
+            Dir() { }
+            Dir(double x) : myX(x) { }
+            Dir& operator=(const Dir&) = default;
+        private:
+            double myX;
+        };
+        class Ax {
+        public:
+            Ax() { }
+            void SetVx(Dir theV) { vxdir = theV; }
+        private:
+            Dir vxdir;
+        };
+        """
+    )
+    assert "self.vxdir = theV.copy()" in out
+    assert "operator=" not in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_plain_operator_assign_on_implicit_field_compiles():
+    out = _mojo(
+        """
+        class Dir {
+        public:
+            Dir() : myX(0) { }
+            Dir(double x) : myX(x) { }
+            Dir& operator=(const Dir&) = default;
+        private:
+            double myX;
+        };
+        class Ax {
+        public:
+            Ax() : vxdir(0) { }
+            void SetVx(Dir theV) { vxdir = theV; }
+        private:
+            Dir vxdir;
+        };
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_transitive_mut_self_via_user_method_call():
+    # Mojo's `mut self` requirement was only detected for a small hardcoded
+    # list of STL-container method names (append/pop/clear/...) calling
+    # into a self-rooted receiver. A method that mutates self by calling
+    # *another user-defined method* that itself mutates self (`Multiplied()`
+    # calling `self.Multiply(x)`) needs `mut self` too, transitively -- this
+    # is the standard mutate-in-place / return-a-copy pairing found
+    # throughout real value types (OCCT's gp_* package, but not only it),
+    # and was previously left as an immutable `self`, which the real Mojo
+    # compiler rejects ("invalid use of mutating method on rvalue").
+    out = _mojo(
+        """
+        class Mat {
+        public:
+            Mat(double a) : myA(a) { }
+            void Multiply(double s) { myA *= s; }
+            Mat Multiplied(double s) const {
+                Mat aCopy = *this;
+                aCopy.Multiply(s);
+                return aCopy;
+            }
+        private:
+            double myA;
+        };
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_return_field_of_struct_type_compiles():
+    # `return self.field;` where the field's own type is a struct hit the
+    # same "cannot be implicitly copied" restriction a bare `return
+    # localVar` does -- but the existing fix only checked `node.value.ty`,
+    # which infer_types never populates for a MirFieldAccess (no
+    # struct-field table available to it), so it silently missed every
+    # "return one of my own struct-typed fields" call site.
+    out = _mojo(
+        """
+        class Dir {
+        public:
+            Dir() : myX(0) { }
+            Dir(double x) : myX(x) { }
+        private:
+            double myX;
+        };
+        class Ax {
+        public:
+            Ax() : vxdir(0) { }
+            Dir Direction() const { return vxdir; }
+        private:
+            Dir vxdir;
+        };
+        """
+    )
     result = mojo_compiles(out)
     assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
 
@@ -320,6 +679,25 @@ def test_cpp_class_to_mojo_struct():
     assert "def sum(self) -> Int:" in out
 
 
+def test_cpp_unqualified_sibling_method_call_gets_self():
+    # `cube()` calls `square(x)` with no `this->`/qualifier -- valid C++ via
+    # implicit member lookup (works even for a *static* sibling method, as
+    # here). Every backend's struct methods aren't free functions, so the
+    # call must be qualified with `self.` or the emitted target can't reach
+    # the method at all (Mojo: "cannot access method directly").
+    src = """
+        class MathUtil {
+        public:
+            static int square(int x) { return x * x; }
+            static int cube(int x) { return x * square(x); }
+        };
+    """
+    out = _mojo(src)
+    assert "self.square(x)" in out
+    rust = _rust(src)
+    assert "self.square(x)" in rust
+
+
 _CLASS_SRC = """
 class Point {
 public:
@@ -387,6 +765,43 @@ def test_cpp_class_compiles_as_rust():
         };
         """
     )
+    result = rust_compiles(out)
+    assert result.ok, result.stderr
+
+
+def test_cpp_return_struct_param_is_copy_not_fabricated_ctor():
+    # `return v;` where v is a struct-typed parameter is an implicit copy
+    # construction -- libclang materializes it as a CALL_EXPR to the
+    # struct's name with a single argument (the value being copied). The
+    # struct-constructor path mistook this for a *partial fieldwise* ctor
+    # call missing its trailing args, padding the missing `y` field with a
+    # fabricated 0: `return v;` emitted as `Vec(v, 0)`, silently wrong
+    # (and a compile error to boot, since `v` isn't an Int).
+    src = """
+        struct Vec {
+            int x;
+            int y;
+            Vec(int a, int b) : x(a), y(b) {}
+        };
+        Vec passthrough(Vec v) { return v; }
+    """
+    out = _mojo(src)
+    assert "Vec(v, 0)" not in out
+    assert "def passthrough(v: Vec) -> Vec:" in out
+    result = mojo_compiles(out)
+    assert result.ok, result.stderr
+
+
+def test_cpp_return_struct_param_compiles_in_rust_too():
+    src = """
+        struct Vec {
+            int x;
+            int y;
+            Vec(int a, int b) : x(a), y(b) {}
+        };
+        Vec passthrough(Vec v) { return v; }
+    """
+    out = _rust(src)
     result = rust_compiles(out)
     assert result.ok, result.stderr
 

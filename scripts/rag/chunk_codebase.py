@@ -9,12 +9,12 @@ Output: data/rag/chunks.jsonl  — one chunk per line:
   {id, lang, kind, name, file, text}
 This is the corpus that gets embedded + indexed (turbovec) in stage 2.
 """
-import json, re
+import json, os, re
 from pathlib import Path
 
-EP_CPP = Path("/home/bart/Github/EnergyPlus/src/EnergyPlus")
-EP_MOJO = Path("/home/bart/Github/energyplus-mojo")
-TRANSP = Path("/home/bart/Github/transpilers")
+EP_CPP = Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus"))
+EP_MOJO = Path(os.environ.get("EP_MOJO_REPO", "/home/bart/Github/energyplus-mojo"))
+TRANSP = Path(__file__).resolve().parents[2]  # scripts/rag/<this file> -> repo root
 OUT = TRANSP / "data/rag"; OUT.mkdir(parents=True, exist_ok=True)
 
 # C++ function/method: RetType [Ns::]Name(args) {   (brace-matched body)
@@ -76,7 +76,9 @@ def main():
         if ".pixi" in str(f): continue
         chunks += chunk_mojo(f)
     # Mojo idiom docs (the syntax skill) as retrievable reference chunks
-    skill = Path("/home/bart/.claude/skills/mojo-syntax/SKILL.md")
+    skill = Path(os.environ.get(
+        "MOJO_SYNTAX_SKILL", str(Path.home() / ".claude/skills/mojo-syntax/SKILL.md")
+    ))
     if skill.exists():
         sec, buf, title = [], [], "mojo-syntax"
         for l in skill.read_text().splitlines():

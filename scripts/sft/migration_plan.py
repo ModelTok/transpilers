@@ -18,11 +18,13 @@ them, and reports:
 GPU-free. Output: data/sft/cpp_mojo/migration_plan.json
 """
 import json
+import os
 import re
 from pathlib import Path
 
-EP = Path("/home/bart/Github/EnergyPlus/src/EnergyPlus")
-OUT = Path("/home/bart/Github/transpilers/data/sft/cpp_mojo/migration_plan.json")
+EP = Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus"))
+REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
+OUT = REPO / "data/sft/cpp_mojo/migration_plan.json"
 
 SIG = re.compile(r"\bReal64\s+(?:[A-Za-z_]\w*::)?([A-Za-z_]\w+)\s*\(([^;{)]*)\)\s*\{")
 SCALAR_ARG = re.compile(r"^(?:const\s+)?(?:Real64|double|int|bool|Int64|Int)\b[^,&*]*$")

@@ -143,27 +143,34 @@ def _run_tests(
     *,
     target: str,
     test_inputs: list[dict],
-) -> tuple[bool, str]:
+) -> tuple[bool | None, str]:
     """Very lightweight test harness: run each test_input through the verifier.
 
     Each entry in *test_inputs* may have:
         ``input``  — string piped to stdin (optional)
         ``expected_output`` — string to compare stdout against (optional)
 
-    Returns (all_passed, error_message).
+    Returns (passed, message), where *passed* is:
+        ``False`` — compilation failed (a real, confirmed failure)
+        ``None``  — compilation passed but the functional test wasn't
+                    actually executed (no target has a runtime-execution
+                    runner yet, only a compile-only verifier)
+        ``True``  — reserved for when a real runner confirms the test passed
 
-    Note: this is a best-effort runner suitable for simple I/O tests.
-    For compiled languages, we only check compilation here (execution
-    requires language-specific runners that may not be installed).
+    Note: this is a best-effort runner suitable for simple I/O tests. For
+    every current target we only check compilation here (execution
+    requires language-specific runners that don't exist yet). Callers must
+    not treat ``None`` as a confirmed pass -- see ``repair()``.
     """
     verify = _VERIFIERS[target]
     result = verify(code)
     if not result.ok:
         return False, result.stderr
 
-    # If test_inputs provided but no runner available, report pass with caveat.
+    # If test_inputs provided but no runner available, say so honestly
+    # rather than claiming a functional pass we never checked.
     if test_inputs:
-        return True, "(compilation passed; runtime I/O tests not executed)"
+        return None, "(compilation passed; runtime I/O tests not executed -- no execution runner for this target)"
     return True, ""
 
 
@@ -228,7 +235,7 @@ def repair(
             test_ok, test_err = _run_tests(
                 current_code, target=target, test_inputs=test_inputs
             )
-            if not test_ok:
+            if test_ok is False:
                 error_msg = test_err
 
         pass_record = RepairPass(
@@ -242,7 +249,11 @@ def repair(
         history.append(pass_record)
 
         # --- Done if everything passed ---
-        if compile_ok and (test_inputs is None or test_ok):
+        # test_ok is False only for a *confirmed* test failure; None means
+        # "compiled but not actually run" (no execution runner exists yet),
+        # which we still accept rather than burn an LLM "fix" pass on code
+        # that already compiles and was never shown to be wrong.
+        if compile_ok and (test_inputs is None or test_ok is not False):
             return RepairResult(
                 code=current_code,
                 passed=True,

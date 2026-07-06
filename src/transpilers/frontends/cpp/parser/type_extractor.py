@@ -142,7 +142,7 @@ def _to_type(t: "ci.Type | None") -> Type:
     # We recurse through the libclang type to get the *actual*
     # template argument (e.g. `T` for an uninstantiated template,
     # `int` for a concrete instantiation). This is the difference
-    # between ``ListT(elem="T")`` (informative) and
+    # between ``ListT(elem=StructT("T"))`` (informative) and
     # ``ListT(elem=UnknownT())`` (a hole).
     #
     # NB: the `template_argument_type` accessor doesn't work on
@@ -169,12 +169,14 @@ def _to_type(t: "ci.Type | None") -> Type:
                 elem = _to_type(arg_ty)
                 # If the arg is a template type parameter (UNEXPOSED
                 # with spelling == the param name like 'T'), keep the
-                # *spelling* as the elem so the ground truth reads
-                # `ListT(elem="T")` rather than collapsing to
+                # *spelling* as a StructT (a real Type, not a bare str --
+                # every backend's type-lattice walk expects a Type
+                # instance) so the ground truth reads
+                # `ListT(elem=StructT("T"))` rather than collapsing to
                 # `ListT(elem=UnknownT())`. This is the difference
                 # between an informative ground truth and a hole.
                 if isinstance(elem, UnknownT) and arg_ty.spelling:
-                    return ListT(elem=arg_ty.spelling)
+                    return ListT(elem=StructT(name=arg_ty.spelling))
                 if not isinstance(elem, UnknownT):
                     return ListT(elem=elem)
         except Exception:

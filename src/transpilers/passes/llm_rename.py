@@ -190,6 +190,10 @@ def _rewrite_node(node: mir.MirNode, mapping: dict[str, str]) -> None:
     if isinstance(node, mir.MirSubscript):
         _rewrite_node(node.value, mapping)
         _rewrite_node(node.index, mapping)
+    if isinstance(node, mir.MirSubscriptAssign):
+        _rewrite_node(node.obj, mapping)
+        _rewrite_node(node.index, mapping)
+        _rewrite_node(node.value, mapping)
     if isinstance(node, mir.MirFieldAccess):
         _rewrite_node(node.value, mapping)
     if isinstance(node, mir.MirList):

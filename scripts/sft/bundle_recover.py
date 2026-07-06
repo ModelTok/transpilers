@@ -12,7 +12,7 @@ Emits additional verified C++->Mojo pairs to data/cpp_mojo_pairs_bundled.jsonl.
 """
 from __future__ import annotations
 
-import importlib.util, json, re, sys
+import importlib.util, json, os, re, sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -67,7 +67,7 @@ def topo(entry: str, byname: dict, names: set[str]) -> list[str] | None:
 
 
 def main():
-    fns = bcm.extract_fns(Path("/home/bart/Github/EnergyPlus/src/EnergyPlus"))
+    fns = bcm.extract_fns(Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus")))
     byname = {f.name: f for f in fns}
     names = set(byname)
     from transpilers.cli.main import transpile_cpp_to_mojo

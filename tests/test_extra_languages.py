@@ -6,6 +6,7 @@ refusal includes the architectural explanation."""
 
 from __future__ import annotations
 
+import os
 import shutil
 import textwrap
 
@@ -334,7 +335,21 @@ def test_asm_pipeline_end_to_end():
         c_src.write_text("int add(int a, int b) { return a + b; }\nint main() { return add(2, 3); }\n")
         subprocess.run(["cc", "-O0", "-fno-pic", "-no-pie", str(c_src), "-o", str(binary)], check=True)
 
-        # PyGhidra has a high cold-start cost; skipping by default to keep CI
-        # fast. Run manually via the CLI:
+        # PyGhidra has a high cold-start cost; skip by default so `just check`
+        # stays fast, but only when the caller hasn't explicitly asked for
+        # it. A prior version of this skip fired unconditionally regardless
+        # of Ghidra actually being installed (checked above), so the
+        # Assembly frontend got zero coverage even in environments where
+        # Ghidra is present and this would run quickly. Opt in with:
+        #     RUN_SLOW_GHIDRA_TESTS=1 pytest tests/test_extra_languages.py -k asm_pipeline
+        # or run the equivalent CLI command directly:
         #     transpile <binary> --source asm --target rust --verify
-        pytest.skip("PyGhidra cold-start too slow for default test run; covered by manual CLI run")
+        if not os.environ.get("RUN_SLOW_GHIDRA_TESTS"):
+            pytest.skip(
+                "PyGhidra cold-start too slow for default test run; "
+                "set RUN_SLOW_GHIDRA_TESTS=1 to run it (Ghidra is installed here)"
+            )
+
+        out = _t("asm", str(binary), target="rust")
+        assert out.strip()
+        assert "add" in out

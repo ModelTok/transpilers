@@ -13,10 +13,10 @@ constants), plus the shim's known helpers. Usage:
   dep_context.py            # demo: print context it would inject for each prod_test fn
   import dep_context; dep_context.context_for(cpp_body)  # -> str
 """
-import re, json, functools
+import functools, json, os, re
 from pathlib import Path
-EP = Path("/home/bart/Github/EnergyPlus/src/EnergyPlus")
-SFT = Path("/home/bart/Github/transpilers/data/sft/cpp_mojo")
+EP = Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus"))
+SFT = Path(__file__).resolve().parents[2] / "data/sft/cpp_mojo"  # scripts/sft/<this file> -> repo root
 
 SHIM = {  # always-available helpers (defined by ep_prelude.mojo / ep_oracle.h)
     "pow_2","pow_3","pow_4","pow_5","pow_6","pow_7","root_4","root_8","sign","mod",

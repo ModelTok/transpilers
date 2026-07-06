@@ -121,8 +121,8 @@ def _type_text(t: ci.Type) -> str:
         else:
             inner = _VECTOR_ELEM_ALIASES.get(inner, inner)
         return f"list[{inner}]"
-    # std::stack<T> / std::queue<T> -> list[T] (Mojo List, used as a stack/queue)
-    for _pre in ("stack<", "std::stack<", "queue<", "std::queue<"):
+    # std::list<T> / std::stack<T> / std::queue<T> -> list[T] (Mojo List)
+    for _pre in ("list<", "std::list<", "stack<", "std::stack<", "queue<", "std::queue<"):
         if cleaned.startswith(_pre) and cleaned.endswith(">"):
             inner = cleaned.split("<", 1)[1][:-1].strip()
             return f"list[{_VECTOR_ELEM_ALIASES.get(inner, inner)}]"

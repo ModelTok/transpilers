@@ -48,6 +48,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+from transpilers.verify._exec_timeout import ExecTimeout, time_limit
+from transpilers.verify.taxonomy import compiler_available
+
 
 @contextlib.contextmanager
 def _muffled():
@@ -62,7 +65,11 @@ def _muffled():
     with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
         yield
 
-from transpilers.verify.taxonomy import compiler_available
+# Wall-clock cap on a single in-process exec()+call of untrusted-shaped
+# source. Without it, a pathological input (infinite loop, runaway
+# recursion) hangs the caller forever -- there is no subprocess boundary to
+# kill here, unlike the native-compiler verifiers.
+_PY_EXEC_TIMEOUT_S = 5
 
 # ---------------------------------------------------------------------------
 # Type tags
@@ -360,16 +367,21 @@ class PythonRunner:
             for args in inputs:
                 ns: dict[str, Any] = {}
                 try:
-                    exec(compile(code, "<behavioral>", "exec"), ns)
-                    fn = ns.get(func_name)
-                    if not callable(fn):
-                        samples.append(
-                            IOSample(args=args, ok=False, error=f"no callable {func_name!r}")
-                        )
-                        continue
-                    value = fn(*args)
+                    with time_limit(_PY_EXEC_TIMEOUT_S):
+                        exec(compile(code, "<behavioral>", "exec"), ns)
+                        fn = ns.get(func_name)
+                        if not callable(fn):
+                            samples.append(
+                                IOSample(args=args, ok=False, error=f"no callable {func_name!r}")
+                            )
+                            continue
+                        value = fn(*args)
                     samples.append(
                         IOSample(args=args, token=canonical_token(value, ret_tag))
+                    )
+                except ExecTimeout:
+                    samples.append(
+                        IOSample(args=args, ok=False, error=f"timeout after {_PY_EXEC_TIMEOUT_S}s")
                     )
                 except Exception as exc:  # noqa: BLE001 — capturing source behavior
                     samples.append(
@@ -419,6 +431,7 @@ class RustRunner:
                 ["rustc", "--edition", "2021", "-A", "warnings", str(src), "-o", str(exe)],
                 capture_output=True,
                 text=True,
+                timeout=30,
             )
             if comp.returncode != 0:
                 # Whole batch fails to build — every input is a divergence.
@@ -694,7 +707,7 @@ def _infer_ret_tag(source: str, func_name: str, inputs: list[tuple]) -> str:
     """Run the oracle and map the first returned value to a type tag."""
     ns: dict[str, Any] = {}
     try:
-        with _muffled():
+        with _muffled(), time_limit(_PY_EXEC_TIMEOUT_S):
             exec(compile(source, "<behavioral>", "exec"), ns)
             fn = ns.get(func_name)
             if not callable(fn):
@@ -705,7 +718,7 @@ def _infer_ret_tag(source: str, func_name: str, inputs: list[tuple]) -> str:
                 except Exception:  # noqa: BLE001
                     continue
                 return _value_tag(v)
-    except Exception:  # noqa: BLE001
+    except (ExecTimeout, Exception):  # noqa: BLE001
         return "int"
     return "int"
 

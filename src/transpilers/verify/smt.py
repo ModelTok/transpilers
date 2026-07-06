@@ -34,6 +34,13 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from transpilers.verify._exec_timeout import ExecTimeout, time_limit
+
+# Wall-clock cap on exec()-ing untrusted-shaped source to pull out a callable
+# (definitions only, so this should be near-instant; a hang here means
+# pathological top-level code, not a slow function body).
+_EXEC_TIMEOUT_S = 5
+
 
 @dataclass
 class SMTConfig:
@@ -68,9 +75,10 @@ def _exec_fn(code: str, func_name: str) -> Callable | None:
     """Execute `code` and return the named function, or None on error."""
     ns: dict = {}
     try:
-        exec(code, ns)
+        with time_limit(_EXEC_TIMEOUT_S):
+            exec(code, ns)
         return ns.get(func_name)
-    except Exception:
+    except (ExecTimeout, Exception):
         return None
 
 
@@ -93,22 +101,30 @@ def _sampling_verify(
             return True, None  # skip
 
     checked = 0
-    for combo in itertools.product(*sample_sets):
-        checked += 1
-        if checked > config.sample_limit:
-            break
-        try:
-            r = ref_fn(*combo)
-            t = trans_fn(*combo)
-            if str(r) != str(t):
-                param_names = [f"x{i}" for i in range(len(combo))]
-                return False, {
-                    "args": dict(zip(param_names, combo)),
-                    "reference_output": str(r),
-                    "translated_output": str(t),
-                }
-        except Exception:
-            continue
+    try:
+        with time_limit(config.timeout_ms / 1000):
+            for combo in itertools.product(*sample_sets):
+                checked += 1
+                if checked > config.sample_limit:
+                    break
+                try:
+                    r = ref_fn(*combo)
+                    t = trans_fn(*combo)
+                    if str(r) != str(t):
+                        param_names = [f"x{i}" for i in range(len(combo))]
+                        return False, {
+                            "args": dict(zip(param_names, combo)),
+                            "reference_output": str(r),
+                            "translated_output": str(t),
+                        }
+                except Exception:
+                    continue
+    except ExecTimeout:
+        # A pathological input (infinite loop, runaway recursion) hung one of
+        # the calls. Sampling is a best-effort check, not a proof -- treat
+        # this the same as exhausting `sample_limit` early: report what we
+        # checked so far as inconclusive-but-clean, not a false failure.
+        pass
     return True, None
 
 

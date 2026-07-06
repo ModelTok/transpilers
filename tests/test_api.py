@@ -80,6 +80,30 @@ def test_verify_python_to_rust():
     assert isinstance(data["compile"]["ok"], bool)
 
 
+def test_verify_maps_compiler_timeout_to_504(monkeypatch):
+    """None of the native verifiers used to set a `subprocess` timeout, so a
+    pathological input could hang the compiler indefinitely -- a real DoS
+    vector on this network-facing, auth-optional endpoint. Now that they do,
+    the resulting `subprocess.TimeoutExpired` must surface as a clean 504,
+    not an unhandled 500."""
+    import subprocess
+
+    from transpilers.api import server
+
+    def _timeout(*_a, **_kw):
+        raise subprocess.TimeoutExpired(cmd=["rustc"], timeout=30)
+
+    monkeypatch.setattr(server, "TARGETS", {
+        **server.TARGETS,
+        "rust": (server.TARGETS["rust"][0], server.TARGETS["rust"][1], _timeout),
+    })
+    r = _client.post(
+        "/transpile/verify",
+        json={"source": _FIB_PY, "source_lang": "python", "target": "rust"},
+    )
+    assert r.status_code == 504
+
+
 def test_repair_without_llm_returns_501():
     r = _client.post(
         "/transpile/repair",

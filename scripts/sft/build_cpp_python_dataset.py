@@ -120,7 +120,7 @@ def py_params(code):
 def main():
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ep-src", type=Path, default=Path("/home/bart/Github/EnergyPlus/src/EnergyPlus"))
+    ap.add_argument("--ep-src", type=Path, default=Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus")))
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
 

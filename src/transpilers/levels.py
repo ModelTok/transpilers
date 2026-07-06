@@ -156,6 +156,22 @@ def _run(label: str, origin: str, source: str, source_lang: str, target: str,
         return Result(label, origin, False, error=f"{type(ex).__name__}: {str(ex).splitlines()[0][:120]}")
 
 
+def _read_unit(path: str, source_lang: str, engine: str, inc: list[str] | None) -> str:
+    """Read a whole translation unit for file/module/folder granularity.
+
+    For the strict engine on cpp/c with -I dirs given, transitively inline
+    local #include "X.h" headers first (same opt-in-only-with-inc rule as
+    the `transpile` CLI's --include-dir) so a multi-file project's own
+    class declarations are visible to the parser. The lift engine already
+    does its own real -I resolution inside lift_source/lift_file and does
+    not need this.
+    """
+    if engine == "strict" and source_lang in ("c", "cpp") and inc:
+        from transpilers.frontends.cpp.parser.includes import resolve_local_includes
+        return resolve_local_includes(path, include_dirs=inc)
+    return open(path, encoding="utf-8", errors="replace").read()
+
+
 def transpile_level(level: str, path: str, *, name: str | None = None,
                     source_lang: str = "cpp", target: str = "mojo",
                     inc: list[str] | None = None, engine: str = "strict") -> list[Result]:
@@ -166,14 +182,14 @@ def transpile_level(level: str, path: str, *, name: str | None = None,
                 for u in extract_objects(path, name=name, inc=inc)]
     if level == "file":
         return [run(os.path.basename(path), os.path.basename(path),
-                    open(path, encoding="utf-8", errors="replace").read())]
+                    _read_unit(path, source_lang, engine, inc))]
     if level == "module":
         return [run(os.path.basename(f), os.path.basename(f),
-                    open(f, encoding="utf-8", errors="replace").read())
+                    _read_unit(f, source_lang, engine, inc))
                 for f in module_files(path)]
     if level == "folder":
         return [run(os.path.basename(f), os.path.basename(f),
-                    open(f, encoding="utf-8", errors="replace").read())
+                    _read_unit(f, source_lang, engine, inc))
                 for f in folder_files_ordered(path)]
     raise ValueError(f"unknown level {level!r} (object|file|module|folder)")
 

@@ -22,5 +22,6 @@ def rust_compiles(source: str) -> CompileResult:
             ["rustc", "--crate-type", "lib", "--edition", "2021", str(src), "-o", str(Path(td) / "out")],
             capture_output=True,
             text=True,
+            timeout=30,
         )
         return CompileResult(ok=out.returncode == 0, stderr=out.stderr)

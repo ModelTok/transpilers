@@ -19,10 +19,10 @@ Read-only on energyplus-mojo. Emits data/sft/mojo_corpus.jsonl.
 """
 from __future__ import annotations
 
-import json, re
+import json, os, re
 from pathlib import Path
 
-EPMOJO = Path("/home/bart/Github/energyplus-mojo")
+EPMOJO = Path(os.environ.get("EP_MOJO_REPO", "/home/bart/Github/energyplus-mojo"))
 OUT = Path(__file__).resolve().parents[2] / "data/sft/mojo_corpus.jsonl"
 BATCH_KEEP = 5          # keep 1 in N batch templates
 

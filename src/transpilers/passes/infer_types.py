@@ -430,9 +430,14 @@ def _resolve_return(fn: mir.MirFunction, return_tys: list[Type]) -> None:
     concrete = [t for t in return_tys if not isinstance(t, UnknownT)]
     if concrete:
         # Multiple distinct concrete return types would be a real ambiguity;
-        # leave the hole in that case.
+        # leave the hole in that case. Value equality, not just same-class
+        # (`type(t) is type(first)` would treat `StructT("Foo")` and
+        # `StructT("Bar")` -- or `ListT(elem=IntT())` and
+        # `ListT(elem=StrT())` -- as "the same type" and silently collapse
+        # to whichever was seen first, which is a miscompilation, not a
+        # left-open hole).
         first = concrete[0]
-        if all(type(t) is type(first) for t in concrete):
+        if all(t == first for t in concrete):
             fn.return_type = first
             return
     # No concrete return found. If the function has no explicit return at

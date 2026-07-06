@@ -517,6 +517,34 @@ def test_legacy_repair_still_works():
     assert res.passes == 1
 
 
+def test_legacy_repair_test_inputs_dont_claim_unverified_pass():
+    """`test_inputs` is given but no target has a runtime-execution runner
+    (every ``_VERIFIERS`` entry only checks compilation). A prior version
+    of `_run_tests` reported `test_ok=True` in this case -- indistinguishable
+    from a genuinely confirmed functional pass -- which could mask real
+    logic bugs as "tested and passing". It must now record `test_ok=None`
+    (compiled, but not actually verified), while still treating the run as
+    successful overall (compiling code that was never shown to be wrong
+    shouldn't burn an LLM "fix" pass)."""
+    from transpilers.repair import repair
+
+    class _ExplodesIfCalled:
+        def complete(self, prompt: str) -> str:
+            raise AssertionError("LLM should not be called -- code already compiled")
+
+    res = repair(
+        "def f():\n    return 0\n",
+        source_lang="python",
+        target="rust",
+        llm_client=_ExplodesIfCalled(),
+        max_passes=3,
+        test_inputs=[{"input": "", "expected_output": "0"}],
+    )
+    assert res.passed is True
+    assert res.passes == 1
+    assert res.history[0].test_ok is None
+
+
 # ---------------------------------------------------------------------------
 # RepairTracker wiring (issue #51): the live loop emits one RepairOutcome
 # per unit so the algorithmic-vs-LLM ratio is populated, not just by the

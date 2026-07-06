@@ -57,6 +57,36 @@ _BUILTIN_MAP = {
 }
 
 
+def _foreign_struct_names(module: mir.MirModule) -> set[str]:
+    """Every `StructT` name reachable from a function/method signature or a
+    struct field's declared type -- covers params, return types, and
+    fields, which is where a type the parser resolved via a project-
+    preamble shim (see docs/occt_preamble.hpp) but the user's own code
+    never declared as a struct will actually show up. Doesn't walk into
+    local-variable declarations inside function bodies; that would need a
+    param/field/return type carrying the same name too in every practical
+    case this is meant to catch."""
+    names: set[str] = set()
+
+    def note(ty) -> None:
+        if isinstance(ty, StructT):
+            names.add(ty.name)
+
+    def scan_fn(fn: mir.MirFunction) -> None:
+        note(fn.return_type)
+        for p in fn.params:
+            note(p.ty)
+
+    for fn in module.functions:
+        scan_fn(fn)
+    for struct in module.structs:
+        for f in struct.fields:
+            note(f.ty)
+        for m in struct.methods:
+            scan_fn(m)
+    return names
+
+
 def _uses_dict(fn) -> bool:
     """True if the function signature or body involves a Dict (whose subscript
     read raises in Mojo, requiring `raises`)."""
@@ -94,13 +124,43 @@ class _MojoLowering(MirLoweringBase):
     def __init__(self) -> None:
         super().__init__()
         self._used_math: set[str] = set()
+        self._field_types: dict[str, dict[str, Type]] = {}
 
     def type_str(self, ty: Type) -> str:
         return _mojo_type(ty)
 
+    def _resolved_ty(self, node: mir.MirNode) -> Type:
+        """`node.ty` if infer_types resolved it, else best-effort lookup for
+        a field access whose *own* type infer_types never fills in (it has
+        no struct-field table to consult -- see MirFieldAccess below). Only
+        needs to walk one level: `self.field` resolves via `self`'s own type
+        (always known), and that covers every copy-insertion site that
+        currently needs it.
+        """
+        ty = getattr(node, "ty", None)
+        if ty is not None and not isinstance(ty, UnknownT):
+            return ty
+        if isinstance(node, mir.MirFieldAccess):
+            recv_ty = self._resolved_ty(node.value)
+            if isinstance(recv_ty, StructT):
+                return self._field_types.get(recv_ty.name, {}).get(node.field, UnknownT())
+        return ty if ty is not None else UnknownT()
+
     def lower_module(self, module: mir.MirModule) -> lir.MojoModule:
         self._used_math.clear()
+        self._field_types = {s.name: {f.name: f.ty for f in s.fields} for s in module.structs}
         items: list[lir.LirNode] = []
+        # Struct types the parser resolved (e.g. via a project-preamble shim
+        # for a third-party library -- see docs/occt_preamble.hpp) but that
+        # the user's own code never declared: emit a minimal opaque
+        # placeholder for each, or every reference to it is a compile-time
+        # "use of unknown declaration" in the *output*, even though libclang
+        # itself was perfectly happy to resolve it during parsing. One dummy
+        # field (rather than none) matters: an empty struct doesn't satisfy
+        # `ImplicitlyCopyable` the same way in this Mojo version.
+        declared = {s.name for s in module.structs}
+        for name in sorted(_foreign_struct_names(module) - declared):
+            items.append(lir.MojoStruct(name=name, fields=[("_opaque", "Int")], methods=[]))
         for struct in module.structs:
             items.extend(self.lower_struct_items(struct))
         for fn in module.functions:
@@ -158,7 +218,27 @@ class _MojoLowering(MirLoweringBase):
         value = self._lower_container_ctor(node, ty)
         if value is None:
             value = self.lower_expr(node.value)
+        # Same "bare name of a non-ImplicitlyCopyable type needs an explicit
+        # .copy()" rule as lower_return above -- `Mat aCopy = *this;` /
+        # `Mat aCopy = otherMat;` hit the identical Mojo 1.0.0b2 restriction
+        # a struct-returning function does, just via a var-decl instead of a
+        # return statement.
+        if (isinstance(value, (lir.MojoName, lir.MojoFieldAccess))
+                and isinstance(self._resolved_ty(node.value), StructT)):
+            value = lir.MojoMethodCall(receiver=value, method="copy", args=[])
         return lir.MojoVar(name=node.target, ty=ty, value=value)
+
+    def lower_field_assign(self, node: mir.MirFieldAssign):
+        # `self.vydir = otherDirField` hits the identical ImplicitlyCopyable
+        # restriction as a var-decl or return of a bare struct-typed name/
+        # field access (see lower_assign / lower_return above) -- the base
+        # implementation has no copy-insertion at all (correct for Rust/Zig,
+        # which don't need it), so Mojo needs its own override.
+        value = self.lower_expr(node.value)
+        if (isinstance(value, (lir.MojoName, lir.MojoFieldAccess))
+                and isinstance(self._resolved_ty(node.value), StructT)):
+            value = lir.MojoMethodCall(receiver=value, method="copy", args=[])
+        return lir.MojoFieldAssign(obj=self.lower_expr(node.obj), field=node.field, value=value)
 
     def _lower_container_ctor(self, node, ty):
         """C++ container construction -> Mojo, using the declared var type.
@@ -235,12 +315,27 @@ class _MojoLowering(MirLoweringBase):
                 and ret not in ("Int", "Float64", "Bool", "String", "None")):
             return lir.MojoReturn(value=lir.MojoStructInit(
                 name=ret, field_values=[("", e) for e in val.elements]))
-        # List/Dict/String aren't ImplicitlyCopyable: `return localVar` needs an
-        # explicit copy (or `^`). Only a bare name needs it — rvalues (`[0]*n`,
-        # calls) are already owned temporaries.
-        if isinstance(val, lir.MojoName) and (
+        # List/Dict/String/struct values aren't ImplicitlyCopyable in this Mojo
+        # version: `return localVar` needs an explicit copy (or `^`). Only a
+        # bare name needs it — rvalues (`[0]*n`, calls, struct-init) are
+        # already owned temporaries. Struct-ness is checked off the returned
+        # value's own resolved type (not the return-type spelling), so this
+        # also covers passing a same-typed parameter straight through
+        # (confirmed against the real Mojo 1.0.0b2 compiler: even a plain
+        # `def f(v: Vec) -> Vec: return v` needs this, not just container/
+        # String types — a struct with real fields hits the exact same
+        # "cannot be implicitly copied, does not conform to
+        # 'ImplicitlyCopyable'" error).
+        needs_copy = (
             ret.startswith("List[") or ret.startswith("Dict[") or ret == "String"
-        ):
+            or isinstance(self._resolved_ty(node.value), StructT)
+        )
+        # A bare field access (`return self.vdir`) is exactly as much a
+        # "reference to an existing owned value" as a bare local name is —
+        # same ImplicitlyCopyable restriction, same fix. Only MojoName was
+        # covered before, which missed the very common "return one of my
+        # own struct-typed fields" pattern entirely.
+        if isinstance(val, (lir.MojoName, lir.MojoFieldAccess)) and needs_copy:
             val = lir.MojoMethodCall(receiver=val, method="copy", args=[])
         return lir.MojoReturn(value=val)
 

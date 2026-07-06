@@ -25,7 +25,7 @@ export TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
 # Reduce VRAM fragmentation from repeated alloc/free cycles.
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
-REPO="/home/bart/Github/transpilers"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV="/root/venvs/lf7"
 LF="$VENV/bin/llamafactory-cli"
 CFG_P1="$REPO/data/sft/cpp_mojo/sft_3b_phase1.yaml"

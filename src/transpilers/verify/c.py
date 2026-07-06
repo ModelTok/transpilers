@@ -34,5 +34,6 @@ def c_compiles(source: str) -> CompileResult:
             [cc, "-c", "-std=c11", "-Wall", "-Werror=implicit-function-declaration", str(src), "-o", str(Path(td) / "out.o")],
             capture_output=True,
             text=True,
+            timeout=30,
         )
         return CompileResult(ok=out.returncode == 0, stderr=out.stderr)

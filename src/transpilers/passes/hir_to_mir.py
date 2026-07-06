@@ -71,9 +71,14 @@ def _default_init_for(ty: Type) -> mir.MirNode:
     if isinstance(ty, ListT):
         # empty typed list (e.g. a std::stack/vector member's default ctor)
         return mir.MirList(elements=[], ty=ty)
-    # Unknown / struct / dict defaults aren't expressible as one literal;
-    # fall back to int 0 (common case).
-    return mir.MirIntLiteral(value=0, ty=IntT())
+    # Unknown / struct / dict defaults aren't expressible as one literal, and
+    # this is an algorithmic pass -- it must not invent a value (a fabricated
+    # `IntT(0)` here would previously masquerade as a real default for a
+    # `dict[...]`/nested-struct field, so any later `self.field["key"]`-style
+    # use would silently index an integer). Emit a `MirRaw` hole instead: every
+    # backend already renders that as a `TODO[port]` stub rather than wrong
+    # code.
+    return mir.MirRaw(snippet="<default-init>", ty=UnknownT(hint=f"default init for {type(ty).__name__}"))
 
 
 def hir_to_mir(module: hir.HirModule) -> mir.MirModule:

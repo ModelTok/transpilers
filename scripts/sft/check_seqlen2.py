@@ -10,7 +10,10 @@ sys.path.insert(0, '/root/venvs/lf/lib/python3.12/site-packages')
 
 from transformers import AutoTokenizer
 
-DATASET_DIR = "/home/bart/Github/transpilers/data/sft/cpp_mojo"
+DATASET_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "sft", "cpp_mojo",
+)  # scripts/sft/<this file> -> repo root
 TOKENIZER = "Qwen/Qwen2.5-Coder-3B-Instruct"
 
 print(f"Loading tokenizer {TOKENIZER}...")
