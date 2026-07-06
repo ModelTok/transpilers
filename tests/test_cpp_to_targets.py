@@ -620,6 +620,118 @@ def test_cpp_transitive_mut_self_via_user_method_call():
 
 
 @pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_mutating_method_call_on_reference_param_compiles():
+    # A *parameter* (not `self`) receiving a call to a user-defined mutating
+    # method needs `var`/`mut` decoration too, not just self -- previously
+    # only a small hardcoded set of STL-container method names (append/...)
+    # was recognized for this on params; a user-defined mutator like
+    # `XYZ::Add` wasn't, leaving the param an immutable default borrow,
+    # which the real Mojo compiler rejects ("invalid use of mutating method
+    # on rvalue").
+    out = _mojo(
+        """
+        class XYZ {
+        public:
+            XYZ(double x) : myX(x) { }
+            void Add(double x) { myX += x; }
+        private:
+            double myX;
+        };
+        void Transforms(XYZ& theCoord) {
+            theCoord.Add(1.0);
+        }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_constructor_calling_self_mutating_setter_keeps_out_self():
+    # Widening mut-param detection to user-defined methods (previous test)
+    # regressed constructors: `self` is always in a method's own param list,
+    # so a constructor body calling a self-mutating setter (`self.SetX(...)`)
+    # started incorrectly landing `self` in the mut-param set too. Since
+    # `lower_params` bakes "var "/"mut " into the parameter NAME STRING, that
+    # broke `__init__`'s required `out self` special case ("__init__ method
+    # must return Self type with 'out' argument").
+    out = _mojo(
+        """
+        class Pnt {
+        public:
+            Pnt(double x) : myX(x) { SetX(x + 1.0); }
+            void SetX(double x) { myX = x; }
+        private:
+            double myX;
+        };
+        """
+    )
+    assert "def __init__(out self, x: Float64):" in out
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_struct_call_argument_gets_copy_inserted():
+    # A struct-typed CALL ARGUMENT (as opposed to a return/assign, already
+    # covered) also needs `.copy()` once the receiving parameter is `var`
+    # (owned): `aT.Transforms(self.coord)` passes a bare field access into a
+    # by-value `var theCoord: XYZ` parameter, which Mojo's `ImplicitlyCopyable`
+    # restriction rejects without an explicit `.copy()`.
+    out = _mojo(
+        """
+        class XYZ {
+        public:
+            XYZ(double x) : myX(x) { }
+            void Add(double x) { myX += x; }
+        private:
+            double myX;
+        };
+        class Trsf {
+        public:
+            void Transforms(XYZ theCoord) { theCoord.Add(1.0); }
+        };
+        class Pnt {
+        public:
+            Pnt(double x) : coord(x) { }
+            void Apply(Trsf& aT) { aT.Transforms(coord); }
+        private:
+            XYZ coord;
+        };
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_struct_reassignment_gets_copy_inserted():
+    # A struct-typed REASSIGNMENT (`x = y.field;` where `x` already exists)
+    # needs the same `.copy()` insertion as a fresh declaration does -- the
+    # reassign branch had no copy-insertion logic at all previously.
+    out = _mojo(
+        """
+        class XYZ {
+        public:
+            XYZ(double x) : myX(x) { }
+        private:
+            double myX;
+        };
+        class Holder {
+        public:
+            XYZ loc;
+        };
+        void reassign(Holder& h, Holder& other) {
+            XYZ tmp = h.loc;
+            tmp = other.loc;
+        }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
 def test_cpp_return_field_of_struct_type_compiles():
     # `return self.field;` where the field's own type is a struct hit the
     # same "cannot be implicitly copied" restriction a bare `return
@@ -940,6 +1052,146 @@ def test_cpp_static_method_signedness_overload_dedup_no_self():
     )
     assert "def NOT(x: Int) -> Int:" in out
     assert "def NOT_overload2(x: Int) -> Int:" in out
+
+
+def test_cpp_unnamed_param_gets_synthesized_name():
+    # An unnamed parameter is legal C++ both in a bare declaration and, when
+    # genuinely unused, in a definition too (e.g. OCCT's own
+    # `void gp_Pnt::DumpJson(Standard_OStream&, int) const`). `cursor.spelling`
+    # is "" for it -- previously emitted a blank param name, invalid Mojo.
+    out = _mojo(
+        """
+        double Epsilon(double) { return 1e-16; }
+        """
+    )
+    assert "def Epsilon(_arg0: Float64) -> Float64:" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_unnamed_param_compiles():
+    out = _mojo(
+        """
+        double Epsilon(double) { return 1e-16; }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+def test_cpp_unnamed_constructor_and_method_params_get_synthesized_names():
+    # Same gap, constructor and method PARM_DECL sites.
+    out = _mojo(
+        """
+        class Foo {
+        public:
+            Foo(int) {}
+            void Bar(int, double) {}
+        };
+        """
+    )
+    assert "def __init__(out self, _arg0: Int):" in out
+    assert "def Bar(self, _arg0: Int, _arg1: Float64):" in out
+
+
+def test_cpp_free_operator_overload_gets_sanitized_name():
+    # Free (non-member) operator overloads are a common idiom for symmetric
+    # binary operators (`gp_Vec operator*(double, const gp_Vec&)`). Call
+    # sites desugar straight to a binop (see `_convert_call`'s
+    # `_OVERLOAD_BINOPS` handling) -- this function is never invoked by
+    # name -- but it still needs a syntactically valid name, and must NOT
+    # be the literal dunder (Mojo rejects a global function named
+    # `__mul__`: "must be a method, not a global function").
+    out = _mojo(
+        """
+        struct Vec { double x; };
+        Vec operator*(double s, const Vec& v) { Vec r; r.x = s * v.x; return r; }
+        """
+    )
+    assert "operator*" not in out
+    assert "def __mul__(" not in out
+    assert "def _operator__mul__(s: Float64, v: Vec) -> Vec:" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_free_operator_overload_compiles():
+    out = _mojo(
+        """
+        struct Vec { double x; };
+        Vec operator*(double s, const Vec& v) { Vec r; r.x = s * v.x; return r; }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+def test_cpp_2d_accessor_operator_call_becomes_getitem():
+    # A multi-arg `operator()` that returns a REFERENCE (as opposed to a
+    # plain value) is the common matrix/grid-class 2D element-accessor
+    # idiom (OCCT's gp_Mat/gp_GTrsf/...: `double& operator()(int, int)`),
+    # not a generic 0/1-arg functor call. A read call site (`m(1, 2)`)
+    # previously emitted a garbled extra `operator()` argument
+    # ("m(operator(), 1, 2)", "use of unknown declaration 'operator'").
+    out = _mojo(
+        """
+        struct Mat {
+            double v[4];
+            double& operator()(int r, int c) { return v[r * 2 + c]; }
+        };
+        double first(Mat& m) { return m(0, 0); }
+        """
+    )
+    assert "def __getitem__(self, r: Int, c: Int) -> Float64:" in out
+    assert "operator()" not in out
+    assert "m[0, 0]" in out or "m.__getitem__(0, 0)" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_2d_accessor_operator_call_compiles():
+    out = _mojo(
+        """
+        struct Mat {
+            double v[4];
+            double& operator()(int r, int c) { return v[r * 2 + c]; }
+        };
+        double first(Mat& m) { return m(0, 0); }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+def test_cpp_2d_accessor_write_use_is_unsupported_hole_not_wrong_code():
+    # The reference-returning 2D accessor also supports a WRITE use
+    # (`m(1, 1) = v;`, assigning through the returned reference) -- no
+    # target modeled here has an analog for that, so it must fall through
+    # to a never-refuse hole rather than the previous silent
+    # single-index-dropping bug (`self.matrix[1] = ...`, discarding the
+    # row index entirely and emitting subtly wrong code).
+    out = _mojo(
+        """
+        struct Mat {
+            double v[4];
+            double& operator()(int r, int c) { return v[r * 2 + c]; }
+            void SetOne(Mat& m) { m(0, 0) = 1.0; }
+        };
+        """
+    )
+    assert "TODO[port]" in out
+
+
+def test_cpp_call_operator_2arg_functor_still_maps_to_call_not_getitem():
+    # A VALUE-returning 2-arg functor (e.g. a comparator) must still map to
+    # `__call__`, not be misrouted to `__getitem__` by the 2D-accessor fix
+    # above -- distinguished by return type (reference vs plain value).
+    out = _mojo(
+        """
+        struct Comparator {
+            bool operator()(int a, int b) const { return a < b; }
+        };
+        """
+    )
+    assert "def __call__(self, a: Int, b: Int) -> Bool:" in out
+    assert "__getitem__" not in out
 
 
 # ---------- refusals ----------

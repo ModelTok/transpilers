@@ -351,3 +351,116 @@ transitive-mutability gap for *parameters* mirroring the one already fixed
 for `self`) — each looks like a real, fixable, general bug on inspection,
 but none are blocking in the way the two structural gaps were, and chasing
 all of them was out of scope for this pass.
+
+## Follow-up 3: closing the parameter-mutability and call-argument-copy gaps, plus three general C++ frontend bugs
+
+Picking up the "transitive-mutability gap for parameters" and the two
+narrower error categories left at the end of Follow-up 2, six real bugs came
+out of continuing to chase `gp_Pnt.cxx --include-impls --verify`'s remaining
+errors down to (near) zero. None are OCCT-specific; all are general C++
+idioms this pass just hadn't exercised yet.
+
+1. **Parameter mutability only recognized a small hardcoded list of STL
+   method names, not user-defined mutating methods.** `_params_reassigned`
+   (`mir_to_mojo_lir.py`) decided whether a parameter needs `var`/`mut`
+   decoration by checking if a mutating method gets called on it, but only
+   recognized `append`/`push_back`/etc. — a user-defined mutator like
+   `gp_XYZ::Add` wasn't recognized at all, leaving the parameter an
+   immutable default borrow, which the real Mojo compiler rejects
+   ("invalid use of mutating method on rvalue"). Fixed by adding
+   `_compute_mir_mutating_method_names`, a MIR-level fixed-point closure
+   mirroring the existing LIR-level one in `backends/mojo/emit.py` (needed
+   one IR tier earlier because `lower_params` runs during MIR→LIR lowering,
+   before the LIR-level closure would exist).
+
+2. **That fix regressed constructors.** Widening the mutating-method set to
+   include user-defined methods meant `self` — always present in every
+   method's own `param_names`, including `__init__`'s — now frequently
+   matched too, since a constructor's own body commonly calls a
+   self-mutating setter. `lower_params` bakes the `"var "` prefix directly
+   into the parameter *name string*, so `__init__`'s special-cased "self
+   gets `out`, not `var`" check (which compares against the literal string
+   `"self"`) silently stopped matching, falling through to an invalid `var
+   self: T` signature ("`__init__` method must return Self type with 'out'
+   argument"). Fixed by excluding `"self"` from `param_names` at the top of
+   `_params_reassigned` — self's mutability is handled entirely by a
+   separate, already-correct mechanism in `emit.py`.
+
+3. **`ImplicitlyCopyable` also blocks struct-typed CALL ARGUMENTS, not just
+   return/assign/field-assign.** Once parameter mutability started
+   resolving correctly, call sites like `aT.Transforms(self.coord)` (passing
+   a bare struct field into a `var`-decorated, i.e. owned/consuming,
+   parameter) started hitting the same "cannot be implicitly copied"
+   restriction previously fixed only for return/assign/field-assign
+   positions. Fixed with a new `lower_arg` hook (default in
+   `_mir_lower_base.py`, overridden in the Mojo lowering) representing "a
+   value passed *by value* into a call" — distinct from a receiver
+   expression, which is borrowed, not consumed — wired into constructor
+   field-inits, method-call args, plain-call args, and the `push_back`
+   special case. Also caught the same gap in *reassignment* (`x = y.field`
+   where `x` already existed) — the reassign branch of `lower_assign` had
+   no copy-insertion logic at all, only the fresh-declaration branch did.
+   Scoped to `StructT` only (verified empirically that bare `String`/`List`/
+   `Dict` call arguments do *not* need `.copy()`, unlike their
+   return/assign positions).
+
+4. **Unnamed parameters produced a blank Mojo parameter name.**
+   `cursor.spelling` is `""` for a C++ `PARM_DECL` with no identifier —
+   legal both in a declaration and, when the parameter is genuinely unused,
+   in a definition (OCCT's own `void gp_Pnt::DumpJson(Standard_OStream&,
+   int) const` omits its unused second parameter's name). Emitted
+   `def Epsilon(: Float64) -> Float64:` — invalid Mojo. Fixed by a
+   `_param_name` helper that synthesizes `_argN` when the spelling is
+   empty, applied at all three `HirParam` sites (constructor, method, free
+   function).
+
+5. **Free (non-member) operator overloads emitted the literal invalid
+   `operator*` token as their name.** `gp_Vec operator*(double, const
+   gp_Vec&)` — the standard idiom for a symmetric binary operator — is
+   converted by `_convert_function`, which never applied the
+   operator→dunder mapping `_convert_method` already used
+   (`_method_name`/now `_operator_name`). Renaming it to the literal dunder
+   isn't right either, though: nothing calls this function by name (a call
+   site like `2.0 * v` desugars straight to a binop, see
+   `_OVERLOAD_BINOPS`), and Mojo (like every target here) rejects a global
+   function named `__mul__` outright ("must be a method, not a global
+   function"). Fixed by applying the same dunder mapping and then
+   prefixing away from the reserved dunder spelling (`__mul__` →
+   `_operator__mul__`) for free functions specifically.
+
+6. **The 2D matrix-element accessor idiom (`double& operator()(int, int)`)
+   wasn't handled at all**, at either the class-definition or call-site
+   level — assessed and deliberately deferred at the end of Follow-up 2 as
+   a bigger feature. A *read* use (`M(1, 1)`) produced a garbled extra
+   argument (`M(operator(), 1, 1)`, "use of unknown declaration
+   'operator'"); a *write* use (`aMat(1, 1) = v;`) fell into the existing
+   `operator[]` single-index assignment path (built for 1-D subscripts) and
+   silently dropped the row index, producing wrong code that also didn't
+   compile ("expression must be mutable in assignment"). Both are real,
+   common idioms — not OCCT-specific — found via `gp_Mat`/`gp_GTrsf`/
+   `gp_Mat2d`/`gp_GTrsf2d`. Fixed the *read* half generically: a multi-arg
+   `operator()` that **returns a reference** (as opposed to a 0/1-arg
+   functor call, or a value-returning multi-arg functor like a
+   `std::sort` comparator — distinguished by checking `result_type.kind`
+   for `LVALUEREFERENCE`/`RVALUEREFERENCE`) maps to `__getitem__`, both at
+   the class-definition side (`_operator_name`) and the call-site side
+   (`_convert_call`). The *write* half is left as a genuinely unsupported
+   construct (a never-refuse `TODO[port]` hole): the idiom relies on
+   returning a mutable C++ reference for the caller to assign through, and
+   none of these value-oriented targets model that, so there's no
+   `__setitem__` counterpart to pair it with.
+
+**Result:** re-running `gp_Pnt.cxx --include-impls --verify` after all six
+fixes drops the error count from ~136 individual compiler diagnostics to
+~72, and eliminates every category these fixes targeted outright: "expected
+argument name", "expected '(' for argument list", "use of unknown
+declaration 'operator'", "'__mul__' must be a method, not a global
+function", and "expression must be mutable in assignment" (18 occurrences)
+are all gone. What's left (`no matching function in initialization` — the
+pre-existing anonymous-namespace helper-struct arity mismatch in
+`gp_Quaternion.cxx`; `__todo_port__`/unknown-declaration for a handful of
+OCCT-specific APIs like `TCollection_AsciiString` this pilot's preamble
+doesn't stub; a SIMD-`swap()`-specific mutability case; a few `List[Float64]`
+literal-conversion mismatches; `gp_Quaternion` missing `__eq__`) is either
+already-documented and deprioritized, or narrow enough to not be worth
+chasing in this pass.

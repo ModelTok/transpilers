@@ -560,6 +560,16 @@ def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
         raise UnsupportedConstruct(f"class member {c.kind.name}")
     return hir.HirStruct(name=name, fields=fields, methods=methods)
 
+def _param_name(cursor: ci.Cursor, index: int) -> str:
+    """A PARM_DECL's identifier, or a synthesized placeholder if it has
+    none. C++ allows an unnamed parameter both in a declaration and, when
+    the parameter is genuinely unused, in a definition too (e.g. OCCT's own
+    `void gp_Pnt::DumpJson(Standard_OStream&, int) const`, whose second
+    parameter is never referenced in the body). `cursor.spelling` is `""`
+    in that case; every target needs *some* identifier there."""
+    return cursor.spelling or f"_arg{index}"
+
+
 def _convert_constructor(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
     """C++ constructor → Mojo `__init__(out self, ...)`. The member-init list
     (`: x(a), y(b)`) appears in the AST as alternating MEMBER_REF / init-expr
@@ -570,10 +580,12 @@ def _convert_constructor(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunct
     body_stmts: list[hir.HirNode] = []
     kids = list(cursor.get_children())
     i = 0
+    pidx = 0
     while i < len(kids):
         c = kids[i]
         if c.kind == CursorKind.PARM_DECL:
-            params.append(hir.HirParam(name=c.spelling, annotation=_type_text(c.type)))
+            params.append(hir.HirParam(name=_param_name(c, pidx), annotation=_type_text(c.type)))
+            pidx += 1
         elif c.kind == CursorKind.MEMBER_REF and i + 1 < len(kids):
             field_inits.append(
                 hir.HirFieldAssign(
@@ -625,14 +637,17 @@ _UNARY_OPERATOR_DUNDERS: dict[str, str] = {
 }
 
 
-def _method_name(cursor: ci.Cursor) -> str:
-    """Map an operator-overload member to its dunder; otherwise the spelling.
+def _operator_name(cursor: ci.Cursor, *, unary_param_count: int) -> str:
+    """Map an operator-overload to its dunder; otherwise the raw spelling.
     `operator+` → `__add__`, `operator==` → `__eq__`, etc. An operator token
     we don't recognize keeps the raw spelling (no refusal — same as before).
 
-    `+`/`-` are ambiguous: a member `operator-()` (no explicit params, just
-    the implicit `self`) is unary negation, but `operator-(other)` is binary
-    subtraction — same token, different arity, different dunder in every
+    `+`/`-` are ambiguous: unary negation/plus take one fewer explicit
+    parameter than the binary form of the same token (a member
+    `operator-()` has zero explicit params — just the implicit `self`;
+    a free `operator-(x)` has one). *unary_param_count* is that
+    threshold, so this same logic serves both member and free-function
+    callers. Same token, different arity, different dunder in every
     target (`__neg__` takes no argument; `__sub__` requires one). Mapping
     both to `__sub__` produces a nonsensical zero-arg `__sub__`, which every
     target's own dunder-arity checker (Mojo's included) rejects outright.
@@ -640,13 +655,37 @@ def _method_name(cursor: ci.Cursor) -> str:
     spelling = cursor.spelling
     if spelling.startswith("operator"):
         token = spelling[len("operator"):].strip()
-        if token in ("-", "+") and not any(
-            c.kind == ci.CursorKind.PARM_DECL for c in cursor.get_children()
-        ):
+        n_params = sum(1 for c in cursor.get_children() if c.kind == ci.CursorKind.PARM_DECL)
+        if token in ("-", "+") and n_params == unary_param_count:
             return _UNARY_OPERATOR_DUNDERS[token]
+        if (token == "()" and n_params >= 2
+                and cursor.result_type.kind in (ci.TypeKind.LVALUEREFERENCE, ci.TypeKind.RVALUEREFERENCE)):
+            # A multi-arg call operator RETURNING A REFERENCE is never a
+            # generic functor invocation (a functor/predicate -- e.g. a
+            # `std::sort` comparator -- returns a plain value like `bool`,
+            # by value): it's the common matrix/grid-class 2D element
+            # accessor idiom (`T& operator()(int row, int col)`, e.g.
+            # OCCT's gp_Mat/gp_GTrsf/gp_Mat2d/gp_GTrsf2d), where the
+            # reference return exists precisely so a write use
+            # (`M(1, 1) = v`) can assign through it. Map to `__getitem__`
+            # so a read call site (`M(1, 1)`, handled in `_convert_call`)
+            # becomes `M[1, 1]`'s dunder. There's no `__setitem__`
+            # counterpart emitted for this: the reference-return-as-lvalue
+            # idiom has no analog in any of these value-oriented targets,
+            # so a write use is left as a genuinely unsupported construct
+            # (see `_convert_assignment_stmt`) rather than paired with a
+            # setter whose signature couldn't match the source body anyway.
+            return "__getitem__"
         if token in _OPERATOR_DUNDERS:
             return _OPERATOR_DUNDERS[token]
     return spelling
+
+
+def _method_name(cursor: ci.Cursor) -> str:
+    """Map an operator-overload member to its dunder; otherwise the spelling.
+    See `_operator_name` — a member's implicit `self` means its unary forms
+    take zero explicit parameters."""
+    return _operator_name(cursor, unary_param_count=0)
 
 
 def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
@@ -660,9 +699,11 @@ def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
     is_static = cursor.is_static_method()
     params: list[hir.HirParam] = [] if is_static else [hir.HirParam(name="self", annotation=struct_name)]
     body: list[hir.HirNode] = []
+    pidx = 0
     for c in cursor.get_children():
         if c.kind == CursorKind.PARM_DECL:
-            params.append(hir.HirParam(name=c.spelling, annotation=_type_text(c.type)))
+            params.append(hir.HirParam(name=_param_name(c, pidx), annotation=_type_text(c.type)))
+            pidx += 1
         elif c.kind == CursorKind.COMPOUND_STMT:
             body = _convert_compound(c)
     return hir.HirFunction(
@@ -736,13 +777,33 @@ def _set_loc(cursor: ci.Cursor, node: "hir.HirNode") -> "hir.HirNode":
 def _convert_function(cursor: ci.Cursor) -> hir.HirFunction:
     params: list[hir.HirParam] = []
     body: list[hir.HirNode] = []
+    idx = 0
     for c in cursor.get_children():
         if c.kind == CursorKind.PARM_DECL:
-            params.append(hir.HirParam(name=c.spelling, annotation=_type_text(c.type)))
+            params.append(hir.HirParam(name=_param_name(c, idx), annotation=_type_text(c.type)))
+            idx += 1
         elif c.kind == CursorKind.COMPOUND_STMT:
             body = _convert_compound(c)
+    # A free (non-member) operator overload -- e.g. `gp_Vec operator*(double,
+    # const gp_Vec&)`, the common idiom for a symmetric binary operator --
+    # is just as real a C++ construct as a member operator, but the free
+    # function itself is never invoked by name: a call site like `2.0 * v`
+    # is desugared straight to a binop by `_convert_call`/`_convert_binop`
+    # (see the CALL_EXPR 'operator*' handling above), never a call to this
+    # function. Naming it here only has to keep it a syntactically valid
+    # identifier instead of the literal invalid `operator*` token -- it must
+    # NOT be the actual dunder, though: Mojo (like every target here)
+    # requires a `__mul__`-etc-named callable to be a struct method, and
+    # rejects a global function with that exact name outright ("must be a
+    # method, not a global function"). Since nothing calls this function by
+    # name anyway, prefix away from the reserved dunder spelling.
+    # Unary here means one explicit parameter (no implicit `self` to absorb
+    # the operand), unlike a member's zero-param unary form.
+    name = _operator_name(cursor, unary_param_count=1)
+    if name.startswith("__") and name.endswith("__"):
+        name = f"_operator{name}"
     return hir.HirFunction(
-        name=cursor.spelling,
+        name=name,
         params=params,
         return_annotation=_type_text(cursor.result_type),
         body=body,
@@ -1298,7 +1359,17 @@ def _convert_assignment_stmt(cursor: ci.Cursor) -> hir.HirNode:
         lk = list(lhs.get_children())
         if len(lk) == 2:
             sub = (_convert_expr(lk[0]), _convert_expr(lk[1]))
-    elif lhs.kind == CursorKind.CALL_EXPR:
+    elif lhs.kind == CursorKind.CALL_EXPR and lhs.spelling != "operator()":
+        # The `lhs.spelling != "operator()"` guard excludes the 2D
+        # element-accessor idiom (`aMat(1, 1) = v`, see `_operator_name`'s
+        # `__getitem__` mapping and the read-side handling in
+        # `_convert_call`): that C++ method returns a mutable reference for
+        # the caller to assign *through*, which none of these targets
+        # model, so there's no `__setitem__` counterpart to route a write
+        # to. Falling through to the `UnsupportedConstruct` below (a
+        # never-refuse hole) is more honest than reusing this 1-D
+        # `(lk[0], lk[-1])` reduction, which would silently drop the row
+        # index and emit a wrong single-index subscript assign.
         lk = [c for c in lhs.get_children()
               if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)
               and not ((c.spelling or "").startswith("operator") and c.kind != CursorKind.CALL_EXPR)]
@@ -1555,6 +1626,40 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
         if len(meaningful) >= 2:
             return hir.HirSubscript(
                 value=_convert_expr(meaningful[0]), index=_convert_expr(meaningful[-1]))
+
+    # 2D element-accessor idiom (`aMat(1, 1)`, `theMat(row, col)`): a common
+    # matrix/grid class's `T& operator()(int, int)` overload, arriving as a
+    # CALL_EXPR with the same [obj, operator-ref, arg...] shape operator[]
+    # has above (as opposed to `_method_name`/`__call__`'s ordinary 0/1-arg
+    # functor invocation). Mirrors the class-definition side's mapping of a
+    # 2+-arg `operator()` to `__getitem__` (see `_operator_name`). A write
+    # use (`aMat(1, 1) = v`) is handled -- or rather, deliberately left
+    # unsupported -- separately in `_convert_assignment_stmt`. Gated on the
+    # callee actually returning a reference (matching `_operator_name`'s
+    # class-definition-side check) so an ordinary value-returning 2-arg
+    # functor call (a `bool operator()(int, int) const` comparator) isn't
+    # misrouted to a `__getitem__` the class was never given.
+    if cursor.spelling == "operator()":
+        op_ref = next(
+            (k for k in kids if (k.spelling or "").startswith("operator")
+             and k.kind != CursorKind.CALL_EXPR),
+            None,
+        )
+        referenced = op_ref.referenced if op_ref is not None else None
+        if referenced is not None and referenced.result_type.kind in (
+            ci.TypeKind.LVALUEREFERENCE, ci.TypeKind.RVALUEREFERENCE
+        ):
+            meaningful = [
+                c for c in kids
+                if c.kind not in (CursorKind.TYPE_REF, CursorKind.NAMESPACE_REF)
+                and not ((c.spelling or "").startswith("operator") and c.kind != CursorKind.CALL_EXPR)
+            ]
+            if len(meaningful) >= 3:
+                return hir.HirMethodCall(
+                    receiver=_convert_expr(meaningful[0]),
+                    method="__getitem__",
+                    args=[_convert_expr(a) for a in meaningful[1:]],
+                )
 
     # Detect tuple/pair constructor: cursor.spelling is the type name ('tuple',
     # 'pair', etc.) and the first child is NOT a callee reference but an argument.
