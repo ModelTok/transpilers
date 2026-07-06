@@ -684,3 +684,36 @@ deliberately deferred as "SIMD-`swap()`-specific mutability" in Follow-up
 drops to 0. Total error count for `gp_Pnt.cxx --include-impls --verify` is
 now ~11, down from ~18 at the start of this follow-up and ~136 at the
 start of Follow-up 3.
+
+## Follow-up 9: an uninitialized fixed-size array's libclang children are its bounds, not its value
+
+The `cannot implicitly convert 'IntLiteral[N]' value to 'List[...]'`
+errors (3 of the ~11 remaining) traced to a libclang AST quirk specific to
+declaring a native fixed-size array with **no initializer at all**
+(OCCT's `gp_Trsf::InitFromJson`: `double mymatrix[3][3];`, a scratch buffer
+filled in by the following lines, not initialized up front). Such a
+`VAR_DECL` still reports two `INTEGER_LITERAL` *children* — but they're the
+array's own **dimension-size expressions** (`3`, `3`), not an initializer;
+there is no `=` or `{` anywhere in the declaration. `_convert_var_decl`'s
+generic "the last child is the initializer" fallback doesn't know that and
+misread the trailing dimension-size literal as one, emitting `var
+mymatrix: List[List[Float64]] = 3` — a bare integer assigned to a matrix-
+typed variable.
+
+Fixed by checking for a real initializer *first* (an `=` or `{` token
+anywhere in the declaration's own tokens) whenever the type is one of the
+array kinds, and when there isn't one, zero-filling a nested list literal
+that matches the array's actual shape (`_default_array_value`, recursing
+through `ci.Type.element_count` for each dimension) instead of consulting
+the children at all.
+
+**Result:** `cannot implicitly convert 'IntLiteral[N]' value to
+'List[...]'` drops to 0. Total error count for `gp_Pnt.cxx --include-impls
+--verify` is now ~8, down from ~11 at the start of this follow-up and ~136
+at the start of Follow-up 3. What remains (`TCollection_AsciiString`, an
+OCCT-specific external type this pilot's preamble doesn't stub; a
+pointer-to-contiguous-fields idiom in `gp_XYZ::GetData`/`ChangeData`
+returning `&x` as if it were `double*` into a 3-element buffer, with no
+faithful representation in a value-oriented target without unsafe raw
+pointer modeling) is narrower, more OCCT/idiom-specific, and a reasonable
+stopping point for this pass.

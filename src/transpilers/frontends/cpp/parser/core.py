@@ -973,8 +973,45 @@ def _convert_stmt_inner(cursor: ci.Cursor) -> list[hir.HirNode]:
             return _convert_stmt_inner(kids[0])
     raise UnsupportedConstruct(f"stmt {kind.name}")
 
+_ARRAY_TYPE_KINDS = (ci.TypeKind.CONSTANTARRAY, ci.TypeKind.INCOMPLETEARRAY, ci.TypeKind.VARIABLEARRAY)
+
+
+def _default_array_value(t: ci.Type) -> hir.HirNode:
+    """A zero-filled nested list literal matching a native fixed-size
+    array type's shape (`double[3][3]` -> a 3x3 list of `0.0`), for a
+    VAR_DECL with no real initializer -- see `_convert_var_decl`'s
+    no-initializer array handling."""
+    if t.kind in _ARRAY_TYPE_KINDS:
+        count = t.element_count if t.kind == ci.TypeKind.CONSTANTARRAY else 0
+        return hir.HirList(elements=[_default_array_value(t.element_type) for _ in range(count)])
+    ann = _type_text(t)
+    if ann in _KNOWN_STRUCT_NAMES:
+        return hir.HirStructInit(name=ann, args=[])
+    if ann == "bool":
+        return hir.HirBoolLiteral(value=False)
+    if ann == "float":
+        return hir.HirFloatLiteral(value=0.0)
+    if ann == "str":
+        return hir.HirStringLiteral(value="")
+    return hir.HirIntLiteral(value=0)
+
+
 def _convert_var_decl(cursor: ci.Cursor) -> hir.HirNode:
     annotation = _type_text(cursor.type)
+    if cursor.type.kind in _ARRAY_TYPE_KINDS and not any(
+        t.spelling in ("=", "{") for t in cursor.get_tokens()
+    ):
+        # A native fixed-size array declared with NO initializer at all
+        # (`double mymatrix[3][3];`, OCCT's own `gp_Trsf::InitFromJson`
+        # scratch buffer) has its dimension-size expressions (INTEGER_LITERAL
+        # cursors for the `3`s) reported as VAR_DECL *children* by libclang --
+        # there's no actual initializer here, but the generic `kids[-1]`
+        # fallback below would misread the last dimension-size literal as
+        # one, emitting e.g. `var mymatrix: List[List[Float64]] = 3`. Zero-
+        # fill a nested list literal matching the array's real shape instead.
+        return hir.HirAssign(
+            target=cursor.spelling, value=_default_array_value(cursor.type), annotation=annotation
+        )
     kids = list(cursor.get_children())
     if annotation in _KNOWN_STRUCT_NAMES:
         # `Point p;` (no kids) → zero-init StructInit.

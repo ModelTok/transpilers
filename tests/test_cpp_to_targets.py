@@ -1450,6 +1450,40 @@ def test_cpp_std_swap_on_same_matrix_compiles():
     assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
 
 
+def test_cpp_uninitialized_2d_array_local_gets_zero_fill_not_size_literal():
+    # `double mymatrix[3][3];` (a native fixed-size array declared with NO
+    # initializer at all, OCCT's own `gp_Trsf::InitFromJson` scratch
+    # buffer) has its dimension-size expressions (INTEGER_LITERAL cursors
+    # for the `3`s) reported as VAR_DECL *children* by libclang -- the
+    # generic "last child is the initializer" fallback misread the last
+    # dimension-size literal as one, emitting `var mymatrix: List[...] = 3`
+    # (a scalar int, not a matrix) instead of a real zero-filled matrix.
+    out = _mojo(
+        """
+        void f() {
+            double mymatrix[2][2];
+            mymatrix[0][0] = 1.0;
+        }
+        """
+    )
+    assert "= 3" not in out
+    assert "[[0.0, 0.0], [0.0, 0.0]]" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_uninitialized_2d_array_local_compiles():
+    out = _mojo(
+        """
+        void f() {
+            double mymatrix[2][2];
+            mymatrix[0][0] = 1.0;
+        }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
 # ---------- refusals ----------
 
 def test_cpp_template_preserved_as_raw_hole():
