@@ -76,6 +76,53 @@ def test_resolve_local_includes_leaves_unresolvable_include_alone(tmp_path):
     assert "int f()" in out
 
 
+def test_resolve_local_includes_handles_circular_forward_declare_pair(tmp_path):
+    # Real headers routinely have circular *textual* includes: A.h forward-
+    # declares B and only #includes B.h at the *bottom* of the file (for an
+    # inline method needing B complete); B.h #includes A.h the same way for
+    # the opposite reason. A real preprocessor handles this via header
+    # guards -- B.h's #include from A.h is a no-op on re-entry since its
+    # guard is already defined, so A.h's own text just resumes afterward,
+    # by which point B is complete. The original hoist-dependencies-first
+    # implementation couldn't represent this (it would need to hoist BOTH
+    # before each other) and left one of them looking incomplete to a real
+    # C++ parser (matches OCCT's gp_Dir.hxx <-> gp_Ax2d.hxx relationship).
+    _write(tmp_path, "a.h", """
+        #ifndef A_H
+        #define A_H
+        class B;
+        class A {
+        public:
+            int tag() { return 1; }
+        };
+        #include "b.h"
+        inline int use_b(const B& b) { return 0; }
+        #endif
+    """)
+    _write(tmp_path, "b.h", """
+        #ifndef B_H
+        #define B_H
+        #include "a.h"
+        class B {
+        public:
+            A field;
+        };
+        #endif
+    """)
+    entry = _write(tmp_path, "main.cpp", """
+        #include "a.h"
+        int main() { return 0; }
+    """)
+
+    out = resolve_local_includes(entry)
+    # Both real bodies must appear exactly once (no re-inclusion, no
+    # infinite recursion) and B's field of type A requires A to already be
+    # complete by the time B's own body is reached.
+    assert out.count("class A {") == 1
+    assert out.count("class B {") == 1
+    assert out.index("class A {") < out.index("A field;")
+
+
 def test_cli_transpiles_multi_file_class_with_include_dir(tmp_path, capsys):
     _write(tmp_path, "mathutil.h", """
         class MathUtil {

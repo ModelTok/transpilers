@@ -90,6 +90,15 @@ namespace std {
     template <typename K, typename V> class map : public _mapbase<K, V> {};
     template <typename K, typename Cmp = int> class set {};
     template <typename K, typename Cmp = int> class unordered_set {};
+    // Primary templates only -- real-world types routinely specialize these
+    // (`template<> struct hash<MyType> {...};`) to make themselves usable as
+    // unordered_map/unordered_set keys. Without a declared primary template,
+    // libclang rejects the specialization outright ("explicit specialization
+    // of undeclared template"), which used to fail parsing for any file with
+    // this near-universal STL-interop idiom, unrelated to the file's own
+    // logic (see e.g. OCCT's gp_Pnt.hxx).
+    template <typename T> struct hash { unsigned long operator()(const T&) const; };
+    template <typename T> struct equal_to { bool operator()(const T&, const T&) const; };
     template <class T, class Container = int, class Cmp = int> class priority_queue {};
     template <class T> class queue { public:
         queue(); void push(const T&); void pop();
@@ -271,6 +280,10 @@ _INCLUDE_RE = re.compile(r"^#\s*include\s*[<\"][^\"<>]+[>\"]\s*$", re.MULTILINE)
 _IFNDEF_RE = re.compile(r"^\s*#\s*ifndef\s+(\S+)\s*$")
 _DEFINE_GUARD_RE = re.compile(r"^\s*#\s*define\s+(\S+)\s*$")
 _ENDIF_RE = re.compile(r"^\s*#\s*endif\b")
+# Any other conditional-opening directive. Needed so `#endif` always pops the
+# frame it actually closes -- see the note in _strip_header_guard about why
+# only tracking #ifndef on the stack is unsound.
+_OTHER_IF_OPEN_RE = re.compile(r"^\s*#\s*(?:if|ifdef)\b")
 # C++20 `requires` constraints that confuse our libclang + template
 # combination (the parser confuses `void` with a type-cast). Match
 # both the standalone form (`requires std::foo<T>` on its own line) and
@@ -296,6 +309,22 @@ def _strip_header_guard(text: str) -> str:
     file with "#else after #else" / "unterminated conditional directive".
     Only a *paired* `#ifndef`+bare-`#define`+`#endif` is guaranteed to be a
     no-op guard; only that pairing is safe to remove.
+
+    The stack must track *every* open `#if`/`#ifdef`/`#ifndef`, not just
+    `#ifndef`: a real header commonly nests an unrelated conditional (e.g. a
+    platform-specific compiler-bug workaround gated on
+    `#if defined(__APPLE__)`) inside its own outer include-guard. If only
+    `#ifndef` pushed a stack frame, that inner `#if`'s `#endif` would pop the
+    *outer* guard's frame instead of its own (since every `#endif` popped
+    unconditionally) -- stripping the inner `#endif` as if it were the outer
+    guard's closer, and leaving the real outer guard's `#endif` behind as an
+    orphan. libclang's own preprocessor then can't find a match for the
+    still-open inner `#if` and treats it as false (on any platform other
+    than the one it's guarding), silently skipping every line up to the next
+    `#endif` it can find -- typically some unrelated header's guard closer
+    thousands of lines later, swallowing whole classes with no diagnostic at
+    all. Pushing a frame for every conditional keeps `#endif` matched to the
+    directive it actually closes, guard or not.
     """
     lines = text.splitlines(keepends=True)
     out: list[str] = []
@@ -315,6 +344,11 @@ def _strip_header_guard(text: str) -> str:
                 guard_stack.append(True)
                 i = j + 1  # drop both the #ifndef and the #define line
                 continue
+            guard_stack.append(False)
+            out.append(line)
+            i += 1
+            continue
+        if _OTHER_IF_OPEN_RE.match(line):
             guard_stack.append(False)
             out.append(line)
             i += 1

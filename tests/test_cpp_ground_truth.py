@@ -122,6 +122,39 @@ def test_preprocess_cpp_preserves_real_conditional_when_no_clang():
     assert "FOO_API void f();" in out
 
 
+def test_preprocess_cpp_nested_conditional_inside_header_guard_when_no_clang():
+    """A real `#ifdef`/`#endif` block *nested inside* an outer `#ifndef`
+    header guard (found via OCCT's gp_Mat.hxx: a platform-specific
+    compiler-bug workaround gated on `#if defined(__APPLE__)`, wrapped in
+    the file's own include guard) must not desync the guard-stripping
+    stack. Only `#ifndef` pushed a stack frame; every `#endif` popped one
+    unconditionally regardless of what opened it, so the inner block's
+    `#endif` wrongly consumed the *outer* guard's frame -- stripping the
+    inner (real) `#endif` as if it were the guard's closer, and leaving the
+    true outer `#endif` behind as an orphan with no matching `#if` in the
+    output. libclang's own preprocessor then can't find a match for the
+    still-open inner `#if` and silently skips every line up to the next
+    `#endif` it can find elsewhere in a multi-file translation unit --
+    potentially swallowing whole unrelated classes with no diagnostic at
+    all (see docs/occt_gp_preamble.hpp and the includes.py docstring)."""
+    src = (
+        "#ifndef FOO_H\n"
+        "#define FOO_H\n"
+        "class Foo {\n"
+        "#if defined(__APPLE__)\n"
+        "  void quirk();\n"
+        "#endif\n"
+        "  int x;\n"
+        "};\n"
+        "#endif // FOO_H\n"
+    )
+    out = preprocess_cpp(src, clang="/no/such/clang")
+    assert out.count("#if defined(__APPLE__)") == 1
+    assert out.count("#endif") == 1
+    assert "int x;" in out
+    assert "};" in out
+
+
 def test_parse_cpp_neutralizes_unresolved_export_macro():
     """Real C++ libraries almost universally gate their public API with a
     SCREAMING_CASE export/calling-convention macro (`FOO_API`, `DLLEXPORT`,
