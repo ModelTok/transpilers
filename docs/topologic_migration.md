@@ -259,19 +259,95 @@ general engine bugs, none Topologic- or OCCT-specific:
     had no copy-insertion at all — the shared base implementation is
     correct for Rust/Zig, which don't need it, but Mojo does).
 
-**What's left, characterized precisely rather than left as "still
-fails":** the remaining `--verify` errors are no longer parser/HIR bugs —
-they're two structural gaps of a different kind. First, OCCT declares many
-methods in a header (`Standard_EXPORT double Angle(...) const;`) with the
-real body living in a *separate* `.cxx` file (`gp_Dir.cxx`) that a
-single-entry-point transpile of `gp_Pnt.cxx` never includes — calling into
-one of these from an inline method that *is* transpiled correctly reports
-"has no attribute". Solving this needs multiple `.cxx` files amalgamated
-into one translation unit (the `gp` package as a whole, not one file at a
-time), not another parser fix. Second, a qualified static call to a
-preamble-stubbed foreign type's method (`Precision::Angular()`,
-`gp::Resolution()`) now correctly avoids the wrong self-call rewrite (point
-10) but falls through to an unresolved bare-name call instead — resolving
-this needs either including that foreign type's real definition in the
-output too, or dedicated handling for "call a stubbed type's static
-method," neither of which exists yet.
+## Follow-up 2: closing both structural gaps above (`--include-impls`, static methods)
+
+The two "structural gaps" the first follow-up left as future work — out-of-
+line `.cxx`-only methods, and qualified static calls to a preamble-stubbed
+type — are now both solved, generally, not just for `gp`. Along the way this
+surfaced four more real bugs, one of them a genuine correctness-affecting
+performance cliff, none OCCT-specific.
+
+1. **New `resolve_local_includes(..., include_impls=True)` / CLI
+   `--include-impls`.** For every locally-resolved header, also pulls in its
+   sibling `.cxx`/`.cpp` implementation file (same stem), so a method
+   declared in a header but defined out-of-line in its own `.cxx` — fine
+   for a real build (the body resolves at link time) — has its real body
+   present in the one amalgamated translation unit this engine builds.
+   Implemented as a strict **second pass**, only after every header is
+   fully resolved, not interleaved into the header expansion at each
+   header's first encounter: a `.cxx` file routinely `#include`s more
+   headers than its own class's declarations strictly need (it has real
+   method bodies to compile, not just signatures), which introduces
+   completeness cycles the pure header graph never had to solve (e.g.
+   `gp_Mat.cxx` needing `gp_XYZ` complete for its own body, while
+   `gp_XYZ`'s header-side completion is still mid-stack because a
+   different branch is what's currently pulling `gp_XYZ.hxx` in).
+   Resolving all headers first sidesteps this for free.
+2. **`_build_provenance_map` was O(mir_nodes × hir_nodes)**: it looked up
+   each MIR/LIR node's matching HIR provenance with a linear re-scan of
+   every already-recorded provenance, instead of an O(1) dict lookup. Fine
+   for a hand-written algorithm slice (dozens of nodes), catastrophic for a
+   real amalgamated translation unit — `--include-impls` on `gp_Pnt.cxx`
+   turned a ~2 second transpile into a multi-minute hang. Fixed with a
+   `hir_id -> HirProvenance` index built once. This is a general
+   correctness-of-performance bug, not specific to C++ or to
+   `--include-impls` — any sufficiently large single-file input would
+   eventually have hit it.
+3. **A struct declared inside an anonymous namespace** (a common
+   translation-unit-local-helper idiom — `gp_Quaternion.cxx` has one for
+   Euler-angle decomposition) **kept its namespace-qualified spelling**
+   (literally `(anonymous namespace)::Name`, libclang's own spelling for
+   it) when used as a type annotation, even though `_convert_top_level`
+   flattens every namespace and registers the struct under its bare name.
+   A still-qualified return-type annotation could never match that
+   registry entry, leaving it an unresolved type hole (a hard `ValueError`
+   crash, not a graceful degradation) despite the struct itself converting
+   fine. Fixed by stripping any `::`-qualified prefix off a `RECORD`-kind
+   type's spelling before use.
+4. **No support for C++ `static` methods at all.** Every `CXX_METHOD`
+   unconditionally got an implicit `self` param injected, wrong for a
+   `static` method twice over: the real call site (`ClassName::method(...)`)
+   has no instance to pass, and Mojo's own static-method convention
+   (`@staticmethod`, no `self` parameter) rejects a `self`-first signature
+   nothing ever supplies a receiver for. Added `HirFunction.is_static` /
+   `MirFunction.is_static` (parser sets it from `cursor.is_static_method()`,
+   no `self` param injected when true), a Mojo `@staticmethod` decorator,
+   and routed the earlier qualified-cross-class-static-call fix (which
+   previously fell through to an unresolved bare-name call) to build a
+   `HirMethodCall` whose receiver is the callee's own struct name — Mojo's
+   real static-call syntax is `StructName.method(...)`, so the struct name
+   doubles as a valid "receiver" expression even though it names a type,
+   not a value. This is what makes `Precision::Angular()` /
+   `gp::Resolution()` resolve correctly now instead of falling through.
+5. **The project-preamble exclusion boundary couldn't express "some of this
+   preamble should be emitted for real."** A preamble is usually parse-only
+   scaffolding (opaque stubs, typedefs, macros) that must never appear in
+   the output, but `gp`'s own real headers call real preamble-provided
+   helpers (`RealSmall()`, `Epsilon()`, `Precision::Angular()`) that
+   genuinely need bodies in the emitted target too, or every call site is
+   "use of unknown declaration" despite parsing and type-checking fine.
+   Added a literal marker line (`_PREAMBLE_REAL_MARKER`) splitting a
+   preamble into an excluded "stub" part and an included "real" part.
+   Getting the ordering right took a second attempt: the real part has to
+   land in the final translation unit *after* the generic std:: shim
+   (`PARSER_PREAMBLE`, itself added later, inside `preprocess_cpp`) and
+   immediately before the user's own source — not where it textually sits
+   in the preamble file, right before `PARSER_PREAMBLE` — so `parse_cpp`
+   now splits the preamble and prepends the real part directly onto
+   *source* rather than trying to express a non-contiguous exclusion region
+   with a single line-number threshold.
+
+**Result: `gp_Pnt.cxx` (via `--include-impls`, pulling in ~15 of the `gp`
+package's `.cxx` files transitively) now goes from timing out entirely to
+transpiling in ~2 seconds and getting substantially further into real Mojo
+compilation** — the "has no attribute" and "unknown declaration" error
+classes that motivated this follow-up are gone. What's left is a longer
+tail of narrower, more specific issues scattered across peripheral parts of
+the package (`gp_Mat`/`gp_Mat2d`'s in-place `swap()` on nested SIMD
+indexing, a handful of Mojo aliasing-exclusivity errors on self-referential
+calls, an anonymous-namespace helper struct's constructor call in
+`gp_Quaternion.cxx` receiving more arguments than it declares, and a
+transitive-mutability gap for *parameters* mirroring the one already fixed
+for `self`) — each looks like a real, fixable, general bug on inspection,
+but none are blocking in the way the two structural gaps were, and chasing
+all of them was out of scope for this pass.
