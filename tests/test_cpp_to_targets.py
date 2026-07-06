@@ -761,6 +761,46 @@ def test_cpp_return_field_of_struct_type_compiles():
     assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
 
 
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_field_of_method_call_result_gets_copy_inserted():
+    # `var v: T = a.Method().field;` -- a struct-typed field access rooted
+    # in a METHOD CALL's result (not a bare name/nested-field chain) hit
+    # the same "cannot be implicitly copied" restriction, but `_resolved_ty`
+    # only recursed through MirFieldAccess receivers, never resolving a
+    # MirMethodCall's own return type (infer_types never populates one --
+    # hir_to_mir doesn't set `ty=` when lowering a HirMethodCall at all).
+    # So `a.Direction().coord`'s type came back Unknown and no `.copy()`
+    # was inserted for the fresh declaration.
+    out = _mojo(
+        """
+        class XYZ {
+        public:
+            XYZ(double x) : myX(x) { }
+        private:
+            double myX;
+        };
+        class Dir {
+        public:
+            Dir() : coord(1.0) { }
+            XYZ coord;
+        };
+        class Ax1 {
+        public:
+            Ax1() : myDir() { }
+            Dir Direction() const { return myDir; }
+        private:
+            Dir myDir;
+        };
+        void f(Ax1& a) {
+            XYZ v = a.Direction().coord;
+        }
+        """
+    )
+    assert "a.Direction().coord.copy()" in out
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
 # ---------- C++ → Rust compile check ----------
 
 @pytest.mark.skipif(not _has("rustc"), reason="rustc not installed")

@@ -125,6 +125,7 @@ class _MojoLowering(MirLoweringBase):
         super().__init__()
         self._used_math: set[str] = set()
         self._field_types: dict[str, dict[str, Type]] = {}
+        self._method_return_types: dict[str, dict[str, Type]] = {}
         self._mutating_names: frozenset[str] = frozenset()
 
     def type_str(self, ty: Type) -> str:
@@ -132,11 +133,13 @@ class _MojoLowering(MirLoweringBase):
 
     def _resolved_ty(self, node: mir.MirNode) -> Type:
         """`node.ty` if infer_types resolved it, else best-effort lookup for
-        a field access whose *own* type infer_types never fills in (it has
-        no struct-field table to consult -- see MirFieldAccess below). Only
-        needs to walk one level: `self.field` resolves via `self`'s own type
-        (always known), and that covers every copy-insertion site that
-        currently needs it.
+        node shapes whose *own* type infer_types never fills in: a field
+        access (no struct-field table to consult) or a method call (MIR
+        carries no method-signature table either -- `hir_to_mir` never sets
+        `ty=` when lowering a HirMethodCall at all). Recurses through
+        receiver chains (`a.Direction().coord`: field-access-of-method-call)
+        so a copy gets inserted for the field of a temporary just as
+        reliably as for the field of a plain name.
         """
         ty = getattr(node, "ty", None)
         if ty is not None and not isinstance(ty, UnknownT):
@@ -145,6 +148,10 @@ class _MojoLowering(MirLoweringBase):
             recv_ty = self._resolved_ty(node.value)
             if isinstance(recv_ty, StructT):
                 return self._field_types.get(recv_ty.name, {}).get(node.field, UnknownT())
+        if isinstance(node, mir.MirMethodCall):
+            recv_ty = self._resolved_ty(node.receiver)
+            if isinstance(recv_ty, StructT):
+                return self._method_return_types.get(recv_ty.name, {}).get(node.method, UnknownT())
         return ty if ty is not None else UnknownT()
 
     def lower_arg(self, node: mir.MirNode):
@@ -164,6 +171,9 @@ class _MojoLowering(MirLoweringBase):
     def lower_module(self, module: mir.MirModule) -> lir.MojoModule:
         self._used_math.clear()
         self._field_types = {s.name: {f.name: f.ty for f in s.fields} for s in module.structs}
+        self._method_return_types = {
+            s.name: {m.name: m.return_type for m in s.methods} for s in module.structs
+        }
         self._mutating_names = _compute_mir_mutating_method_names(module)
         items: list[lir.LirNode] = []
         # Struct types the parser resolved (e.g. via a project-preamble shim

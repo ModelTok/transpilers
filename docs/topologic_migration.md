@@ -710,8 +710,36 @@ the children at all.
 **Result:** `cannot implicitly convert 'IntLiteral[N]' value to
 'List[...]'` drops to 0. Total error count for `gp_Pnt.cxx --include-impls
 --verify` is now ~8, down from ~11 at the start of this follow-up and ~136
-at the start of Follow-up 3. What remains (`TCollection_AsciiString`, an
-OCCT-specific external type this pilot's preamble doesn't stub; a
+at the start of Follow-up 3.
+
+## Follow-up 10: `_resolved_ty` never resolved a method call's own return type
+
+The last single-instance `ImplicitlyCopyable` error, `var XYZ: gp_XYZ =
+A1.Direction().coord`, traced to a gap in the copy-insertion type
+resolution added back in Follow-up 3. `_resolved_ty` (`mir_to_mojo_lir.py`)
+recurses through a `MirFieldAccess`'s receiver to resolve a field's type
+when `infer_types` didn't fill one in — but it only handled a *field*
+receiver, never a *method call* receiver: `A1.Direction().coord`'s outer
+field access recurses into `A1.Direction()` (a `MirMethodCall`), and
+`_resolved_ty` had no case for that shape at all, since `hir_to_mir` never
+sets `ty=` on a `MirMethodCall` to begin with (no method-signature table
+available to it, mirroring the field case). The chain came back
+`UnknownT()`, no `.copy()` got inserted, and `var XYZ: gp_XYZ = ...`
+handed a bare reference into a fresh `gp_XYZ`-typed declaration.
+
+Fixed by adding a `_method_return_types` table (struct name → method name
+→ declared return type, populated in `lower_module` alongside the existing
+`_field_types`) and a matching case in `_resolved_ty`: a `MirMethodCall`
+resolves its receiver's type first, then looks up the callee method's
+return type on that struct — the same one-level-at-a-time recursion
+`_resolved_ty` already uses for field access, extended to cover a
+method-call link in the same receiver chain.
+
+**Result:** `value of type 'gp_XYZ' cannot be implicitly copied` drops to
+0. Total error count for `gp_Pnt.cxx --include-impls --verify` is now ~7,
+down from ~8 at the start of this follow-up and ~136 at the start of
+Follow-up 3. What remains (`TCollection_AsciiString`, an OCCT-specific
+external type this pilot's preamble doesn't stub; a
 pointer-to-contiguous-fields idiom in `gp_XYZ::GetData`/`ChangeData`
 returning `&x` as if it were `double*` into a 3-element buffer, with no
 faithful representation in a value-oriented target without unsafe raw
