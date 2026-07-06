@@ -124,12 +124,31 @@ class _MojoLowering(MirLoweringBase):
     def __init__(self) -> None:
         super().__init__()
         self._used_math: set[str] = set()
+        self._field_types: dict[str, dict[str, Type]] = {}
 
     def type_str(self, ty: Type) -> str:
         return _mojo_type(ty)
 
+    def _resolved_ty(self, node: mir.MirNode) -> Type:
+        """`node.ty` if infer_types resolved it, else best-effort lookup for
+        a field access whose *own* type infer_types never fills in (it has
+        no struct-field table to consult -- see MirFieldAccess below). Only
+        needs to walk one level: `self.field` resolves via `self`'s own type
+        (always known), and that covers every copy-insertion site that
+        currently needs it.
+        """
+        ty = getattr(node, "ty", None)
+        if ty is not None and not isinstance(ty, UnknownT):
+            return ty
+        if isinstance(node, mir.MirFieldAccess):
+            recv_ty = self._resolved_ty(node.value)
+            if isinstance(recv_ty, StructT):
+                return self._field_types.get(recv_ty.name, {}).get(node.field, UnknownT())
+        return ty if ty is not None else UnknownT()
+
     def lower_module(self, module: mir.MirModule) -> lir.MojoModule:
         self._used_math.clear()
+        self._field_types = {s.name: {f.name: f.ty for f in s.fields} for s in module.structs}
         items: list[lir.LirNode] = []
         # Struct types the parser resolved (e.g. via a project-preamble shim
         # for a third-party library -- see docs/occt_preamble.hpp) but that
@@ -199,7 +218,27 @@ class _MojoLowering(MirLoweringBase):
         value = self._lower_container_ctor(node, ty)
         if value is None:
             value = self.lower_expr(node.value)
+        # Same "bare name of a non-ImplicitlyCopyable type needs an explicit
+        # .copy()" rule as lower_return above -- `Mat aCopy = *this;` /
+        # `Mat aCopy = otherMat;` hit the identical Mojo 1.0.0b2 restriction
+        # a struct-returning function does, just via a var-decl instead of a
+        # return statement.
+        if (isinstance(value, (lir.MojoName, lir.MojoFieldAccess))
+                and isinstance(self._resolved_ty(node.value), StructT)):
+            value = lir.MojoMethodCall(receiver=value, method="copy", args=[])
         return lir.MojoVar(name=node.target, ty=ty, value=value)
+
+    def lower_field_assign(self, node: mir.MirFieldAssign):
+        # `self.vydir = otherDirField` hits the identical ImplicitlyCopyable
+        # restriction as a var-decl or return of a bare struct-typed name/
+        # field access (see lower_assign / lower_return above) -- the base
+        # implementation has no copy-insertion at all (correct for Rust/Zig,
+        # which don't need it), so Mojo needs its own override.
+        value = self.lower_expr(node.value)
+        if (isinstance(value, (lir.MojoName, lir.MojoFieldAccess))
+                and isinstance(self._resolved_ty(node.value), StructT)):
+            value = lir.MojoMethodCall(receiver=value, method="copy", args=[])
+        return lir.MojoFieldAssign(obj=self.lower_expr(node.obj), field=node.field, value=value)
 
     def _lower_container_ctor(self, node, ty):
         """C++ container construction -> Mojo, using the declared var type.
@@ -289,9 +328,14 @@ class _MojoLowering(MirLoweringBase):
         # 'ImplicitlyCopyable'" error).
         needs_copy = (
             ret.startswith("List[") or ret.startswith("Dict[") or ret == "String"
-            or isinstance(getattr(node.value, "ty", None), StructT)
+            or isinstance(self._resolved_ty(node.value), StructT)
         )
-        if isinstance(val, lir.MojoName) and needs_copy:
+        # A bare field access (`return self.vdir`) is exactly as much a
+        # "reference to an existing owned value" as a bare local name is —
+        # same ImplicitlyCopyable restriction, same fix. Only MojoName was
+        # covered before, which missed the very common "return one of my
+        # own struct-typed fields" pattern entirely.
+        if isinstance(val, (lir.MojoName, lir.MojoFieldAccess)) and needs_copy:
             val = lir.MojoMethodCall(receiver=val, method="copy", args=[])
         return lir.MojoReturn(value=val)
 

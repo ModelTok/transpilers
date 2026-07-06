@@ -34,7 +34,8 @@ def _augmented_form(name: str, value: lir.LirNode) -> tuple[str, lir.LirNode] | 
 
 
 def emit_mojo(module: lir.MojoModule) -> str:
-    body = "\n\n".join(_emit_item(item) for item in module.items) + "\n"
+    mutating_names = _compute_mutating_method_names(module)
+    body = "\n\n".join(_emit_item(item, mutating_names) for item in module.items) + "\n"
     imports = getattr(module, "imports", None)
     if imports:
         # Entries may be bare module names (`math`) or full statements
@@ -45,15 +46,15 @@ def emit_mojo(module: lir.MojoModule) -> str:
     return body
 
 
-def _emit_item(item: lir.LirNode) -> str:
+def _emit_item(item: lir.LirNode, mutating_names: frozenset[str]) -> str:
     if isinstance(item, lir.MojoStruct):
-        return _emit_struct(item)
+        return _emit_struct(item, mutating_names)
     if isinstance(item, lir.MojoFn):
-        return _emit_fn(item)
+        return _emit_fn(item, mutating_names)
     raise NotImplementedError(f"mojo top-level item {type(item).__name__}")
 
 
-def _emit_struct(s: lir.MojoStruct) -> str:
+def _emit_struct(s: lir.MojoStruct, mutating_names: frozenset[str]) -> str:
     """`@fieldwise_init` + `Copyable, Movable` conformance gives the struct
     a usable constructor and value semantics in current Mojo. An explicit
     `__init__` (from a C++ constructor) replaces the synthesized fieldwise
@@ -68,7 +69,7 @@ def _emit_struct(s: lir.MojoStruct) -> str:
         lines.append(f"{INDENT}var {_safe(name)}: {ty}")
     for m in s.methods:
         lines.append("")
-        lines.append(_emit_fn(m, depth=1))
+        lines.append(_emit_fn(m, mutating_names, depth=1))
     return "\n".join(lines)
 
 
@@ -92,31 +93,67 @@ def _touches_self(node: object) -> bool:
     return False
 
 
-def _mutates_self(nodes: object) -> bool:
+def _mutates_self(nodes: object, mutating_names: frozenset[str]) -> bool:
     """Does this method body mutate `self`? (assign self.field, self.field[i]=…,
     or call a mutating method on a self-rooted receiver). Such methods need
-    `mut self` in Mojo (default borrow is immutable)."""
+    `mut self` in Mojo (default borrow is immutable). `mutating_names` is the
+    module-wide, fixed-point-closed set of method names known to mutate
+    their receiver (see _compute_mutating_method_names) -- covers both the
+    hardcoded STL-container names and any user struct method that mutates
+    self itself, directly or transitively."""
     import dataclasses
     if isinstance(nodes, list):
-        return any(_mutates_self(n) for n in nodes)
+        return any(_mutates_self(n, mutating_names) for n in nodes)
     if not dataclasses.is_dataclass(nodes):
         return False
     if isinstance(nodes, lir.MojoFieldAssign) and _touches_self(nodes.obj):
         return True
     if isinstance(nodes, lir.MojoSubscriptAssign) and _touches_self(nodes.obj):
         return True
-    if (isinstance(nodes, lir.MojoMethodCall) and nodes.method in _MUTATING_METHODS
+    if (isinstance(nodes, lir.MojoMethodCall) and nodes.method in mutating_names
             and _touches_self(nodes.receiver)):
         return True
-    return any(_mutates_self(getattr(nodes, f.name)) for f in dataclasses.fields(nodes))
+    return any(_mutates_self(getattr(nodes, f.name), mutating_names) for f in dataclasses.fields(nodes))
 
 
-def _emit_fn(fn: lir.MojoFn, *, depth: int = 0) -> str:
+def _compute_mutating_method_names(module: lir.MojoModule) -> frozenset[str]:
+    """Fixed-point closure of method names that mutate their receiver.
+
+    Mojo requires `mut self` on any method that mutates self -- directly (a
+    field/subscript assign) or transitively, by calling another mutating
+    method on self or on a field self owns (e.g. `Multiplied()` calling
+    `self.Multiply(x)`, or `Transform()` calling `self.coord.Add(x)`). A
+    single-pass, body-only check misses the transitive case entirely,
+    wrongly leaving the caller as an immutable `self` and producing
+    "invalid use of mutating method on rvalue" from the real Mojo compiler.
+    Real-world value types lean on exactly this Foo()/Fooed() mutate-vs-
+    return-copy pairing throughout (OCCT's gp_* package, but not only it),
+    so resolving the closure properly -- rather than hardcoding a small
+    STL-container method-name list -- matters for any nontrivial struct.
+    Matching by bare method name (not per-struct) is deliberately
+    conservative: at worst it marks an unrelated same-named method `mut`
+    too, which Mojo permits on a method that doesn't strictly need it.
+    """
+    names = set(_MUTATING_METHODS)
+    methods = [m for item in module.items if isinstance(item, lir.MojoStruct) for m in item.methods]
+    changed = True
+    while changed:
+        changed = False
+        for m in methods:
+            if m.name in names:
+                continue
+            if _mutates_self(m.body, frozenset(names)):
+                names.add(m.name)
+                changed = True
+    return frozenset(names)
+
+
+def _emit_fn(fn: lir.MojoFn, mutating_names: frozenset[str], *, depth: int = 0) -> str:
     indent = INDENT * depth
     # `__init__` takes `out self`; a method that mutates self takes `mut self`;
     # otherwise the default immutable borrow `self`.
     mut_self = (fn.params and fn.params[0][0] == "self"
-                and fn.name != "__init__" and _mutates_self(fn.body))
+                and fn.name != "__init__" and _mutates_self(fn.body, mutating_names))
     params = ", ".join(
         ("out self" if (n == "self" and fn.name == "__init__")
          else "mut self" if (n == "self" and mut_self)
