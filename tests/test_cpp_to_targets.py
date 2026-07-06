@@ -975,6 +975,52 @@ def test_cpp_return_struct_param_compiles_in_rust_too():
     assert result.ok, result.stderr
 
 
+def test_cpp_ctor_with_fewer_params_than_fields_not_padded():
+    # A struct can have MORE fields than its constructor takes explicit
+    # params for, when the constructor's member-init list computes some
+    # fields from the others (OCCT's `gp_EulerSequence_Parameters`: 6
+    # fields, but a 4-param ctor deriving 3 of them from the first param).
+    # The struct-init trailing-field-padding logic assumed every arg
+    # lines up 1:1 with a field and padded "missing" fields up to the
+    # *field* count, fabricating 2 extra args no constructor declares
+    # ("no matching function in initialization").
+    src = """
+        struct Six {
+            int a, b, c;
+            bool d, e, f;
+            Six(int x, bool y, bool z, bool w) : a(x), b(x), c(x), d(y), e(z), f(w) {}
+        };
+        Six make() { return Six(1, true, false, true); }
+    """
+    out = _mojo(src)
+    assert "Six(1, True, False, True)" in out
+    assert "Six(1, True, False, True, False, False)" not in out
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_defaulted_default_ctor_alongside_real_ctor_compiles():
+    # `Vec() = default;` alongside another *real*, explicit constructor
+    # (`Vec(double, double)`) previously vanished entirely: the explicit
+    # constructor made Mojo's `@fieldwise_init` auto-default unavailable
+    # (it only synthesizes when a struct has *no* explicit `__init__`), so
+    # a 0-arg `Vec()` call site had no matching overload at all ("no
+    # matching function in initialization").
+    out = _mojo(
+        """
+        struct Vec {
+            double x, y;
+            Vec() = default;
+            Vec(double a, double b) : x(a), y(b) {}
+        };
+        Vec origin() { return Vec(); }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
 # ---------- static methods (no implicit self/this) ----------
 
 def test_cpp_static_method_no_self_param():

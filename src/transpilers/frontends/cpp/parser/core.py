@@ -510,6 +510,7 @@ def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
     name = cursor.spelling
     fields: list[hir.HirParam] = []
     methods: list[hir.HirFunction] = []
+    has_defaulted_default_ctor = False
     for c in cursor.get_children():
         if c.kind == ci.CursorKind.CXX_ACCESS_SPEC_DECL:
             # `public:` / `private:` / `protected:` markers. Only public is
@@ -524,14 +525,30 @@ def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
         if c.kind == ci.CursorKind.CONSTRUCTOR and c.is_definition() and not c.is_default_method():
             methods.append(_convert_constructor(c, struct_name=name))
             continue
+        if c.kind == ci.CursorKind.CONSTRUCTOR and c.is_default_method() and c.is_default_constructor():
+            # `gp_Vec() = default;` (or the implicit compiler-generated
+            # equivalent) alongside other real, explicit constructors on the
+            # same class (e.g. gp_Vec also declares `gp_Vec(double, double,
+            # double)`). Mojo's `@fieldwise_init` synthesizes a usable
+            # default ctor only when the struct has *no* explicit `__init__`
+            # at all (see `_class_conformances` in backends/mojo/emit.py) --
+            # once any real constructor is emitted, that auto-generation is
+            # dropped, so a defaulted 0-arg ctor needs its own explicit
+            # `__init__` synthesized too, or `gp_Vec()` call sites have no
+            # matching overload ("no matching function in initialization").
+            # Deferred until the whole class is scanned (see below the loop)
+            # since whether it's actually needed depends on whether any
+            # *other* constructor ends up defined on this same class.
+            has_defaulted_default_ctor = True
+            continue
         if c.kind in (ci.CursorKind.CXX_METHOD, ci.CursorKind.CONSTRUCTOR, ci.CursorKind.DESTRUCTOR):
-            # Declared-but-not-defined methods/ctors/dtors, and `= default`
-            # ones (no explicit body to convert -- e.g. `Dir& operator=
-            # (const Dir&) = default;`, extremely common on OCCT-style value
-            # types): skip silently rather than raising, matching real
-            # compiler-generated behavior. `is_default_method()` still
-            # reports `is_definition() == True`, so without excluding it
-            # above too, this branch would never even see it.
+            # Declared-but-not-defined methods/ctors/dtors, and other
+            # `= default` ones (no explicit body to convert -- e.g. `Dir&
+            # operator=(const Dir&) = default;`, extremely common on
+            # OCCT-style value types): skip silently rather than raising,
+            # matching real compiler-generated behavior. `is_default_method()`
+            # still reports `is_definition() == True`, so without excluding
+            # it above too, this branch would never even see it.
             continue
         if c.kind == ci.CursorKind.CXX_BASE_SPECIFIER:
             raise UnsupportedConstruct(f"C++ inheritance for class {name!r} not yet supported")
@@ -558,7 +575,51 @@ def _convert_class(cursor: ci.Cursor) -> hir.HirStruct:
             # struct's other concrete fields and methods untouched.
             continue
         raise UnsupportedConstruct(f"class member {c.kind.name}")
+    if has_defaulted_default_ctor and any(m.name == "__init__" for m in methods):
+        methods.append(_synthesized_default_ctor(fields, struct_name=name))
     return hir.HirStruct(name=name, fields=fields, methods=methods)
+
+
+def _default_value_for_annotation(annotation: str) -> hir.HirNode:
+    """A best-effort zero/empty value for *annotation*, for synthesizing a
+    defaulted 0-arg constructor's field-init body (see
+    `_synthesized_default_ctor`). A struct-typed field recurses into that
+    struct's own 0-arg construction (mirroring real C++ value-init
+    semantics for a member with its own default ctor); anything else falls
+    back to a scalar zero rather than refusing the whole class over it."""
+    if annotation in _KNOWN_STRUCT_NAMES:
+        return hir.HirStructInit(name=annotation, args=[])
+    if annotation == "bool":
+        return hir.HirBoolLiteral(value=False)
+    if annotation in ("float", "double"):
+        return hir.HirFloatLiteral(value=0.0)
+    if annotation == "str":
+        return hir.HirStringLiteral(value="")
+    return hir.HirIntLiteral(value=0)
+
+
+def _synthesized_default_ctor(fields: list[hir.HirParam], *, struct_name: str) -> hir.HirFunction:
+    """A `__init__(out self):` that zero/value-initializes every field, for
+    a class with an explicitly-defaulted (`= default`) 0-arg constructor
+    alongside other real, explicit constructors. Mojo's `@fieldwise_init`
+    only auto-synthesizes a usable default ctor when a struct has *no*
+    explicit `__init__` at all; once any other constructor is emitted, a
+    defaulted 0-arg ctor needs this explicit counterpart too, or a 0-arg
+    construction call site (`gp_Vec()`) has no matching overload."""
+    body: list[hir.HirNode] = [
+        hir.HirFieldAssign(
+            obj=hir.HirName(name="self"),
+            field=f.name,
+            value=_default_value_for_annotation(f.annotation),
+        )
+        for f in fields
+    ]
+    return hir.HirFunction(
+        name="__init__",
+        params=[hir.HirParam(name="self", annotation=struct_name)],
+        return_annotation="None",
+        body=body,
+    )
 
 def _param_name(cursor: ci.Cursor, index: int) -> str:
     """A PARM_DECL's identifier, or a synthesized placeholder if it has

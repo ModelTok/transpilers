@@ -464,3 +464,54 @@ doesn't stub; a SIMD-`swap()`-specific mutability case; a few `List[Float64]`
 literal-conversion mismatches; `gp_Quaternion` missing `__eq__`) is either
 already-documented and deprioritized, or narrow enough to not be worth
 chasing in this pass.
+
+## Follow-up 4: the `gp_EulerSequence_Parameters` arity mismatch, and a defaulted-ctor gap
+
+The `no matching function in initialization` bucket (28 of the ~72
+remaining errors — the single largest category left) turned out to be one
+general bug, not an OCCT-specific one, and chasing it down surfaced a
+second general bug in the same area.
+
+1. **`HirStructInit`'s trailing-field-padding logic assumed a struct's
+   positional ctor args always line up 1:1 with its fields.** That's true
+   for the common per-field aggregate constructor (`gp_XYZ(x, y, z)`: 3
+   params, 3 fields), but `gp_EulerSequence_Parameters` has a real,
+   explicit constructor with a member-init list that *computes* 3 of its 6
+   fields (`i`, `j`, `k`) from a single `theAx1` parameter — 4 declared
+   params, 6 fields. Every real call site in the OCCT source passes exactly
+   4 args (`Params(1, F, F, T)`), but the padding logic — which exists to
+   handle genuine C++ partial aggregate init — treated the 2 "missing"
+   fields as needing a fabricated default, emitting a 6-arg call
+   (`gp_EulerSequence_Parameters(1, F, F, T, False, False)`) against a
+   4-param constructor. Fixed by tracking each struct's explicit `__init__`
+   parameter types (`_STRUCT_CTOR_PARAM_TYPES` in `hir_to_mir.py`,
+   populated in `_lower_struct` right after its methods are lowered) and
+   padding to *that* arity instead of the field count whenever the struct
+   has a real constructor — a struct with no explicit constructor (the
+   aggregate case) is unaffected, since there's nothing to key off besides
+   field count.
+
+2. **A `= default` 0-arg constructor alongside another real, explicit
+   constructor left the class with no way to construct it with 0 args.**
+   `_convert_class` already skipped `= default` members (nothing to
+   convert), relying on Mojo's `@fieldwise_init` to auto-synthesize a usable
+   default constructor — but `@fieldwise_init` is only emitted when the
+   struct has *no* explicit `__init__` at all (see `emit.py`), and OCCT's
+   `gp_Vec` declares both `gp_Vec() = default;` *and* `gp_Vec(const gp_XYZ&)`
+   / `gp_Vec(double, double, double)`. `@fieldwise_init` gets dropped for
+   the two real constructors, `= default` gets silently skipped, and
+   `gp_Vec()` (used throughout the package to construct a zero vector) has
+   no matching overload at all. Fixed by detecting this specific
+   combination (`is_default_constructor()` among an otherwise-skipped
+   defaulted member, plus at least one other real `__init__` ending up on
+   the same class) and synthesizing an explicit `__init__(out self):` that
+   value-initializes every field — recursing into a struct-typed field's
+   own 0-arg construction, mirroring what C++'s defaulted constructor
+   actually does for a member with its own default constructor.
+
+**Result:** `no matching function in initialization` drops from 28 to 0.
+As a side effect (the previously-broken `translateEulerSequence` and its
+callers now type-check further), `__todo_port__`/unknown-declaration count
+also drops, from 20 to 10. Total error count for `gp_Pnt.cxx
+--include-impls --verify` is now ~35, down from ~136 at the start of
+Follow-up 3.
