@@ -1414,9 +1414,52 @@ def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
         return hir.HirIntLiteral(value=0)
     raise UnsupportedConstruct(f"expr {kind.name}")
 
+def _strip_paren_unexposed(cursor: ci.Cursor) -> ci.Cursor:
+    while cursor.kind in (CursorKind.UNEXPOSED_EXPR, CursorKind.PAREN_EXPR):
+        kids = list(cursor.get_children())
+        if len(kids) != 1:
+            return cursor
+        cursor = kids[0]
+    return cursor
+
+
+def _is_this_expr(cursor: ci.Cursor) -> bool:
+    return _strip_paren_unexposed(cursor).kind == CursorKind.CXX_THIS_EXPR
+
+
+def _is_addr_of_expr(cursor: ci.Cursor) -> bool:
+    c = _strip_paren_unexposed(cursor)
+    if c.kind != CursorKind.UNARY_OPERATOR or len(list(c.get_children())) != 1:
+        return False
+    try:
+        return _unary_token(c) == "&"
+    except UnsupportedConstruct:
+        return False
+
+
 def _convert_binop(cursor: ci.Cursor) -> hir.HirNode:
     op = _binop_token(cursor)
     kids = list(cursor.get_children())
+    if op in ("==", "!=") and (
+        (_is_this_expr(kids[0]) and _is_addr_of_expr(kids[1]))
+        or (_is_this_expr(kids[1]) and _is_addr_of_expr(kids[0]))
+    ):
+        # `this == &theOther` / `&theOther == this` -- a pointer-identity
+        # self-aliasing check (the classic self-assignment/self-comparison
+        # guard idiom, e.g. OCCT's `gp_Quaternion::IsEqual`: `if (this ==
+        # &theOther) return true;` before falling back to a real value
+        # comparison). This engine doesn't model pointer/reference identity
+        # -- parameters are handled by value/borrow, not tracked aliases --
+        # and after the existing address-of/`this`-to-`self` lossy
+        # lowering, both sides collapse to plain names, so naively emitting
+        # a VALUE comparison here isn't just imprecise but can be a compile
+        # error outright when the type has no `operator==` (as here).
+        # Every real-world instance of this idiom is followed by a full
+        # value-comparison fallback that computes the correct result
+        # regardless of whether the identity fast path is taken, so
+        # dropping the fast path (never true) preserves correctness at the
+        # cost of a micro-optimization.
+        return hir.HirBoolLiteral(value=(op == "!="))
     left = _convert_expr(kids[0])
     right = _convert_expr(kids[1])
     if op in COMPARE_OPS:

@@ -606,3 +606,33 @@ per-shape handling didn't recognize."
 **Result:** `unexpected token in expression` drops to 0. Total error count
 for `gp_Pnt.cxx --include-impls --verify` is now ~18, down from ~21 at the
 start of this follow-up and ~136 at the start of Follow-up 3.
+
+## Follow-up 7: `this == &other` is a pointer check, not a value comparison
+
+The last single-instance error, `'gp_Quaternion' does not implement the
+'__eq__' method`, traced to a real semantic bug rather than a missing
+feature: `if (this == &theOther) { return true; }` (OCCT's
+`gp_Quaternion::IsEqual`'s classic self-assignment/self-comparison guard,
+before falling back to a real value comparison) is a raw **pointer-identity**
+comparison in C++ (`this` and `&theOther` are both `gp_Quaternion*`) — not a
+call to the type's `operator==`. But this frontend's existing address-of/
+`this`-to-`self` lowering (`&x` drops the indirection to just `x`; `this`
+becomes `self`) collapses both sides to plain names before the comparison
+is even built, so it silently became a **value** comparison,
+`self == theOther` — a different check, and a compile error outright for
+any type (like `gp_Quaternion`) with no `operator==` defined.
+
+This engine doesn't model pointer/reference identity at all (parameters
+are handled by value/borrow, never tracked aliases), so there's no direct
+translation available. But every real-world instance of this idiom is
+followed by a full value-comparison fallback that already computes the
+correct result regardless of whether the identity fast path is taken —
+fixed by detecting the `this == &X` / `&X == this` shape directly on the
+cursors (`_is_this_expr`/`_is_addr_of_expr` in `core.py`, checked before
+either side is converted) and dropping it to a boolean literal (`False`
+for `==`, `True` for `!=`): the identity fast path is simply never taken,
+correctness is preserved by the fallback that already exists, and only a
+micro-optimization is lost.
+
+**Result:** `'gp_Quaternion' does not implement the '__eq__' method`
+disappears from `gp_Pnt.cxx --include-impls --verify`'s error list.

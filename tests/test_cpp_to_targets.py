@@ -1350,6 +1350,54 @@ def test_cpp_this_deref_assign_becomes_self_reassign_and_mut_self():
     assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
 
 
+def test_cpp_this_vs_addr_of_identity_check_drops_to_false():
+    # `this == &theOther` is a raw POINTER-identity comparison (the classic
+    # self-assignment/self-comparison guard, e.g. OCCT's
+    # `gp_Quaternion::IsEqual`: `if (this == &theOther) return true;`
+    # before a real value-comparison fallback) -- not a call to the type's
+    # `operator==`. This engine's existing address-of/`this`-to-`self`
+    # lowering collapses both sides to plain names, so previously this
+    # became a VALUE comparison `self == theOther`, which is wrong (a
+    # different check) and can be a compile error outright when the type
+    # has no `operator==`, as here.
+    out = _mojo(
+        """
+        struct Q {
+            double x;
+            Q(double v) : x(v) {}
+            bool IsEqual(const Q& theOther) const {
+                if (this == &theOther) {
+                    return true;
+                }
+                return x == theOther.x;
+            }
+        };
+        """
+    )
+    assert "self == theOther" not in out
+    assert "if False:" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_this_vs_addr_of_identity_check_compiles():
+    out = _mojo(
+        """
+        struct Q {
+            double x;
+            Q(double v) : x(v) {}
+            bool IsEqual(const Q& theOther) const {
+                if (this == &theOther) {
+                    return true;
+                }
+                return x == theOther.x;
+            }
+        };
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
 # ---------- refusals ----------
 
 def test_cpp_template_preserved_as_raw_hole():
