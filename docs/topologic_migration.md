@@ -563,3 +563,46 @@ wrong `0`/`0.0`.
 `__todo_port__` count both drop to 0. Total error count for `gp_Pnt.cxx
 --include-impls --verify` is now ~21, down from ~35 at the start of this
 follow-up and ~136 at the start of Follow-up 3.
+
+## Follow-up 6: unary operator-overload calls, and `(*this) = expr` self-reassignment
+
+The `unexpected token in expression` bucket (3 of the ~21 remaining errors)
+turned out to be two distinct, general C++ call-site gaps, both variations
+on "a `CALL_EXPR` shaped like an overloaded-operator call that the existing
+per-shape handling didn't recognize."
+
+1. **A unary member operator overload's call site was never handled**,
+   only its definition was. `-v` where `v`'s type declares a member
+   `operator-()` (unary negation, 0 explicit params — already correctly
+   mapped to `__neg__` at the class-definition side, see Follow-up 3's
+   `_operator_name`) arrives at the call site as the same `CALL_EXPR`
+   shape the binary-operator-overload handling (`_OVERLOAD_BINOPS`)
+   expects, except with only 1 real operand after filtering the
+   operator-ref — that comment literally said "unary forms fall through",
+   and they did, straight into the generic call-resolution fallback, which
+   has no notion of a bare operator-ref child and emitted garbled code
+   (`vydir(operator-)`, matching OCCT's own `vydir = -vydir;` idiom).
+   Fixed by handling the 1-operand case for `+`/`-` (the only two tokens
+   valid as unary operators in this set) with a plain `HirUnaryOp`.
+
+2. **`(*this) = expr;` — the "replace my whole value via copy-assign"
+   idiom (OCCT's `gp_Quaternion::Multiply`: `(*this) = Multiplied(theOther);`
+   ) — has no identifier `_decl_name` can extract from a dereference**, so
+   it fell through the existing `operator=` call-site handling (built for a
+   bare-name or `obj.field` target) entirely, reaching the same generic
+   call-resolution fallback and emitting a raw, un-parseable `operator=`
+   token reference. Fixed by recognizing `*this`/`(*this)` (however
+   parenthesized/unexposed-wrapped; `_is_this_deref` in `tokens.py`) as the
+   target "self", producing a plain `self = expr` reassignment. That alone
+   wasn't enough for a *correct* compile, though: reassigning `self`
+   outright needs `mut self` in Mojo exactly like assigning one of its
+   fields does, but neither the LIR-level `_mutates_self` (`emit.py`) nor
+   its MIR-level counterpart (`_mir_mutates_self`, needed one IR tier
+   earlier for parameter-mutability decisions — see Follow-up 3) checked
+   for a whole-`self` reassignment, only field/subscript assigns and
+   mutating method calls. Fixed both to also recognize a reassignment whose
+   target is literally `"self"`.
+
+**Result:** `unexpected token in expression` drops to 0. Total error count
+for `gp_Pnt.cxx --include-impls --verify` is now ~18, down from ~21 at the
+start of this follow-up and ~136 at the start of Follow-up 3.

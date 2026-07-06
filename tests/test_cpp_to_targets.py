@@ -1284,6 +1284,72 @@ def test_cpp_macro_constant_resolves_to_real_value_not_zero():
     assert "3.14159265358979" in out
 
 
+def test_cpp_unary_operator_overload_call_site():
+    # `-v` where `v`'s type has a member `operator-()` (unary negation, 0
+    # explicit params) arrives at the call site as a CALL_EXPR shaped like
+    # the binary-operator-overload case (`_OVERLOAD_BINOPS`), but with only
+    # 1 real operand after filtering the operator-ref. That unary case fell
+    # through unhandled, reaching the generic call-resolution fallback and
+    # emitting garbled code (`v(operator-)`, "unexpected token in
+    # expression") instead of a `HirUnaryOp`.
+    out = _mojo(
+        """
+        struct Dir {
+            double x;
+            Dir(double v) : x(v) {}
+            Dir operator-() const { return Dir(-x); }
+        };
+        Dir negate(Dir d) { return -d; }
+        """
+    )
+    assert "operator-" not in out
+    assert "return -d" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_unary_operator_overload_call_site_compiles():
+    out = _mojo(
+        """
+        struct Dir {
+            double x;
+            Dir(double v) : x(v) {}
+            Dir operator-() const { return Dir(-x); }
+        };
+        Dir negate(Dir d) { return -d; }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_this_deref_assign_becomes_self_reassign_and_mut_self():
+    # `(*this) = expr;` (the "replace my whole value" idiom for a
+    # mutate-via-copy-assign method, e.g. OCCT's `gp_Quaternion::Multiply`)
+    # has no identifier `_decl_name` can extract from a dereference, so it
+    # fell through the assignment-target handling entirely and emitted
+    # garbled code (`__cpp_overloaded_op__(operator=, ...)`, "unexpected
+    # token in expression"). Beyond just parsing, the method also needs
+    # `mut self`, since reassigning `self` outright is a mutation just like
+    # assigning one of its fields.
+    out = _mojo(
+        """
+        struct Q {
+            double x;
+            Q(double v) : x(v) {}
+            Q Multiplied(const Q& o) const { return Q(x * o.x); }
+            void Multiply(const Q& theOther) {
+                (*this) = Multiplied(theOther);
+            }
+        };
+        """
+    )
+    assert "def Multiply(mut self, theOther: Q):" in out
+    assert "self = self.Multiplied(theOther.copy())" in out
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
 # ---------- refusals ----------
 
 def test_cpp_template_preserved_as_raw_hole():

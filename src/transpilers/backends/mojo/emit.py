@@ -110,6 +110,13 @@ def _mutates_self(nodes: object, mutating_names: frozenset[str]) -> bool:
         return True
     if isinstance(nodes, lir.MojoSubscriptAssign) and _touches_self(nodes.obj):
         return True
+    if isinstance(nodes, lir.MojoReassign) and nodes.name == "self":
+        # `self = expr` -- the "replace my whole value" idiom for a
+        # mutate-via-copy-assign method (C++'s `(*this) = Multiplied(...);`,
+        # see `_is_this_deref` in the C++ frontend). Reassigning `self`
+        # outright is just as much a mutation as assigning one of its
+        # fields, and needs the same `mut self`.
+        return True
     if (isinstance(nodes, lir.MojoMethodCall) and nodes.method in mutating_names
             and _touches_self(nodes.receiver)):
         return True

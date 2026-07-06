@@ -1606,8 +1606,7 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
 
     # Overloaded binary operator `a + b` arrives as CALL_EXPR 'operator+' with
     # kids [lhs, operator-ref, rhs]. Map to a real binop/compare so Mojo's struct
-    # operator methods (__add__/__eq__/...) drive it. Unary forms (1 operand
-    # after filtering) fall through.
+    # operator methods (__add__/__eq__/...) drive it.
     if cursor.spelling in _OVERLOAD_BINOPS:
         op = cursor.spelling[len("operator"):]
         operands = [k for k in kids if (k.spelling or "") != cursor.spelling]
@@ -1619,6 +1618,16 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
             if op in ("&&", "||"):
                 return hir.HirBoolOp(op="and" if op == "&&" else "or", left=lhs, right=rhs)
             return hir.HirBinOp(op=op, left=lhs, right=rhs)
+        # Unary form of the same token (1 operand after filtering, e.g.
+        # `-vydir` calling a member `gp_Dir::operator-()` with no explicit
+        # params): only `+`/`-` are valid unary operators among this set.
+        # Without this, the call fell through to the generic call-resolution
+        # path at the bottom of this function, which has no notion of a
+        # bare operator-ref child and emitted garbled code (a spurious
+        # `operator-` call embedded as an argument, e.g. `vydir(operator-)`,
+        # "unexpected token in expression").
+        if len(operands) == 1 and op in ("+", "-"):
+            return hir.HirUnaryOp(op=op, operand=_convert_expr(operands[0]))
 
     # Overloaded assignment (`r = x` / `r += x`, e.g. std::string concat, or
     # any user struct with an `operator=`/`operator+=`) arrives as CALL_EXPR
@@ -1643,7 +1652,7 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
                     value = hir.HirBinOp(
                         op=aug, left=hir.HirFieldAccess(value=obj, field=lhs.spelling), right=value)
                 return hir.HirFieldAssign(obj=obj, field=lhs.spelling, value=value)
-            target = _decl_name(lhs)
+            target = _decl_name(lhs) or ("self" if _is_this_deref(lhs) else None)
             if target is not None:
                 return hir.HirAssign(target=target, value=_convert_expr(rhs),
                                      annotation=None, augmented_op=aug)

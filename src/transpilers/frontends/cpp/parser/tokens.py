@@ -35,6 +35,23 @@ def _decl_name(cursor: ci.Cursor) -> str | None:
             return _decl_name(kids[0])
     return None
 
+def _is_this_deref(cursor: ci.Cursor) -> bool:
+    """True for `*this` (however parenthesized/unexposed-wrapped) -- the
+    common "replace my whole value" idiom for a mutate-via-copy-assign
+    method (`void Multiply(...) { (*this) = Multiplied(...); }`, OCCT's
+    `gp_Quaternion` and common elsewhere). Used as an assignment LHS to
+    recognize a self-reassignment that `_decl_name` can't name (there's no
+    identifier behind a dereference)."""
+    while cursor.kind in (CursorKind.UNEXPOSED_EXPR, CursorKind.PAREN_EXPR):
+        kids = list(cursor.get_children())
+        if len(kids) != 1:
+            return False
+        cursor = kids[0]
+    if cursor.kind != CursorKind.UNARY_OPERATOR:
+        return False
+    kids = list(cursor.get_children())
+    return len(kids) == 1 and kids[0].kind == CursorKind.CXX_THIS_EXPR
+
 def _tokens_for(cursor: ci.Cursor) -> list:
     """*cursor*'s tokens, falling back to a widened whole-line retokenize
     when the direct extent yields nothing.
@@ -119,4 +136,4 @@ def _loc_lt(a: ci.SourceLocation, b: ci.SourceLocation) -> bool:
     return (a.line, a.column) < (b.line, b.column)
 
 
-__all__ = ['_strip_unexposed', 'COMPARE_OPS', 'ARITH_OPS', 'LOGICAL_OPS', 'ASSIGN_OPS', '_decl_name', '_binop_token', '_unary_token', '_loc_ge', '_loc_lt', '_tokens_for', '_literal_token']
+__all__ = ['_strip_unexposed', 'COMPARE_OPS', 'ARITH_OPS', 'LOGICAL_OPS', 'ASSIGN_OPS', '_decl_name', '_is_this_deref', '_binop_token', '_unary_token', '_loc_ge', '_loc_lt', '_tokens_for', '_literal_token']

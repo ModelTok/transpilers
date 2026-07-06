@@ -528,6 +528,12 @@ def _mir_mutates_self(nodes, mutating_names: frozenset[str]) -> bool:
         return True
     if isinstance(nodes, mir.MirSubscriptAssign) and _touches_mir_self(nodes.obj):
         return True
+    if isinstance(nodes, mir.MirAssign) and nodes.target == "self":
+        # `self = expr` -- the "replace my whole value" idiom for a
+        # mutate-via-copy-assign method (C++'s `(*this) = Multiplied(...);`,
+        # see `_is_this_deref` in the C++ frontend). Mirrors the same check
+        # in emit.py's `_mutates_self`.
+        return True
     if (isinstance(nodes, mir.MirMethodCall) and nodes.method in mutating_names
             and _touches_mir_self(nodes.receiver)):
         return True
