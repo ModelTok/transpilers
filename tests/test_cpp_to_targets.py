@@ -1240,6 +1240,50 @@ def test_cpp_call_operator_2arg_functor_still_maps_to_call_not_getitem():
     assert "__getitem__" not in out
 
 
+def test_cpp_macro_constant_in_binop_not_a_todo_hole():
+    # `M_PI` (predefined via a `-D` compiler flag for <cmath>/POSIX libm
+    # portability -- not standard C++, but ubiquitous in real math-heavy
+    # code) used inline in a binary expression hit a libclang tokenizer
+    # quirk: a sub-expression cursor whose extent starts exactly at a
+    # command-line macro's expansion point returns *no* tokens at all, so
+    # `_binop_token` couldn't locate the operator and the whole statement
+    # silently became a `TODO[port]` hole -- even though the surrounding
+    # statement (and its own tokens) parse just fine.
+    out = _mojo(
+        """
+        double f(double x) { return M_PI - x; }
+        """
+    )
+    assert "TODO[port]" not in out
+    assert "3.14159265358979" in out
+    assert "def f(x: Float64) -> Float64:" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_macro_constant_in_binop_compiles():
+    out = _mojo(
+        """
+        double f(double x) { return M_PI - x; }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+def test_cpp_macro_constant_resolves_to_real_value_not_zero():
+    # Beyond just parsing, the literal's own VALUE must be the real constant
+    # -- not the previous silent fallback to 0.0 (`_literal_token`'s widened
+    # retokenize finds the macro's identifier spelling, not its expanded
+    # numeric text, so a naive `float(token.spelling)` would still fail and
+    # fall back to a wrong 0.0 even once the binop-token-lookup bug above is
+    # fixed). `_PREDEF_FLOAT_MACROS`/`_PREDEF_INT_MACROS` resolve these
+    # specific, well-known names to the value the frontend itself defines
+    # them as via its own `-D` flags.
+    out = _mojo("double area(double r) { return M_PI * r * r; }")
+    assert "0.0 * r" not in out
+    assert "3.14159265358979" in out
+
+
 # ---------- refusals ----------
 
 def test_cpp_template_preserved_as_raw_hole():

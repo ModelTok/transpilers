@@ -1226,25 +1226,61 @@ def _convert_expr_stmt(cursor: ci.Cursor) -> hir.HirNode:
         return hir.HirRaw(snippet=_cursor_snippet(cursor))
 
 
+# Mirrors the numeric-valued `-D` predefines in `parse_cpp`'s `predefs`
+# list (NULL, M_PI, ...) -- kept in sync with that list by hand. An
+# INTEGER_LITERAL/FLOATING_LITERAL cursor for one of these command-line
+# `-D`-defined constants loses its own token text under a libclang
+# tokenizer quirk at macro-expansion boundaries (see `_tokens_for`'s and
+# `_literal_token`'s docstrings); the token *found* via the widened
+# retokenize fallback is still just the macro's identifier spelling
+# ("M_PI"), never its expanded numeric text, so `float()`/`int()` on it
+# would still fail. Resolve these specific, well-known names to the value
+# we ourselves defined them as, rather than silently falling back to 0.
+_PREDEF_INT_MACROS: dict[str, int] = {
+    "NULL": 0, "EXIT_SUCCESS": 0, "EXIT_FAILURE": 1,
+    "INT_MIN": -2147483648, "INT_MAX": 2147483647,
+    "UINT_MAX": 4294967295,
+    "LONG_MIN": -9223372036854775808, "LONG_MAX": 9223372036854775807,
+    "LLONG_MIN": -9223372036854775808, "LLONG_MAX": 9223372036854775807,
+}
+
+_PREDEF_FLOAT_MACROS: dict[str, float] = {
+    "M_PI": 3.14159265358979323846,
+    "M_PI_2": 1.57079632679489661923,
+    "M_PI_4": 0.78539816339744830962,
+    "M_2_PI": 0.63661977236758134308,
+    "M_E": 2.71828182845904523536,
+    "M_SQRT2": 1.41421356237309504880,
+    "M_SQRT1_2": 0.70710678118654752440,
+    "DBL_EPSILON": 2.2204460492503131e-16,
+    "FLT_EPSILON": 1.19209290e-7,
+}
+
+
 def _convert_expr(cursor: ci.Cursor) -> hir.HirNode:
     kind = cursor.kind
     if kind == CursorKind.INTEGER_LITERAL:
-        token = next(cursor.get_tokens(), None)
+        token = _literal_token(cursor)
         if token is None:
-            # Macro-expanded literals (EXIT_FAILURE, NULL) lose their source
-            # tokens. We don't have the actual constant value available
-            # without evaluating; fall back to 0 so the file parses. This
-            # is a real lossy compromise — comparisons against
-            # EXIT_FAILURE/EXIT_SUCCESS may now produce surprising results.
             return hir.HirIntLiteral(value=0)
+        if token.spelling in _PREDEF_INT_MACROS:
+            return hir.HirIntLiteral(value=_PREDEF_INT_MACROS[token.spelling])
         try:
             return hir.HirIntLiteral(value=int(token.spelling.rstrip("uUlL"), 0))
         except ValueError:
+            # Some other macro-expanded literal (`_literal_token`'s widened
+            # retokenize found the macro's own identifier spelling, not its
+            # expanded numeric text -- we don't have the actual constant
+            # value available for anything outside `_PREDEF_INT_MACROS`
+            # without evaluating). Fall back to 0 so the file still parses;
+            # a real lossy compromise for an unrecognized macro constant.
             return hir.HirIntLiteral(value=0)
     if kind == CursorKind.FLOATING_LITERAL:
-        token = next(cursor.get_tokens(), None)
+        token = _literal_token(cursor)
         if token is None:
             return hir.HirFloatLiteral(value=0.0)
+        if token.spelling in _PREDEF_FLOAT_MACROS:
+            return hir.HirFloatLiteral(value=_PREDEF_FLOAT_MACROS[token.spelling])
         try:
             return hir.HirFloatLiteral(value=float(token.spelling.rstrip("fFlL")))
         except ValueError:

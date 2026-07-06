@@ -515,3 +515,51 @@ callers now type-check further), `__todo_port__`/unknown-declaration count
 also drops, from 20 to 10. Total error count for `gp_Pnt.cxx
 --include-impls --verify` is now ~35, down from ~136 at the start of
 Follow-up 3.
+
+## Follow-up 5: a libclang tokenizer quirk around `-D`-defined macro constants
+
+The next-largest bucket, `use of unknown declaration 'anAng'` (plus a good
+chunk of the generic `__todo_port__` count), traced to a single libclang
+tokenizer quirk affecting every `-D`-predefined constant this frontend
+injects for stdlib portability (`M_PI`, `NULL`, `EXIT_FAILURE`, `INT_MIN`,
+...) whenever one is used inline in a binary or unary expression.
+
+`const double anAng = M_PI - Angle(theOther);` parses to a perfectly
+ordinary AST (`VAR_DECL` → `BINARY_OPERATOR` → `[FLOATING_LITERAL,
+CALL_EXPR]`) — but `_binop_token` (which finds the actual operator symbol
+by slicing `cursor.get_tokens()` between the two operand extents, since
+libclang's bindings expose no direct `.operator` accessor) got an *empty*
+token list for the `BINARY_OPERATOR` cursor. libclang's tokenizer can
+return nothing for a sub-expression extent that starts or ends exactly at
+a command-line macro's expansion point — even though tokenizing the
+*enclosing* `VAR_DECL`/`DECL_STMT` (whose extent starts safely before the
+macro) works fine and includes the real `M_PI` / `-` tokens. `_binop_token`
+raised `UnsupportedConstruct`, turning the *entire* declaration statement
+into a `TODO[port]` hole — and every later reference to `anAng` in the same
+function then became "use of unknown declaration", since the variable was
+never actually declared.
+
+Fixed with `_tokens_for` (`tokens.py`): try the cursor's own tokens first;
+if empty, retokenize a *widened* range (from column 1 of the cursor's
+first line to the start of the line after its last) and let the existing
+location-based filtering in `_binop_token`/`_unary_token` pick out the
+right token — widening the search window can't return a *wrong* token,
+only find one that direct tokenization missed, since callers still match
+by exact source position.
+
+That alone fixes the "which operator" problem, but not the literal's own
+*value*: the token `_tokens_for` recovers for `M_PI` is still the literal
+macro identifier text ("M_PI"), never libclang's expanded numeric text —
+there's no `evaluate()`-style API in this libclang binding version to ask
+for the constant's semantic value directly. Since these are constants the
+frontend itself defines via its own `-D` flags, `_PREDEF_INT_MACROS`/
+`_PREDEF_FLOAT_MACROS` (`core.py`) map the well-known names (`M_PI`, `NULL`,
+`EXIT_FAILURE`, `INT_MIN`, ...) to the same values already passed on the
+command line, so `_literal_token` resolves them exactly instead of the
+previous silent (and explicitly pre-existing, documented) fallback to a
+wrong `0`/`0.0`.
+
+**Result:** `use of unknown declaration 'anAng'` and the remaining
+`__todo_port__` count both drop to 0. Total error count for `gp_Pnt.cxx
+--include-impls --verify` is now ~21, down from ~35 at the start of this
+follow-up and ~136 at the start of Follow-up 3.
