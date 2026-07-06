@@ -136,15 +136,53 @@ def _project_preamble() -> str:
     return ("\n" + inline + "\n") if inline else ""
 
 
-# Number of lines occupied by the parser preamble (PARSER_PREAMBLE +
-# _project_preamble). User code starts at this line offset. Cursors with
-# ``location.line <= USER_CODE_FIRST_LINE`` come from the preamble and
-# should not be emitted as user HIR. Cursors at exactly
-# ``USER_CODE_FIRST_LINE`` come from the leading newline of the user
-# source, which is harmless to skip.
+# A project preamble is usually *parse-only* scaffolding (opaque stub
+# classes, typedefs, macros) that must exist for libclang to get past a
+# type it can't see the real declaration of, but that should never itself
+# appear in the emitted target -- e.g. `class Standard_OStream {};` is
+# never meant to become a real Mojo struct. But some projects also need a
+# handful of small *real* helpers with correct bodies (e.g. OCCT's
+# `RealSmall()`/`Epsilon()`/`IsOdd()` tolerance/parity functions, called
+# for real from headers/impls the -I resolver pulls in) -- these DO need
+# to be emitted, or every call site is "use of unknown declaration" in the
+# output even though the call parsed and type-checked fine. A preamble
+# marks the split with this literal line; everything at or after it is
+# treated as ordinary user code (converted and emitted normally) instead
+# of being excluded like the rest of the preamble.
+_PREAMBLE_REAL_MARKER = "// === TRANSPILERS: REAL PREAMBLE BELOW ==="
+
+
+def _split_project_preamble() -> tuple[str, str]:
+    """Split ``_project_preamble()`` into ``(stub_part, real_part)`` at
+    ``_PREAMBLE_REAL_MARKER``. ``real_part`` is ``""`` if the preamble has
+    no marker (the common case -- most project preambles are parse-only).
+
+    ``real_part`` must land in the final translation unit *after*
+    ``PARSER_PREAMBLE`` (the generic std:: shim, also excluded, and itself
+    only added later inside ``preprocess_cpp``) and immediately before the
+    user's own source -- not where it textually sits in the preamble file,
+    right before ``PARSER_PREAMBLE``. ``parse_cpp`` prepends it directly to
+    *source* for exactly this reason; see the call site there.
+    """
+    project = _project_preamble()
+    marker_at = project.find(_PREAMBLE_REAL_MARKER)
+    if marker_at == -1:
+        return project, ""
+    return project[:marker_at], project[marker_at:]
+
+
+# Number of lines occupied by everything that must stay excluded from user
+# HIR: the parse-only project preamble stub part, plus PARSER_PREAMBLE
+# (added after it -- see _split_project_preamble and the parse_cpp call
+# site). Cursors with ``location.line <= this`` come from that excluded
+# region; cursors after it (the preamble's own real part, if any, followed
+# by the user's actual source) are ordinary user code. Cursors at exactly
+# this line come from the leading newline of the user source, which is
+# harmless to skip.
 def _compute_user_first_line() -> int:
     from .preprocess import PARSER_PREAMBLE
-    return len((PARSER_PREAMBLE + _project_preamble()).splitlines())
+    stub_part, _real_part = _split_project_preamble()
+    return len((stub_part + PARSER_PREAMBLE).splitlines())
 
 _UNKNOWN_TYPE_NAME_RE = _re.compile(r"unknown type name '([A-Za-z_][A-Za-z0-9_]*)'")
 _SCREAMING_MACRO_RE = _re.compile(r"^[A-Z][A-Z0-9_]*$")
@@ -221,6 +259,9 @@ def parse_cpp(source: str):
         "-DM_PI=3.14159265358979323846", "-DM_PI_2=1.57079632679489661923",
         "-DM_PI_4=0.78539816339744830962", "-DM_2_PI=0.63661977236758134308",
         "-DM_E=2.71828182845904523536", "-DM_SQRT2=1.41421356237309504880",
+        "-DM_SQRT1_2=0.70710678118654752440",
+        # <cfloat>/float.h, same rationale as the M_* constants above.
+        "-DDBL_EPSILON=2.2204460492503131e-16", "-DFLT_EPSILON=1.19209290e-7F",
     ]
     triple_args = []
     triple = _host_triple()
@@ -248,9 +289,17 @@ def parse_cpp(source: str):
     # never actually be used by that code; only worked for cases that
     # never exercised it, e.g. macro-only injections that the real `-E`
     # step expands positionally regardless of preamble placement).
-    # _compute_user_first_line()'s line-count math is order-independent
-    # (same total line count either way), so this doesn't need updating.
-    preprocessed = _project_preamble() + preprocess_cpp(source)
+    # The preamble's stub part goes before preprocess_cpp (ahead of even
+    # PARSER_PREAMBLE, which preprocess_cpp adds internally) exactly as
+    # before. Its *real* part (see _split_project_preamble/
+    # _PREAMBLE_REAL_MARKER) instead goes directly onto the front of
+    # *source*, so it lands after PARSER_PREAMBLE and immediately before
+    # the user's own code -- matching _compute_user_first_line()'s
+    # boundary, which only excludes stub_part + PARSER_PREAMBLE. Real
+    # C++ code with no directives of its own to strip, so prepending it
+    # pre-preprocessing (rather than post-, like stub_part) is harmless.
+    _stub_preamble, _real_preamble = _split_project_preamble()
+    preprocessed = _stub_preamble + preprocess_cpp(_real_preamble + source)
     # Retry with unresolved export/calling-convention macros (TOPOLOGIC_API,
     # DLLEXPORT, WINAPI, ...) neutralized -- see _macro_like_unknown_types.
     # Bounded by the number of distinct macro names actually seen, so this
@@ -601,7 +650,15 @@ def _method_name(cursor: ci.Cursor) -> str:
 
 
 def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
-    params: list[hir.HirParam] = [hir.HirParam(name="self", annotation=struct_name)]
+    # A `static` method has no implicit `this`/`self` -- it's called via
+    # `ClassName::method(...)`, no receiver instance at all (e.g. OCCT's
+    # `gp::Resolution()` / `Precision::Angular()` tolerance helpers).
+    # Injecting a `self` param for one anyway would be wrong twice over: the
+    # target emits it as `@staticmethod` (no self param at all — Mojo
+    # rejects a bodyless-of-self instance method with "self argument must
+    # be present"), and a real call site never has an instance to pass.
+    is_static = cursor.is_static_method()
+    params: list[hir.HirParam] = [] if is_static else [hir.HirParam(name="self", annotation=struct_name)]
     body: list[hir.HirNode] = []
     for c in cursor.get_children():
         if c.kind == CursorKind.PARM_DECL:
@@ -613,6 +670,7 @@ def _convert_method(cursor: ci.Cursor, *, struct_name: str) -> hir.HirFunction:
         params=params,
         return_annotation=_type_text(cursor.result_type),
         body=body,
+        is_static=is_static,
     )
 
 def _check_diagnostics(tu: ci.TranslationUnit) -> None:
@@ -1571,6 +1629,16 @@ def _convert_call(cursor: ci.Cursor) -> hir.HirNode:
     qualified = any(t.spelling == "::" for t in callee.get_tokens())
     if referenced is not None and referenced.kind == CursorKind.CXX_METHOD and not qualified:
         return hir.HirMethodCall(receiver=hir.HirName(name="self"), method=name, args=args)
+    # A qualified call to another class's *static* method (`Precision::
+    # Angular()`, `gp::Resolution()`) — every target here maps a static
+    # method to a receiver-less callable reached via the struct's own name
+    # (Mojo: `@staticmethod` + `StructName.method(...)`), so the struct
+    # name doubles as a valid "receiver" expression for a HirMethodCall
+    # despite naming a type, not a value.
+    if (referenced is not None and referenced.kind == CursorKind.CXX_METHOD
+            and qualified and referenced.is_static_method() and referenced.semantic_parent is not None):
+        struct_name = referenced.semantic_parent.spelling
+        return hir.HirMethodCall(receiver=hir.HirName(name=struct_name), method=name, args=args)
     # SIMD intrinsic lifting: turn Intel `_mm*` calls into semantic HIR
     # operations on SIMD-typed values. Mojo will emit idiomatic `a + b`
     # on SIMD types; other targets fall back to the original call form.

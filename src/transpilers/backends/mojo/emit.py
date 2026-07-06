@@ -162,7 +162,8 @@ def _emit_fn(fn: lir.MojoFn, mutating_names: frozenset[str], *, depth: int = 0) 
     )
     ret = f" -> {fn.return_type}" if fn.return_type != "None" else ""
     raises = " raises" if getattr(fn, "raises", False) else ""
-    header = f"{indent}def {_safe(fn.name)}({params}){raises}{ret}:"
+    decorator = f"{indent}@staticmethod\n" if getattr(fn, "is_static", False) else ""
+    header = f"{decorator}{indent}def {_safe(fn.name)}({params}){raises}{ret}:"
     body = _emit_block(fn.body, depth + 1) or (indent + INDENT + "pass")
     return f"{header}\n{body}"
 

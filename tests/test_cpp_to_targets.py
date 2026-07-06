@@ -86,6 +86,63 @@ def test_cpp_namespace_flattens_to_module_scope():
     assert "def classify(x: Int) -> Int:" in out
 
 
+def test_cpp_anonymous_namespace_struct_return_type_resolves():
+    # A struct declared inside an anonymous namespace (a common
+    # translation-unit-local-helper idiom in real .cxx files) keeps its
+    # namespace-qualified spelling from libclang -- literally
+    # `(anonymous namespace)::Name` -- when used as a type annotation
+    # (e.g. a function's return type). _convert_top_level flattens every
+    # namespace, including anonymous ones, registering the struct under
+    # its bare name -- so a still-qualified annotation on the return type
+    # could never match the registry, leaving it an unresolved type hole
+    # (ValueError: unresolved type hole) even though the struct itself
+    # converted fine.
+    out = _mojo(
+        """
+        namespace {
+        struct Helper {
+            int tag;
+        };
+        Helper makeHelper(int t) {
+            Helper h;
+            h.tag = t;
+            return h;
+        }
+        }
+        int useIt(int t) {
+            Helper h = makeHelper(t);
+            return h.tag;
+        }
+        """
+    )
+    assert "struct Helper" in out
+    assert "def makeHelper(t: Int) -> Helper:" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_anonymous_namespace_struct_return_type_compiles():
+    out = _mojo(
+        """
+        namespace {
+        struct Helper {
+            int tag;
+        };
+        Helper makeHelper(int t) {
+            Helper h;
+            h.tag = t;
+            return h;
+        }
+        }
+        int useIt(int t) {
+            Helper h = makeHelper(t);
+            return h.tag;
+        }
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
 def test_cpp_typedef_and_using_resolve():
     out = _mojo(
         """
@@ -804,6 +861,85 @@ def test_cpp_return_struct_param_compiles_in_rust_too():
     out = _rust(src)
     result = rust_compiles(out)
     assert result.ok, result.stderr
+
+
+# ---------- static methods (no implicit self/this) ----------
+
+def test_cpp_static_method_no_self_param():
+    # A `static` method has no implicit `this` -- called via
+    # `ClassName::method(...)`, no receiver instance at all. Previously
+    # every CXX_METHOD unconditionally got an injected `self` param, which
+    # is wrong twice over: the real call site has no instance to pass, and
+    # Mojo's own static-method convention (`@staticmethod`, no self param)
+    # rejects a "self"-first signature with a caller that never supplies one.
+    out = _mojo(
+        """
+        class Tol {
+        public:
+            static double Small() { return 1e-9; }
+        };
+        """
+    )
+    assert "@staticmethod" in out
+    assert "def Small() -> Float64:" in out
+    assert "def Small(self)" not in out
+
+
+def test_cpp_qualified_static_call_resolves_to_struct_dot_method():
+    # Precision::Angular() (or here, Tol::Small()) called from another
+    # class's method must route through the callee's own struct name --
+    # `Tol.Small()`, Mojo's real static-call syntax -- not a bare
+    # `Small()` free-function reference (Small was never emitted as a
+    # free function; that call site would be "unknown declaration") and
+    # not `self.Small()` (this is not a same-class call).
+    out = _mojo(
+        """
+        class Tol {
+        public:
+            static double Small() { return 1e-9; }
+        };
+        class Foo {
+        public:
+            bool Check(double a) { return a <= Tol::Small(); }
+        };
+        """
+    )
+    assert "self.Small()" not in out
+    assert "Tol.Small()" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_qualified_static_call_compiles():
+    out = _mojo(
+        """
+        class Tol {
+        public:
+            static double Small() { return 1e-9; }
+        };
+        class Foo {
+        public:
+            bool Check(double a) { return a <= Tol::Small(); }
+        };
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
+def test_cpp_static_method_signedness_overload_dedup_no_self():
+    # dedupe_overloads' rename (issue #80) must not reintroduce a `self`
+    # param for a static overload it renames.
+    out = _mojo(
+        """
+        class Bitwise {
+        public:
+            static int NOT(const int x) { return -x; }
+            static unsigned int NOT(const unsigned int x) { return -x; }
+        };
+        """
+    )
+    assert "def NOT(x: Int) -> Int:" in out
+    assert "def NOT_overload2(x: Int) -> Int:" in out
 
 
 # ---------- refusals ----------

@@ -150,7 +150,8 @@ def _lower_function(fn: hir.HirFunction) -> mir.MirFunction:
     ret_ty = _resolve_annotation(fn.return_annotation)
     env: dict[str, Type] = {p.name: p.ty for p in params}
     body = [_lower_stmt(n, env) for n in fn.body]
-    return _p(mir.MirFunction(name=fn.name, params=params, return_type=ret_ty, body=body), fn)
+    return _p(mir.MirFunction(name=fn.name, params=params, return_type=ret_ty, body=body,
+                              is_static=fn.is_static), fn)
 
 
 def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:

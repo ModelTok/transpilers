@@ -294,6 +294,7 @@ class _MojoLowering(MirLoweringBase):
         # Mojo Dict subscript reads raise (KeyError); a function using a Dict
         # needs `raises`. Over-declaring raises is harmless.
         f.raises = _uses_dict(fn)
+        f.is_static = getattr(fn, "is_static", False)
         return f
 
     def lower_return(self, node: mir.MirReturn):
