@@ -636,3 +636,51 @@ micro-optimization is lost.
 
 **Result:** `'gp_Quaternion' does not implement the '__eq__' method`
 disappears from `gp_Pnt.cxx --include-impls --verify`'s error list.
+
+## Follow-up 8: multi-dimensional array types, and `std::swap` on the same container
+
+The largest remaining bucket, `invalid use of mutating method on rvalue of
+type 'Float64'` (6 of the ~18 errors left, all from `gp_Mat::Transpose`'s
+`std::swap(myMat[0][1], myMat[1][0])`), was previously scoped and
+deliberately deferred as "SIMD-`swap()`-specific mutability" in Follow-up
+2. Chasing it down surfaced two distinct, general bugs.
+
+1. **Multi-dimensional native array types collapsed to a single flat
+   `list[T]`, silently dropping every dimension after the first.**
+   `_type_text`'s array-type-text heuristic (`types.py`) detects an array
+   spelling by slicing at the *first* `[` (`"double[3][3]"` → head
+   `"double"`), which correctly identifies the element type but then wraps
+   it in exactly *one* `list[...]` layer regardless of how many bracket
+   groups followed — so OCCT's `gp_Mat::myMat` (`double myMat[3][3];`, a
+   real 3×3 matrix) got the field annotation `List[Float64]` instead of
+   `List[List[Float64]]`. Ordinary `self.myMat[i][j]` reads/writes still
+   happened to compile regardless (Mojo doesn't strictly enforce the
+   stated `var` annotation against the initializer's own inferred type),
+   which is why this had stayed hidden — it only surfaced where the
+   *declared* element type mattered for resolving a generic call's type
+   parameter (see point 2). Fixed by wrapping in one `list[...]` layer per
+   bracket group (`cleaned.count("[")`) instead of exactly one.
+
+2. **`std::swap(a, b)` was passed straight through as a call to Mojo's own
+   `swap()` builtin**, which — once point 1 correctly resolved `self.myMat[0]`
+   as `List[Float64]` rather than a bare `Float64` — rejects two arguments
+   that alias the same underlying container outright: "argument of 'swap'
+   call allows writing a memory location previously writable through
+   another aliased argument". This isn't a Mojo quirk to route around with
+   more type-inference precision — it's Mojo's aliasing-exclusivity model
+   correctly refusing two simultaneous mutable borrows into the same
+   value, and `std::swap(myMat[0][1], myMat[1][0])` (two elements of the
+   *same* matrix) does exactly that. No amount of correct typing fixes a
+   call shaped this way; the call itself has to change. Fixed by
+   desugaring `std::swap(a, b)` (detected via `cursor.referenced.
+   semantic_parent.spelling == "std"`, not just the bare spelling `"swap"`,
+   since that's also an unrelated, real OCCT method name elsewhere) directly
+   into a manual temp-variable swap (`tmp = a; a = b; b = tmp;`) at the C++
+   frontend level — this sidesteps Mojo's aliasing check entirely (no two
+   arguments ever passed to the same call) and is correct for every target,
+   not a Mojo-specific workaround.
+
+**Result:** `invalid use of mutating method on rvalue of type 'Float64'`
+drops to 0. Total error count for `gp_Pnt.cxx --include-impls --verify` is
+now ~11, down from ~18 at the start of this follow-up and ~136 at the
+start of Follow-up 3.

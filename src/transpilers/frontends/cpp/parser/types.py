@@ -157,12 +157,19 @@ def _type_text(t: ci.Type) -> str:
                     v = _VECTOR_ELEM_ALIASES.get(inner[i + 1:].strip(), inner[i + 1:].strip())
                     return f"dict[{k}, {v}]"
             break
-    # Array types — `int[]`, `int[10]`, `int[n]`. Drop the size; carry the
-    # element type as a list.
+    # Array types — `int[]`, `int[10]`, `int[n]`. Drop the size(s); carry
+    # the element type as a list. Multi-dimensional (`double[3][3]`) needs
+    # one `list[...]` layer per bracket group -- slicing at just the first
+    # `[` previously collapsed every dimension onto a single flat
+    # `list[float]`, silently discarding the second (and any further)
+    # dimension (OCCT's `gp_Mat::myMat`: `double myMat[3][3];`).
     if "[" in cleaned and cleaned.endswith("]"):
         head = cleaned[: cleaned.index("[")].strip()
         if head in _VECTOR_ELEM_ALIASES:
-            return f"list[{_VECTOR_ELEM_ALIASES[head]}]"
+            result = _VECTOR_ELEM_ALIASES[head]
+            for _ in range(cleaned.count("[")):
+                result = f"list[{result}]"
+            return result
     # Array libclang kinds.
     if t.kind in (ci.TypeKind.CONSTANTARRAY, ci.TypeKind.INCOMPLETEARRAY, ci.TypeKind.VARIABLEARRAY):
         try:

@@ -1398,6 +1398,58 @@ def test_cpp_this_vs_addr_of_identity_check_compiles():
     assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
 
 
+def test_cpp_2d_fixed_array_field_gets_nested_list_annotation():
+    # `double myMat[3][3];` (a native 2D fixed-size array field, OCCT's
+    # gp_Mat) previously collapsed to a flat `List[Float64]` annotation:
+    # the array-type-text heuristic sliced the type spelling at the FIRST
+    # `[`, discarding every dimension after the first. Needs one
+    # `list[...]` layer per bracket group.
+    out = _mojo(
+        """
+        struct Mat {
+            double myMat[2][2];
+        };
+        """
+    )
+    assert "var myMat: List[List[Float64]]" in out
+
+
+def test_cpp_std_swap_desugars_to_temp_swap_not_builtin_call():
+    # `std::swap(a, b)` was passed straight through as a call to Mojo's own
+    # `swap()` builtin, which rejects two arguments that alias the same
+    # underlying container ("allows writing a memory location previously
+    # writable through another aliased argument") -- exactly OCCT's
+    # `gp_Mat::Transpose` idiom, `std::swap(myMat[0][1], myMat[1][0])`, two
+    # elements of the *same* matrix. Desugars to a manual temp-variable
+    # swap instead, which sidesteps the aliasing restriction entirely and
+    # is correct for every target, not just Mojo.
+    out = _mojo(
+        """
+        struct Mat {
+            double myMat[2][2];
+            void Transpose() { std::swap(myMat[0][1], myMat[1][0]); }
+        };
+        """
+    )
+    assert "swap(" not in out
+    assert "__swap_tmp" in out
+    assert "def Transpose(mut self):" in out
+
+
+@pytest.mark.skipif(not _has("mojo"), reason="mojo not installed")
+def test_cpp_std_swap_on_same_matrix_compiles():
+    out = _mojo(
+        """
+        struct Mat {
+            double myMat[2][2];
+            void Transpose() { std::swap(myMat[0][1], myMat[1][0]); }
+        };
+        """
+    )
+    result = mojo_compiles(out)
+    assert result.ok, f"mojo rejected:\n{out}\n\nstderr:\n{result.stderr}"
+
+
 # ---------- refusals ----------
 
 def test_cpp_template_preserved_as_raw_hole():

@@ -953,6 +953,9 @@ def _convert_stmt_inner(cursor: ci.Cursor) -> list[hir.HirNode]:
     if kind == CursorKind.UNARY_OPERATOR:
         return [_convert_unary_stmt(cursor)]
     if kind == CursorKind.CALL_EXPR:
+        swapped = _convert_std_swap_stmt(cursor)
+        if swapped is not None:
+            return swapped
         return [_convert_expr_stmt(cursor)]
     if kind == CursorKind.BREAK_STMT:
         return [hir.HirBreak()]
@@ -1630,6 +1633,57 @@ def _lhs_as_subscript_or_name(lhs: ci.Cursor) -> hir.HirNode:
         obj = _convert_expr(lk[0]) if lk else hir.HirName(name="self")
         return hir.HirFieldAccess(value=obj, field=lhs.spelling)
     return _convert_expr(lhs)
+
+def _assign_to(target: hir.HirNode, value: hir.HirNode) -> hir.HirNode:
+    """Build the right *Assign statement for a target expression shape
+    produced by `_lhs_as_subscript_or_name` (subscript / field / plain
+    name), for `_convert_std_swap_stmt`'s manual swap desugaring."""
+    if isinstance(target, hir.HirSubscript):
+        return hir.HirSubscriptAssign(obj=target.value, index=target.index, value=value)
+    if isinstance(target, hir.HirFieldAccess):
+        return hir.HirFieldAssign(obj=target.value, field=target.field, value=value)
+    if isinstance(target, hir.HirName):
+        return hir.HirAssign(target=target.name, value=value, annotation=None)
+    raise UnsupportedConstruct(f"swap target shape {type(target).__name__}")
+
+
+def _convert_std_swap_stmt(cursor: ci.Cursor) -> list[hir.HirNode] | None:
+    """`std::swap(a, b);` as a statement -> `tmp = a; a = b; b = tmp;`.
+
+    Not just a style choice: Mojo's own `swap()` builtin rejects two
+    arguments that alias the same underlying container ("argument ...
+    allows writing a memory location previously writable through another
+    aliased argument") -- exactly OCCT's `gp_Mat::Transpose` idiom,
+    `std::swap(myMat[0][1], myMat[1][0])`, two elements of the *same*
+    matrix. A manual temp-variable swap sidesteps that aliasing-exclusivity
+    restriction entirely (no two arguments passed to any single call), and
+    is correct universally -- not a Mojo-specific workaround.
+
+    Returns None (not applicable) for anything that isn't a genuine
+    `std::swap(a, b)` two-argument call, so the caller falls back to
+    ordinary call-expression handling.
+    """
+    if cursor.spelling != "swap":
+        return None
+    ref = cursor.referenced
+    if ref is None or ref.semantic_parent is None or ref.semantic_parent.spelling != "std":
+        return None
+    kids = [
+        k for k in cursor.get_children()
+        if k.kind not in (CursorKind.NAMESPACE_REF, CursorKind.TYPE_REF, CursorKind.TEMPLATE_REF)
+        and (k.spelling or "") != "swap"
+    ]
+    if len(kids) != 2:
+        return None
+    a = _lhs_as_subscript_or_name(kids[0])
+    b = _lhs_as_subscript_or_name(kids[1])
+    tmp = "__swap_tmp"
+    return [
+        hir.HirAssign(target=tmp, value=a, annotation=None),
+        _assign_to(a, b),
+        _assign_to(b, hir.HirName(name=tmp)),
+    ]
+
 
 def _iter_index(node: "hir.HirNode"):
     """Interpret a vector iterator expr as (container, index): c.begin() -> (c,0),
