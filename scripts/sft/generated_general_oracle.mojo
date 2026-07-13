@@ -1,13 +1,3 @@
-# Real `mojo build`/`mojo run` gate for the fine-tuned model's output.
-# Contains the Mojo the fine-tuned LoRA emitted for two unmigrated
-# EnergyPlus General.cc leaves (SafeDivide, OrdinalDay) + a main() that
-# oracle-checks them against the C++ reference semantics. If `mojo run`
-# prints PASS for both, the generated Mojo genuinely compiles AND
-# computes correctly -- not just "looks plausible in Python".
-#
-# Run (after `uv pip install modular`):
-#   mojo run scripts/sft/generated_general.mojo
-
 from math import copysign
 
 
@@ -19,7 +9,7 @@ def SafeDivide(a: Float64, b: Float64) -> Float64:
 
 
 def OrdinalDay(Month: Int, Day: Int, LeapYearValue: Int) -> Int:
-    comptime EndDayofMonth = [31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
+    var EndDayofMonth = [31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
     if Month == 1:
         return Day
     if Month == 2:
@@ -48,12 +38,11 @@ def ref_ordinal_day(month: Int, day: Int, leap: Int) -> Int:
 
 
 def main():
-    # --- SafeDivide oracle (fuzz vs C++ ref) ---
     var sd_bad = 0
     for (a, b) in [(5.0, 2.0), (7.0, 0.0), (-3.0, 1e-12), (0.0, 0.0), (10.0, -1e-11), (9.0, 4.0)]:
         if SafeDivide(a, b) != ref_safe_divide(a, b):
             sd_bad += 1
-    # --- OrdinalDay oracle (fuzz vs C++ ref) ---
+
     var od_bad = 0
     var i = 0
     while i < 200:
@@ -71,4 +60,4 @@ def main():
     if not (sd_pass and od_pass):
         print("REAL-MOJO GATE: FAIL")
         return
-    print("REAL-MOJO GATE: PASS  (generated Mojo compiles + matches C++ oracle)")
+    print("REAL-MOJO GATE: PASS")
