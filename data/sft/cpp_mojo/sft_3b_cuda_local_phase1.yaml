@@ -1,0 +1,46 @@
+### model
+model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+# Plain bf16 LoRA (no QLoRA): 3B*bf16 ~6GB + LoRA ~120MB + optim ~240MB
+# + activations(GC) ~1.5GB = ~8GB, fits the 16GB RTX 5060 Ti.
+
+### attention (NVIDIA Blackwell sm_120 — native SDPA, NO flash-attn compile)
+# flash-attn has no prebuilt wheel for sm_120; PyTorch SDPA is built-in.
+flash_attn: sdpa
+use_unsloth_gc: false
+use_reentrant_gc: false
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+
+### dataset
+dataset_dir: C:\Github\transpilers\data\sft\cpp_mojo
+dataset: mojo_acquisition
+template: qwen
+cutoff_len: 4096
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+### output
+output_dir: C:\Github\transpilers\out\adapter_3b_cuda_phase1
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+overwrite_output_dir: true
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+learning_rate: 1.5e-4
+num_train_epochs: 2.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
