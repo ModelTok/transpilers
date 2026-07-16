@@ -3,6 +3,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.venv_cuda/
+out/
+train_*.log
 dist/
 build/
 *.egg-info/
