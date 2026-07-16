@@ -96,7 +96,7 @@ _PREAMBLE = """
 typedef signed char int8_t; typedef short int16_t; typedef int int32_t;
 typedef long long int64_t; typedef unsigned char uint8_t;
 typedef unsigned short uint16_t; typedef unsigned int uint32_t;
-typedef unsigned long long uint64_t; typedef unsigned long size_t;
+typedef unsigned long long uint64_t; typedef unsigned long long size_t;
 typedef long ssize_t; typedef long ptrdiff_t;
 double exp(double); double log(double); double log10(double); double log2(double);
 double sqrt(double); double cbrt(double); double pow(double, double);
@@ -110,12 +110,6 @@ double max(double, double); double min(double, double);
 int max(int, int); int min(int, int); int abs(int); long labs(long);
 double clamp(double, double, double); int clamp(int, int, int);
 namespace std {
-using ::exp; using ::log; using ::log10; using ::log2; using ::sqrt; using ::cbrt;
-using ::pow; using ::sin; using ::cos; using ::tan; using ::asin; using ::acos;
-using ::atan; using ::atan2; using ::sinh; using ::cosh; using ::tanh;
-using ::fabs; using ::ceil; using ::floor; using ::round; using ::trunc;
-using ::fmod; using ::hypot; using ::fmin; using ::fmax; using ::fma;
-using ::max; using ::min; using ::abs; using ::labs; using ::clamp;
 }
 """
 

@@ -112,7 +112,7 @@ namespace std {
     template <class T> class deque {};
     template <typename R, typename... A> class function {};
     class exception {};
-    using size_t = unsigned long;
+    using size_t = unsigned long long;
     using ptrdiff_t = long;
     class string { public:
         string(); string(const char*); string(const string&);
@@ -206,9 +206,9 @@ namespace std {
     template <typename T, typename U> T* static_cast_helper(U*);
     template <typename T, typename U> T* dynamic_cast_helper(U*);
 }
-void* operator new(unsigned long, void*);
-inline void* operator new(unsigned long);
-inline void operator delete(void*);
+void* operator new(unsigned long long, void*);
+void* operator new(unsigned long long);
+void operator delete(void*);
 
 // TU-scope `using` declarations so user code that writes bare
 // `vector<int>` (instead of `std::vector<int>`) still resolves
@@ -228,42 +228,9 @@ using std::deque;
 using std::priority_queue;
 using std::string;
 using std::string_view;
-using std::swap;
-using std::min;
-using std::max;
 using std::function;
 using std::shared_ptr;
 using std::unique_ptr;
-using std::sqrt;
-using std::exp;
-using std::log;
-using std::log10;
-using std::log2;
-using std::cbrt;
-using std::pow;
-using std::sin;
-using std::cos;
-using std::tan;
-using std::asin;
-using std::acos;
-using std::atan;
-using std::atan2;
-using std::sinh;
-using std::cosh;
-using std::tanh;
-using std::fabs;
-using std::ceil;
-using std::floor;
-using std::round;
-using std::trunc;
-using std::fmod;
-using std::hypot;
-using std::fmin;
-using std::fmax;
-using std::fma;
-using std::abs;
-using std::labs;
-using std::size_t;
 using std::ptrdiff_t;
 using std::exception;
 using std::numeric_limits;

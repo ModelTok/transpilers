@@ -12,6 +12,7 @@ is given. Target defaults to rust.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -229,6 +230,23 @@ def main(argv: list[str] | None = None) -> int:
             "always searched first, even without this flag."
         ),
     )
+    parser.add_argument(
+        "--cbm",
+        dest="cbm_repo",
+        default=None,
+        metavar="REPO_ROOT",
+        help=(
+            "cpp only: recover the cross-file class/method/macro surface for "
+            "this file from a codebase-memory-mcp knowledge graph and inject it "
+            "as a parser preamble (issue #79). The repo at REPO_ROOT must be "
+            "indexed by `codebase-memory-mcp index`. This is the inverse of the "
+            "manual header-flattening the strict frontend otherwise needs for "
+            "multi-file C++ (out-of-line `Class::Method` defs resolve without "
+            "stripping their class declaration). Opt-in: without it, parsing is "
+            "unchanged. Requires the `codebase-memory-mcp` CLI on PATH or "
+            "$CBM_BIN."
+        ),
+    )
     args = parser.parse_args(argv)
 
     source_lang = args.source_lang or EXT_TO_SOURCE.get(args.source.suffix)
@@ -256,6 +274,38 @@ def main(argv: list[str] | None = None) -> int:
         # instead of failing with "use of undeclared identifier".
         from transpilers.frontends.cpp.parser.includes import resolve_local_includes
         src_input = resolve_local_includes(args.source, include_dirs=args.include_dirs)
+    elif source_lang == "cpp" and args.cbm_repo:
+        # Opt-in (only when --cbm is given): recover the cross-file
+        # class/method/macro surface for this file from a codebase-memory-mcp
+        # knowledge graph and inject it as a project preamble (issue #79).
+        # This is the inverse of manual header-flattening: out-of-line
+        # `Class::Method` definitions resolve against the recovered class
+        # declaration instead of failing with "undeclared identifier".
+        # The preamble file is consumed by parse_cpp via
+        # $TRANSPILERS_CPP_PREAMBLE_FILE (core._project_preamble),
+        # so the existing parse path is untouched when --cbm is absent.
+        from transpilers.frontends.cpp.parser import cbmpreamble
+        import tempfile
+        rel = None
+        try:
+            rel = str(args.source.relative_to(Path(args.cbm_repo)))
+        except ValueError:
+            # Source lives outside the repo root: still try a basename probe.
+            rel = args.source.name
+        cbm_tmp = Path(tempfile.gettempdir()) / "cbm_preamble.inc"
+        written = cbmpreamble.write_preamble_for_file(
+            str(args.cbm_repo), rel, str(cbm_tmp)
+        )
+        if written is None:
+            sys.stderr.write(
+                f"[cbm] no recovered declarations for {rel}; "
+                f"parsing without the graph preamble\n"
+            )
+            src_input = args.source.read_text(encoding="utf-8", errors="replace")
+        else:
+            sys.stderr.write(f"[cbm] recovered preamble -> {cbm_tmp}\n")
+            os.environ["TRANSPILERS_CPP_PREAMBLE_FILE"] = str(cbm_tmp)
+            src_input = args.source.read_text(encoding="utf-8", errors="replace")
     else:
         # Legacy Fortran/C/C++ sources often carry non-UTF-8 bytes (e.g. the
         # © in author headers, latin-1 names), so decode leniently.
