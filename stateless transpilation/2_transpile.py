@@ -129,12 +129,19 @@ def call_openai(prompt: str, model: str, timeout: int, endpoint: str) -> tuple[s
         "cost_usd": 0.0, "usage": p.get("usage", {}), "endpoint": endpoint}
 
 
-# Transient upstream failures worth retrying: rate limits (429) and gateway/
-# provider errors (5xx). OpenRouter surfaces a 504 as a body with no `choices`,
-# which the SDK raises as a *validation* error — so we also match on that shape.
+# Transient upstream failures worth retrying: rate limits (429), gateway/provider
+# errors (5xx) and malformed completions. OpenRouter surfaces a 504 as a body with
+# no `choices`, which the SDK raises as a *validation* error; a truncated stream
+# surfaces as "EOF while parsing". Both are retried — but the same model at the
+# same temperature tends to reproduce the same bad response, which is why the
+# retry schedule below also escalates model and temperature.
 _RETRY_HINTS = ("429", "500", "502", "503", "504", "rate limit", "timeout",
-                "overloaded", "temporarily", "validation")
-_RETRIES = int(os.environ.get("OPENROUTER_RETRIES", "4"))
+                "overloaded", "temporarily", "validation", "eof while parsing")
+_RETRIES = int(os.environ.get("OPENROUTER_RETRIES", "6"))
+# Comma-separated OpenRouter model slugs to escalate to once the primary keeps
+# failing, e.g. "provider/cheap-model,provider/strong-model". Empty = primary only.
+_FAILOVER = [m.strip() for m in os.environ.get("OPENROUTER_FAILOVER", "").split(",") if m.strip()]
+_RETRY_TEMPERATURE = 0.3
 
 
 def _transient(exc: Exception) -> bool:
@@ -142,13 +149,32 @@ def _transient(exc: Exception) -> bool:
     return any(h in s for h in _RETRY_HINTS)
 
 
+def _attempt_plan(primary: str, chain: list[str], attempt: int, retries: int) -> tuple[str, float]:
+    """(model, temperature) for a 0-based retry attempt.
+
+    Models are spread evenly over the retry budget — primary first, then each
+    failover model in order — so every model in the chain gets a turn even when
+    OPENROUTER_RETRIES is small. Temperature is 0.0 for the first half of the
+    budget and _RETRY_TEMPERATURE after, so a model that has already emitted a
+    malformed response gets a different sample rather than the same one again.
+    """
+    models = []
+    for m in (primary, *chain):
+        if m not in models:
+            models.append(m)
+    idx = min(attempt * len(models) // max(retries, 1), len(models) - 1)
+    temperature = 0.0 if attempt < retries // 2 else _RETRY_TEMPERATURE
+    return models[idx], temperature
+
+
 def call_openrouter(prompt: str, model: str, timeout: int, endpoint: str | None) -> tuple[str, dict]:
-    """One completion against OpenRouter via the official SDK, with backoff.
+    """One completion against OpenRouter via the official SDK, with backoff + failover.
 
     Key comes from OPENROUTER_API_KEY (loaded from .env). `endpoint` is unused —
     OpenRouter is a single cloud endpoint, so lanes behave like the claude backend.
-    Transient errors (429 rate limit, 5xx/504 provider timeout) are retried with
-    exponential backoff; non-transient errors (auth, payment) fail fast.
+    Transient errors (429, 5xx/504, malformed completions) are retried with
+    exponential backoff, escalating model (`model` then OPENROUTER_FAILOVER) and
+    temperature per _attempt_plan; non-transient errors (auth, payment) fail fast.
     """
     import time
 
@@ -160,21 +186,25 @@ def call_openrouter(prompt: str, model: str, timeout: int, endpoint: str | None)
 
     last = None
     for attempt in range(_RETRIES):
+        used, temperature = _attempt_plan(model, _FAILOVER, attempt, _RETRIES)
         try:
             with OpenRouter(api_key=key) as client:
                 resp = client.chat.send(
-                    model=model,
+                    model=used,
                     messages=[{"role": "user", "content": prompt}],
+                    temperature=temperature,
                 )
             usage = getattr(resp, "usage", None)
             cost = getattr(usage, "cost", None) if usage is not None else None
             usage_dict = usage.model_dump() if hasattr(usage, "model_dump") else {}
-            return resp.choices[0].message.content, {"cost_usd": cost or 0.0, "usage": usage_dict}
+            return resp.choices[0].message.content, {
+                "cost_usd": cost or 0.0, "usage": usage_dict,
+                "model_used": used, "attempts": attempt + 1}
         except Exception as e:  # noqa: BLE001
             last = e
             if attempt == _RETRIES - 1 or not _transient(e):
                 raise
-            time.sleep(2 ** attempt)  # 1, 2, 4, 8s
+            time.sleep(2 ** attempt)  # 1, 2, 4, 8, 16s
     raise last  # unreachable, satisfies type checkers
 
 
