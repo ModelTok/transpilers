@@ -9,10 +9,13 @@ behavior rather than being a full test suite for the module.
 
 from __future__ import annotations
 
+import pytest
+
 import transpilers.verify.smt as smt
 from transpilers.verify.smt import SMTConfig, _sampling_verify
 
 
+@pytest.mark.requires_sigalrm
 def test_exec_fn_times_out_on_infinite_loop(monkeypatch):
     monkeypatch.setattr(smt, "_EXEC_TIMEOUT_S", 0.2)
     src = "while True:\n    pass\n"
@@ -20,6 +23,7 @@ def test_exec_fn_times_out_on_infinite_loop(monkeypatch):
     assert fn is None
 
 
+@pytest.mark.requires_sigalrm
 def test_sampling_verify_times_out_on_hung_call():
     def ref(x):
         return x + 1

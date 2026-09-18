@@ -10,7 +10,6 @@ honest verified-flagging — without requiring any external compiler.
 from __future__ import annotations
 
 import importlib.util
-import signal
 import sys
 from pathlib import Path
 
@@ -78,11 +77,7 @@ def test_verify_timeout_is_base_exception():
     assert not issubclass(gen._VerifyTimeout, Exception)
 
 
-@pytest.mark.skipif(
-    not hasattr(signal, "SIGALRM"),
-    reason="SIGALRM is POSIX-only and _time_limit is a documented no-op without it, "
-    "so nothing would ever interrupt the loop",
-)
+@pytest.mark.requires_sigalrm
 def test_time_limit_interrupts_infinite_loop():
     with pytest.raises(gen._VerifyTimeout):
         with gen._time_limit(1):
