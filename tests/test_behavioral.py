@@ -141,6 +141,7 @@ def test_inputs_where_source_raises_are_dropped():
     assert 0 < r.total < 12
 
 
+@pytest.mark.requires_sigalrm
 def test_python_runner_times_out_on_infinite_loop(monkeypatch):
     """`PythonRunner.run()` execs untrusted-shaped source in-process with no
     subprocess boundary to kill. Without a wall-clock guard, a pathological
