@@ -163,7 +163,7 @@ def _attempt_plan(primary: str, chain: list[str], attempt: int, retries: int) ->
         if m not in models:
             models.append(m)
     idx = min(attempt * len(models) // max(retries, 1), len(models) - 1)
-    temperature = 0.0 if attempt < retries // 2 else _RETRY_TEMPERATURE
+    temperature = 0.0 if attempt < max(retries // 2, 1) else _RETRY_TEMPERATURE
     return models[idx], temperature
 
 
