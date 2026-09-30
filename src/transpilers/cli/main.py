@@ -273,6 +273,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--cbm-refresh",
+        action="store_true",
+        help=(
+            "with --cbm: (re)index REPO_ROOT with the codebase-memory-mcp CLI "
+            "when it is not indexed or the source file is newer than the "
+            "index. Without it, a missing index is an error and a stale one "
+            "a warning."
+        ),
+    )
+    parser.add_argument(
         "--include-impls",
         action="store_true",
         help=(
@@ -335,6 +345,14 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError:
             # Source lives outside the repo root: still try a basename probe.
             rel = args.source.name
+        try:
+            for warning in cbmpreamble.check_index(
+                str(args.cbm_repo), args.source, refresh=args.cbm_refresh
+            ):
+                sys.stderr.write(f"[cbm] warning: {warning}\n")
+        except cbmpreamble.CbmIndexError as exc:
+            sys.stderr.write(f"error: --cbm: {exc}\n")
+            return 2
         cbm_tmp = Path(tempfile.gettempdir()) / "cbm_preamble.inc"
         written = cbmpreamble.write_preamble_for_file(
             str(args.cbm_repo), rel, str(cbm_tmp)
