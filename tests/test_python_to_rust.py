@@ -276,3 +276,21 @@ def test_sum_preserves_float_element_type():
 )
 def test_emitted_rust_compiles(src: str):
     _compile(src)
+
+
+# ---------- unsupported top-level statements are reported, not silent ----------
+
+
+def test_dropped_top_level_class_warns():
+    src = """
+        class A:
+            @staticmethod
+            def f(x: int) -> int:
+                return x + 1
+
+        def g(x: int) -> int:
+            return x + 1
+    """
+    with pytest.warns(UserWarning, match="dropped top-level ClassDef A"):
+        out = _t(src)
+    assert "fn g" in out and "fn f" not in out

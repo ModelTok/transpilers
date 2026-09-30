@@ -18,6 +18,8 @@ not silently drop nodes it doesn't understand.
 
 from __future__ import annotations
 
+import warnings
+
 import libcst as cst
 
 from transpilers.ir import hir
@@ -49,11 +51,20 @@ def parse_python(source: str) -> hir.HirModule:
                 continue
         try:
             body.append(_convert(stmt))
-        except UnsupportedConstruct:
+        except UnsupportedConstruct as exc:
             # Walk inside FunctionDef even if we can't parse module-level
-            # constructs around it. For non-FunctionDef siblings we skip.
+            # constructs around it. For non-FunctionDef siblings we skip,
+            # but say so: a class-only module (e.g. topologicpy) would
+            # otherwise "succeed" with an empty translation (issue #79).
             if isinstance(stmt, cst.FunctionDef):
                 raise
+            name = getattr(getattr(stmt, "name", None), "value", "")
+            warnings.warn(
+                f"python frontend dropped top-level "
+                f"{type(stmt).__name__}{' ' + name if name else ''}: {exc}",
+                UserWarning,
+                stacklevel=2,
+            )
     return hir.HirModule(source_lang="python", body=body)
 
 
