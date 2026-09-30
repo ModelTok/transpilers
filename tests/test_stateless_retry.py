@@ -77,6 +77,10 @@ def test_plan_without_chain_stays_on_primary():
     assert {T._attempt_plan(PRIMARY, [], a, 6)[0] for a in range(6)} == {PRIMARY}
 
 
+def test_plan_single_attempt_budget_stays_deterministic():
+    assert T._attempt_plan(PRIMARY, [CHEAP], 0, 1) == (PRIMARY, 0.0)
+
+
 def test_plan_dedupes_primary_already_in_chain():
     models = [T._attempt_plan(CHEAP, [CHEAP, STRONG], a, 4)[0] for a in range(4)]
     assert models == [CHEAP, CHEAP, STRONG, STRONG]
