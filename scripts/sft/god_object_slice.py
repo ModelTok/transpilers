@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 
@@ -190,6 +191,78 @@ def _mojo_type_for(name: str) -> str:
     return "Float64"
 
 
+# ---------------------------------------------------------------------------
+# Header type join: stamp real C++ field types from `struct XxxData` headers.
+# ---------------------------------------------------------------------------
+_CPP_SCALARS = {
+    "bool": "Bool",
+    "int": "Int", "short": "Int", "long": "Int", "unsigned": "Int",
+    "size_t": "Int", "std::size_t": "Int", "int32_t": "Int", "int64_t": "Int",
+    "double": "Float64", "float": "Float64", "Real64": "Float64",
+}
+_STRUCT_RE = re.compile(r"\bstruct\s+(\w+)\s*(?::[^{;]*)?\{")
+_FIELD_RE = re.compile(r"^\s*([A-Za-z_][\w:<>,\s\*&]*?)\s+(\w+)\s*(?:=[^;]*|\{[^;]*\}|\[[^\];]*\])?;\s*$")
+_SKIP_WORDS = ("return", "using", "typedef", "friend", "static", "constexpr", "extern")
+
+
+def parse_header_fields(text: str) -> dict[str, dict[str, str]]:
+    """Map ``struct -> {field: cpp_type}`` from C++ header text.
+
+    Only single-declaration member fields at the struct's top brace depth are
+    kept; methods, nested structs, static/constexpr members and multi-name
+    declarations (``int a, b;``) are ignored. Comments are stripped first.
+    """
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    text = re.sub(r"//[^\n]*", "", text)
+    out: dict[str, dict[str, str]] = {}
+    for m in _STRUCT_RE.finditer(text):
+        name, depth, i, start = m.group(1), 1, m.end(), m.end()
+        while i < len(text) and depth:
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            i += 1
+        body, top, d = text[start:i - 1], [], 0
+        buf, brace_init = "", False
+        for ch in body:  # keep only top-level (depth 0) text
+            if ch == "{":
+                d += 1
+                if d == 1 and buf.rstrip().endswith(")"):
+                    buf = ""  # method body
+                    continue
+                if d == 1:
+                    head = buf.rstrip()
+                    brace_init = bool(re.search(r"\w$", head)) and not re.search(
+                        r"\b(struct|class|enum|union|namespace)\b", head)
+            elif ch == "}":
+                d -= 1
+                if d == 0:
+                    if brace_init:
+                        buf += "{}"  # keep `T name{...};` as a plain member
+                    continue
+            if d == 0 or ch == "{":
+                buf += ch
+            if ch == ";" and d == 0:
+                top.append(buf)
+                buf = ""
+        fields: dict[str, str] = {}
+        for stmt in top:
+            stmt = " ".join(stmt.split())
+            if "(" in stmt.split("=")[0] or stmt.startswith(_SKIP_WORDS):
+                continue
+            fm = _FIELD_RE.match(stmt)
+            if fm and "," not in fm.group(1):
+                fields[fm.group(2)] = " ".join(fm.group(1).split())
+        out[name] = fields
+    return out
+
+
+def mojo_type_from_cpp(cpp_type: str) -> str | None:
+    """Mojo scalar for a C++ scalar type, or None if not a plain scalar."""
+    t = re.sub(r"\b(const|signed|mutable)\b", "", cpp_type).strip()
+    t = t.replace("long long", "long").replace("unsigned int", "unsigned")
+    t = " ".join(t.split())
+    return _CPP_SCALARS.get(t)
+
+
 _MOJO_DEFAULT = {"Bool": "False", "Int": "0", "Float64": "0.0"}
 
 
@@ -208,7 +281,7 @@ def _struct_name(owner_short: str) -> str:
     return "data" + short[0].upper() + short[1:]
 
 
-def emit_substate_structs(manifest: dict) -> str:
+def emit_substate_structs(manifest: dict, header_types: dict | None = None) -> str:
     """Emit Mojo sub-state structs + a sliced container from a slice manifest.
 
     Each owning sub-state becomes a ``struct data<Owner>`` holding only the
@@ -217,6 +290,10 @@ def emit_substate_structs(manifest: dict) -> str:
     name-heuristic guesses (see ``_mojo_type_for``); the win is that a function
     now depends on ``state.data<Owner>.<field>`` (one small struct) instead of
     the full god-object.
+
+    ``header_types`` (from ``parse_header_fields``) stamps real scalar types:
+    a field found in ``header_types[<owner>]`` or ``header_types[<owner>Data]``
+    with a plain C++ scalar type uses it; anything else keeps the name heuristic.
     """
     by_owner = manifest.get("fields_by_owner", {})
     if not by_owner:
@@ -231,13 +308,15 @@ def emit_substate_structs(manifest: dict) -> str:
         seen: dict[str, str] = {}
         for r in rows:
             seen.setdefault(r["name"] or "field", r.get("mode", ""))
+        short = owner.rsplit(".", 1)[-1]
+        known = (header_types or {}).get(short) or (header_types or {}).get(short + "Data") or {}
+        types = {f: (mojo_type_from_cpp(known.get(f, "")) or _mojo_type_for(f)) for f in seen}
         lines = [f"struct {struct}:"]
         for fname, mode in seen.items():
-            ty = _mojo_type_for(fname)
-            lines.append(f"    var {fname}: {ty}  # {mode}")
+            lines.append(f"    var {fname}: {types[fname]}  # {mode}")
         lines.append("    fn __init__(out self):")
         for fname in seen:
-            ty = _mojo_type_for(fname)
+            ty = types[fname]
             lines.append(f"        self.{fname} = {_MOJO_DEFAULT[ty]}")
         chunks.append("\n".join(lines) + "\n")
     # Composing container.
@@ -261,6 +340,8 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--emit-mojo", default=None,
                     help="write per-module sub-state Mojo struct scaffolds (--entry mode)")
+    ap.add_argument("--headers", default=None,
+                    help="dir of EnergyPlus .hh headers; stamps real scalar types (with --emit-mojo)")
     args = ap.parse_args()
     if not args.entry and args.owner is None:
         ap.error("provide --entry (reachability) or --owner (field-centric)")
@@ -291,7 +372,11 @@ def main():
     if args.emit_mojo:
         if "fields_by_owner" not in manifest:
             ap.error("--emit-mojo requires --entry (a reachability slice manifest)")
-        Path(args.emit_mojo).write_text(emit_substate_structs(manifest))
+        header_types: dict = {}
+        if args.headers:
+            for hh in sorted(Path(args.headers).rglob("*.hh")):
+                header_types.update(parse_header_fields(hh.read_text(errors="replace")))
+        Path(args.emit_mojo).write_text(emit_substate_structs(manifest, header_types))
         print(f"sub-state structs -> {args.emit_mojo}")
 
 

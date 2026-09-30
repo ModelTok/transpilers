@@ -156,3 +156,54 @@ def test_struct_name_drops_leading_data_prefix():
     # EnergyPlus owner DataHeatBalance -> member dataHeatBalance (no double Data).
     assert gos._struct_name("ns.DataHeatBalance") == "dataHeatBalance"
     assert gos._struct_name("ns.StateA") == "dataStateA"
+
+
+_HH = """
+struct HeatBalanceData : BaseGlobalStruct
+{
+    int NumOfZones = 0;            // count
+    Real64 OutBaroPress{101325.0};
+    bool DoZoneSizing = false;
+    std::string Name;
+    Array1D<Real64> ZoneTemp;
+    static constexpr int Max = 5;
+    int a, b;
+    void init_state(EnergyPlusData &state) { int hidden = 1; }
+    struct Inner { double nested; };
+    double tail = 1.0;
+};
+"""
+
+
+def test_parse_header_fields_top_level_scalars_only():
+    f = gos.parse_header_fields(_HH)["HeatBalanceData"]
+    assert f["NumOfZones"] == "int"
+    assert f["OutBaroPress"] == "Real64"
+    assert f["DoZoneSizing"] == "bool"
+    assert f["tail"] == "double"
+    assert f["ZoneTemp"] == "Array1D<Real64>"
+    assert "Max" not in f and "a" not in f and "hidden" not in f and "nested" not in f
+
+
+def test_mojo_type_from_cpp():
+    assert gos.mojo_type_from_cpp("const int") == "Int"
+    assert gos.mojo_type_from_cpp("unsigned int") == "Int"
+    assert gos.mojo_type_from_cpp("Real64") == "Float64"
+    assert gos.mojo_type_from_cpp("Array1D<Real64>") is None
+
+
+def test_emit_uses_header_types_over_name_heuristic():
+    manifest = {"fields_by_owner": {"DataHeatBalance": [
+        {"name": "OutBaroPress", "mode": "read"},   # heuristic: Float64; header: Int (forced)
+        {"name": "NumOfZones", "mode": "write"},
+        {"name": "Unknown", "mode": "read"},
+    ]}}
+    types = {"DataHeatBalance": {"OutBaroPress": "int", "NumOfZones": "Real64"}}
+    code = gos.emit_substate_structs(manifest, types)
+    assert "var OutBaroPress: Int" in code
+    assert "var NumOfZones: Float64" in code
+    assert "var Unknown: Float64" in code
+    assert "self.OutBaroPress = 0\n" in code
+    # falls back to <owner>Data key
+    code2 = gos.emit_substate_structs(manifest, {"DataHeatBalanceData": types["DataHeatBalance"]})
+    assert "var OutBaroPress: Int" in code2

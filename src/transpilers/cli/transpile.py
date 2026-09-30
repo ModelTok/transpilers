@@ -23,6 +23,8 @@ except ImportError:
 
 from openrouter import OpenRouter  # noqa: E402  (after env bootstrap)
 
+from transpilers.cli.domain_prompts import apply_domain_guidance  # noqa: E402
+
 PROMPT_TEMPLATE = """\
 Convert this C++ file to Mojo. Faithful 1:1 translation, no refactoring.
 
@@ -113,7 +115,12 @@ def mojo_compile(path: Path) -> tuple[bool, str]:
 
 
 def transpile_one(
-    entry: dict, model: str, client: OpenRouter, repair: bool, max_retries: int
+    entry: dict,
+    model: str,
+    client: OpenRouter,
+    repair: bool,
+    max_retries: int,
+    domain_prompts: bool = False,
 ) -> dict:
     cc_path = Path(entry["source"])
     target_path = Path(entry["target"])
@@ -149,6 +156,8 @@ def transpile_one(
         header_source=hh_source or "(no header file)",
         body_source=cc_source,
     )
+    if domain_prompts:
+        prompt = apply_domain_guidance(prompt, cc_source, str(cc_path))
 
     for attempt in range(max_retries + 1):
         try:
@@ -273,6 +282,11 @@ def main() -> int:
     ap.add_argument(
         "--force", action="store_true", help="Re-transpile even if decision=done"
     )
+    ap.add_argument(
+        "--domain-prompts",
+        action="store_true",
+        help="Add gtest / Eigen-specific guidance when those sources are detected",
+    )
     args = ap.parse_args()
 
     config_path = Path(args.config)
@@ -358,7 +372,12 @@ def main() -> int:
         nonlocal ok_count, completed
         with OpenRouter(api_key=api_key) as client:
             result = transpile_one(
-                entry, args.model, client, args.repair, args.max_retries
+                entry,
+                args.model,
+                client,
+                args.repair,
+                args.max_retries,
+                args.domain_prompts,
             )
         status = result["status"]
         with config_lock:

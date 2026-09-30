@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import concurrent.futures as cf
 import json
 import os
@@ -87,12 +88,174 @@ def _oracle_paths(file: str) -> tuple[Path, Path | None]:
     return ORACLE / f"{file}.cc", ORACLE / f"{file}.hh"
 
 
-def build_prompt(file: str) -> str:
+def build_prompt(file: str, cc: str | None = None, hh: str | None = None,
+                 name: str | None = None, note: str = "") -> str:
+    """Fill the prompt template. `cc`/`hh` override the oracle text (chunking);
+    `name` overrides the output stem ({FILE}); `note` is prepended to the body."""
     cc_path, hh_path = _oracle_paths(file)
-    cc, hh = read(cc_path), read(hh_path)
+    cc = read(cc_path) if cc is None else cc
+    hh = read(hh_path) if hh is None else hh
     lang = (_BY_NAME.get(file) or {}).get("lang", "cpp")
-    return (_BODY.replace("{FILE}", file).replace("{snake_file}", snake(file))
+    stem = name or file
+    return (note + _BODY.replace("{FILE}", stem).replace("{snake_file}", snake(stem))
             .replace("{LANG}", lang).replace("{CC}", cc).replace("{HH}", hh))
+
+
+# --- oversize inputs: compress, then chunk + stitch (issues #91, #92) ---------
+
+
+def compress_source(text: str) -> str:
+    """Cheap, code-preserving shrink: drop whole-line // comments, trailing
+    whitespace and runs of blank lines. Never touches code lines."""
+    out, blank = [], False
+    for line in text.splitlines():
+        line = line.rstrip()
+        if line.lstrip().startswith("//"):
+            continue
+        if not line:
+            if blank:
+                continue
+            blank = True
+        else:
+            blank = False
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def _depth_delta(line: str, in_block: bool) -> tuple[int, bool]:
+    """Net brace depth change of one C++ line, ignoring strings/chars/comments."""
+    d, i, n = 0, 0, len(line)
+    while i < n:
+        two = line[i:i + 2]
+        if in_block:
+            if two == "*/":
+                in_block, i = False, i + 2
+            else:
+                i += 1
+        elif two == "/*":
+            in_block, i = True, i + 2
+        elif two == "//":
+            break
+        elif line[i] in ('"', "'"):
+            q, i = line[i], i + 1
+            while i < n and line[i] != q:
+                i += 2 if line[i] == "\\" else 1
+            i += 1
+        else:
+            d += (line[i] == "{") - (line[i] == "}")
+            i += 1
+    return d, in_block
+
+
+def split_units(text: str) -> list[str]:
+    """Split C++ source into top-level units (functions/classes/declarations) at
+    brace depth 0. Preprocessor lines and comments attach to the next unit."""
+    units, cur, depth, in_block = [], [], 0, False
+    for line in text.splitlines(keepends=True):
+        cur.append(line)
+        d, in_block = _depth_delta(line, in_block)
+        depth += d
+        if depth == 0 and not in_block and line.strip().endswith(("}", ";")):
+            units.append("".join(cur))
+            cur = []
+    if "".join(cur).strip():
+        units.append("".join(cur))
+    return units
+
+
+def split_chunks(text: str, budget: int) -> list[str]:
+    """Greedily pack top-level units into chunks of <= budget chars. A single
+    unit larger than the budget is unsplittable here: raise rather than cut
+    mid-construct."""
+    chunks, cur = [], ""
+    for u in split_units(text):
+        if len(u) > budget:
+            raise ValueError(f"single top-level unit of {len(u):,} chars exceeds chunk "
+                             f"budget {budget:,}; cannot split safely")
+        if cur and len(cur) + len(u) > budget:
+            chunks.append(cur)
+            cur = ""
+        cur += u
+    if cur.strip():
+        chunks.append(cur)
+    return chunks
+
+
+_CHUNK_NOTE = ("NOTE: this is chunk {i} of {n} of `{file}`. Port ONLY the code shown; "
+               "other chunks are ported separately and concatenated, so do not add "
+               "module docstrings or duplicate declarations from other chunks. "
+               "Use the file-block paths exactly as given below.\n\n")
+_IMPORT_RE = re.compile(r"^(?:from\s+\S+\s+import\s|import\s)")
+
+
+def stitch(parts: list[str]) -> str:
+    """Concatenate per-chunk sources; hoist and dedupe top-level import lines."""
+    imports: list[str] = []
+    body: list[str] = []
+    for part in parts:
+        for line in part.rstrip().splitlines():
+            if _IMPORT_RE.match(line):
+                if line not in imports:
+                    imports.append(line)
+            else:
+                body.append(line)
+        body.append("")
+    head = "\n".join(imports) + "\n\n" if imports else ""
+    return head + "\n".join(body).strip("\n") + "\n"
+
+
+def _strip_fence(body: str) -> str:
+    return re.sub(r"\n```\s*$", "", re.sub(r"^```[a-zA-Z]*\n", "", body))
+
+
+def transpile_chunked(file, cc, fn, model, timeout, endpoint, max_chars) -> dict:
+    """Split `cc` into chunks, call `fn` per chunk, validate each response has a
+    Python and a Mojo FILE block, stitch, syntax-check the Python, then write.
+    All-or-nothing: any failed chunk writes nothing."""
+    lang = (_BY_NAME.get(file) or {}).get("lang", "cpp")
+    if lang != "cpp":
+        return {"file": file, "status": f"error: chunking supports cpp only, not {lang}",
+                "written": []}
+    hh = read(_oracle_paths(file)[1])
+    overhead = len(build_prompt(file, cc="", hh=hh, note=_CHUNK_NOTE.format(i=99, n=99, file=file)))
+    budget = max_chars - overhead
+    if budget <= 0:
+        return {"file": file, "status": "error: header alone exceeds prompt limit", "written": []}
+    try:
+        chunks = split_chunks(cc, budget)
+    except ValueError as e:
+        return {"file": file, "status": f"error: {e}", "written": []}
+    py_parts, mojo_parts, cost = [], [], 0.0
+    for i, chunk in enumerate(chunks, 1):
+        prompt = build_prompt(file, cc=chunk, hh=hh, name=f"{file}_part{i:02d}",
+                              note=_CHUNK_NOTE.format(i=i, n=len(chunks), file=file))
+        text, meta = fn(prompt, model, timeout, endpoint)
+        cost += (meta or {}).get("cost_usd") or 0.0
+        blocks = {m.group("path").strip(): _strip_fence(m.group("body"))
+                  for m in FILE_BLOCK.finditer(text)}
+        py = next((b for p, b in blocks.items() if p.endswith(".py")), None)
+        mj = next((b for p, b in blocks.items() if p.endswith(".mojo")), None)
+        if py is None or mj is None:
+            return {"file": file, "cost_usd": cost, "written": [],
+                    "status": f"error: chunk {i}/{len(chunks)} missing "
+                              f"{'python' if py is None else 'mojo'} FILE block"}
+        py_parts.append(py)
+        mojo_parts.append(mj)
+    py_src, mojo_src = stitch(py_parts), stitch(mojo_parts)
+    try:
+        ast.parse(py_src)
+    except SyntaxError as e:
+        return {"file": file, "cost_usd": cost, "written": [],
+                "status": f"error: stitched Python does not parse: {e}"}
+    written = []
+    for rel, src in ((f"out/python/{file}.py", py_src),
+                     (f"out/mojo/{snake(file)}.mojo", mojo_src)):
+        out = BASE / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(src)
+        written.append(rel)
+    return {"file": file, "status": "ok", "written": written, "chunks": len(chunks),
+            "cost_usd": cost}
 
 
 def call_claude(prompt: str, model: str, timeout: int, endpoint: str | None) -> tuple[str, dict]:
@@ -227,7 +390,7 @@ def is_real(file: str) -> bool:
     return "__todo__" not in t and "Phase-1 C++->Python lift" not in t
 
 
-def transpile_one(file, backend, model, timeout, force, endpoint, max_chars) -> dict:
+def transpile_one(file, backend, model, timeout, force, endpoint, max_chars, chunk=False) -> dict:
     # Skip only files whose manifest status is "done" (BOTH ports present).
     # "partial" (one port missing) must re-run to complete; is_real() alone is
     # python-only and would wrongly skip partials.
@@ -239,10 +402,16 @@ def transpile_one(file, backend, model, timeout, force, endpoint, max_chars) -> 
         prompt = build_prompt(file)
         if not prompt.strip() or not cc_path.exists():
             return {"file": file, "status": "no oracle .cc", "written": []}
+        fn = {"lmstudio": call_openai, "openrouter": call_openrouter}.get(backend, call_claude)
+        if len(prompt) > max_chars and chunk:
+            cc = compress_source(read(cc_path))  # context guard: shrink first
+            if len(build_prompt(file, cc=cc)) <= max_chars:
+                prompt = build_prompt(file, cc=cc)
+            else:
+                return transpile_chunked(file, cc, fn, model, timeout, endpoint, max_chars)
         if len(prompt) > max_chars:
             return {"file": file, "status": f"skip: prompt {len(prompt):,} chars > limit "
-                    f"(use cloud/chunk)", "written": []}
-        fn = {"lmstudio": call_openai, "openrouter": call_openrouter}.get(backend, call_claude)
+                    f"(use --chunk)", "written": []}
         text, meta = fn(prompt, model, timeout, endpoint)
         written = write_blocks(text)
         return {"file": file, "status": "ok" if written else "no file blocks in output",
@@ -277,6 +446,9 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=4, help="concurrency for --backend claude")
     ap.add_argument("--timeout", type=int, default=900)
     ap.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
+    ap.add_argument("--chunk", action="store_true",
+                    help="oversize prompts: compress, else split into top-level chunks, "
+                         "transpile each and stitch (cpp only)")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -317,7 +489,7 @@ def main() -> int:
         lane = free.get()
         try:
             return transpile_one(file, args.backend, args.model, args.timeout,
-                                 args.force, lane, args.max_chars)
+                                 args.force, lane, args.max_chars, args.chunk)
         finally:
             free.put(lane)
 
