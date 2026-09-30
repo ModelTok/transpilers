@@ -546,6 +546,126 @@ def cbm_query(project: str, cypher: str, binary: str = CBM_BIN) -> list[dict]:
     return _parse_query_table(proc.stdout)
 
 
+class CbmIndexError(RuntimeError):
+    """The cbm graph for a repo is unusable (no binary, not indexed, or a
+    refresh failed). The message is user-facing and says how to fix it."""
+
+
+def _cbm_cli_json(binary: str, tool: str, *flags: str, timeout: int = 600):
+    """Run ``cbm cli <tool> <flags>`` and return the first JSON object on
+    stdout, or ``None`` on any failure / non-JSON output. Errors such as
+    "project not found" come back as JSON with an ``error`` key and exit 0,
+    so callers must inspect the payload."""
+    try:
+        proc = subprocess.run(
+            [binary, "cli", tool, *flags],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                return json.loads(line)
+            except ValueError:
+                return None
+    return None
+
+
+def index_status(project: str, binary: str = CBM_BIN) -> dict | None:
+    """Return cbm's ``index_status`` payload for ``project`` (has
+    ``status``, ``indexed_at``, ``root_path``), or ``None`` if the project
+    is not indexed (or the binary is unavailable)."""
+    binary = _resolve_binary(binary)
+    if not binary:
+        return None
+    data = _cbm_cli_json(
+        binary, "index_status", "--project", project, "--format", "json"
+    )
+    if not isinstance(data, dict) or data.get("error"):
+        return None
+    return data
+
+
+def _indexed_at_epoch(status: dict) -> float | None:
+    from datetime import datetime, timezone
+
+    raw = status.get("indexed_at")
+    if not raw:
+        return None
+    try:
+        dt = datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+    return dt.replace(tzinfo=timezone.utc).timestamp()
+
+
+def check_index(
+    repo_root: str,
+    source: str | os.PathLike | None = None,
+    project: str | None = None,
+    binary: str = CBM_BIN,
+    refresh: bool = False,
+) -> list[str]:
+    """Make sure the cbm graph for ``repo_root`` exists and is fresh.
+
+    Raises :class:`CbmIndexError` when the binary is missing, or the repo is
+    not indexed and ``refresh`` is false, or a refresh fails. Returns a list
+    of warnings (e.g. a stale index that was *not* refreshed). A graph is
+    stale when ``source`` was modified after the index's ``indexed_at``.
+    With ``refresh=True`` a missing or stale index is (re)built with
+    ``index_repository --mode fast`` (no persistence; no repo files touched).
+    """
+    resolved = _resolve_binary(binary)
+    if not resolved:
+        raise CbmIndexError(
+            f"codebase-memory-mcp binary not found ({binary!r}); install a "
+            "released binary or set $CBM_BIN"
+        )
+    proj = project or _project_slug(repo_root)
+    status = index_status(proj, resolved)
+    stale = False
+    if status is not None and source is not None:
+        at = _indexed_at_epoch(status)
+        try:
+            stale = at is not None and Path(source).stat().st_mtime > at
+        except OSError:
+            stale = False
+
+    if status is not None and not stale:
+        return []
+    if status is None and not refresh:
+        raise CbmIndexError(
+            f"repo {repo_root} is not indexed as cbm project {proj!r}; run "
+            f"`codebase-memory-mcp cli index_repository --repo-path "
+            f"{repo_root}` or pass --cbm-refresh"
+        )
+    if not refresh:
+        return [
+            f"cbm index for {proj!r} (indexed_at {status.get('indexed_at')}) "
+            f"is older than {Path(source).name}; declarations may be stale "
+            "(pass --cbm-refresh to re-index)"
+        ]
+    result = _cbm_cli_json(
+        resolved,
+        "index_repository",
+        "--repo-path",
+        str(repo_root),
+        "--mode",
+        "fast",
+    )
+    if not isinstance(result, dict) or result.get("error") or result.get(
+        "status"
+    ) != "indexed":
+        raise CbmIndexError(
+            f"cbm index_repository failed for {repo_root}: {result!r}"
+        )
+    return []
+
+
 def build_preamble_payload(
     repo_root: str,
     rel_path: str,
@@ -682,6 +802,9 @@ def write_preamble_for_file(
 __all__ = [
     "CBM_BIN",
     "cbm_query",
+    "CbmIndexError",
+    "check_index",
+    "index_status",
     "build_preamble_payload",
     "payload_to_cpp",
     "write_preamble_for_file",

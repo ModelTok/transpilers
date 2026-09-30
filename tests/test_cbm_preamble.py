@@ -325,3 +325,81 @@ def test_occt_shim_from_type_refs_key():
     cpp = cp.payload_to_cpp(payload)
     assert "OCCT (OpenCASCADE) opaque shim" in cpp
     assert "referenced OCCT types: BRepBuilderAPI_MakeEdge, gp_Pnt" in cpp
+
+
+# --------------------------------------------------------------------------
+# Index freshness (issue #83)
+# --------------------------------------------------------------------------
+
+
+def _fake_binary(monkeypatch):
+    monkeypatch.setattr(cp, "_resolve_binary", lambda b: "cbm")
+
+
+def test_check_index_missing_binary_raises(monkeypatch):
+    monkeypatch.setattr(cp, "_resolve_binary", lambda b: "")
+    with pytest.raises(cp.CbmIndexError, match="binary not found"):
+        cp.check_index("/repo")
+
+
+def test_check_index_not_indexed_fails_clearly(monkeypatch):
+    _fake_binary(monkeypatch)
+    monkeypatch.setattr(cp, "index_status", lambda p, b: None)
+    with pytest.raises(cp.CbmIndexError, match="not indexed.*--cbm-refresh"):
+        cp.check_index("/repo")
+
+
+def test_check_index_not_indexed_refreshes(monkeypatch):
+    _fake_binary(monkeypatch)
+    monkeypatch.setattr(cp, "index_status", lambda p, b: None)
+    calls = []
+
+    def fake(binary, tool, *flags, **kw):
+        calls.append((tool, flags))
+        return {"status": "indexed"}
+
+    monkeypatch.setattr(cp, "_cbm_cli_json", fake)
+    assert cp.check_index("/repo", refresh=True) == []
+    assert calls[0][0] == "index_repository"
+    assert "/repo" in calls[0][1]
+
+
+def test_check_index_refresh_failure_raises(monkeypatch):
+    _fake_binary(monkeypatch)
+    monkeypatch.setattr(cp, "index_status", lambda p, b: None)
+    monkeypatch.setattr(cp, "_cbm_cli_json", lambda *a, **k: {"error": "boom"})
+    with pytest.raises(cp.CbmIndexError, match="index_repository failed"):
+        cp.check_index("/repo", refresh=True)
+
+
+def test_check_index_fresh_and_stale(monkeypatch, tmp_path):
+    _fake_binary(monkeypatch)
+    src = tmp_path / "a.cpp"
+    src.write_text("int x;\n")
+    monkeypatch.setattr(
+        cp, "index_status", lambda p, b: {"indexed_at": "2000-01-01T00:00:00Z"}
+    )
+    warnings = cp.check_index(str(tmp_path), src)
+    assert len(warnings) == 1 and "older than a.cpp" in warnings[0]
+    monkeypatch.setattr(
+        cp, "index_status", lambda p, b: {"indexed_at": "2999-01-01T00:00:00Z"}
+    )
+    assert cp.check_index(str(tmp_path), src) == []
+
+
+def test_cli_cbm_not_indexed_exits_2(monkeypatch, tmp_path, capsys):
+    from transpilers.cli.main import main
+
+    _fake_binary(monkeypatch)
+    monkeypatch.setattr(cp, "index_status", lambda p, b: None)
+    src = tmp_path / "a.cpp"
+    src.write_text("int f(int x){return x;}\n")
+    rc = main([str(src), "--source", "cpp", "--target", "mojo", "--cbm", str(tmp_path)])
+    assert rc == 2
+    assert "not indexed" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(not _HAS_CBM, reason="codebase-memory-mcp binary not found")
+def test_live_check_index_unindexed_project_fails(tmp_path):
+    with pytest.raises(cp.CbmIndexError, match="not indexed"):
+        cp.check_index(str(tmp_path / "definitely-not-indexed-xyz"))
