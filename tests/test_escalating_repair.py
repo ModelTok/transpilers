@@ -30,7 +30,11 @@ from transpilers.repair import (
     signal_from_structural,
 )
 from transpilers.repair.flywheel import read_flywheel
-from transpilers.repair.loop import VerificationOutcome, _render_prompt
+from transpilers.repair.loop import (
+    VerificationOutcome,
+    _format_suspect_region,
+    _render_prompt,
+)
 from transpilers.repair.signal import signal_from_internal
 
 
@@ -655,3 +659,142 @@ def test_tracker_auto_created_from_env(tmp_path: Path, monkeypatch):
     assert log.exists()
     lines = [ln for ln in log.read_text().splitlines() if ln.strip()]
     assert len(lines) == 1
+
+
+# ---------------------------------------------------------------------------
+# Suspect region (opt-in localised repair hint) + graded attempt score
+# ---------------------------------------------------------------------------
+
+_TEN_LINES = "\n".join(f"let v{i} = {i};" for i in range(1, 11))
+
+
+def _prompt_for(signal, *, broken_code=_TEN_LINES, suspect_window=None):
+    return _render_prompt(
+        source_lang="python",
+        target="rust",
+        source_code="def f(): return 0",
+        broken_code=broken_code,
+        signal=signal,
+        attempt=2,
+        max_attempts=5,
+        tier=ModelTier.FRONTIER,
+        suspect_window=suspect_window,
+    )
+
+
+def test_format_suspect_region_window_in_the_middle():
+    region = _format_suspect_region(_TEN_LINES, 5, 2)
+    assert region.splitlines() == [
+        "  3 | let v3 = 3;",
+        "  4 | let v4 = 4;",
+        "> 5 | let v5 = 5;",
+        "  6 | let v6 = 6;",
+        "  7 | let v7 = 7;",
+    ]
+
+
+def test_format_suspect_region_clamps_at_start_and_end_of_file():
+    start = _format_suspect_region(_TEN_LINES, 1, 3).splitlines()
+    assert [ln.split("|")[0].strip(" >") for ln in start] == ["1", "2", "3", "4"]
+    assert start[0].startswith(">")
+    end = _format_suspect_region(_TEN_LINES, 10, 3).splitlines()
+    assert [ln.split("|")[0].strip(" >") for ln in end] == ["7", "8", "9", "10"]
+    assert end[-1].startswith(">")
+    # Numbers are right-aligned to the widest line number shown.
+    assert end[0].startswith("   7 |") and end[-1].startswith("> 10 |")
+    assert len({ln.index("|") for ln in end}) == 1  # columns line up
+
+
+def test_format_suspect_region_zero_window_is_just_the_line():
+    assert _format_suspect_region(_TEN_LINES, 4, 0) == "> 4 | let v4 = 4;"
+
+
+def test_format_suspect_region_unknown_or_out_of_range_is_empty():
+    assert _format_suspect_region(_TEN_LINES, None, 3) == ""
+    assert _format_suspect_region(_TEN_LINES, 0, 3) == ""
+    assert _format_suspect_region(_TEN_LINES, 11, 3) == ""
+    assert _format_suspect_region(_TEN_LINES, 5, -1) == ""
+    assert _format_suspect_region("", 1, 3) == ""
+
+
+def test_suspect_region_off_leaves_prompt_byte_identical():
+    """With the option off, a known error line must not change the prompt."""
+    with_line = signal_from_compile(
+        "error[E0425]: cannot find value `n`\n --> a.rs:5:3\n"
+    )
+    assert with_line.first_error_line == 5
+    without_line = signal_from_compile("error[E0425]: cannot find value `n`\n")
+    assert without_line.first_error_line is None
+    assert _prompt_for(with_line) == _prompt_for(without_line)
+    assert "Suspect region" not in _prompt_for(with_line)
+
+
+def test_suspect_region_on_adds_section_in_addition_to_existing_content():
+    sig = signal_from_compile("error[E0425]: cannot find value `n`\n --> a.rs:5:3\n")
+    plain = _prompt_for(sig)
+    prompt = _prompt_for(sig, suspect_window=1)
+    assert "### Suspect region" in prompt
+    assert "line 5 of the previous attempt" in prompt
+    assert "> 5 | let v5 = 5;" in prompt
+    assert (
+        "let v6 = 6;" in prompt and "let v3 = 3;" not in prompt.split("### Suspect")[1]
+    )
+    # Nothing is removed: every line of the plain prompt survives, in order.
+    rest = iter(prompt.splitlines())
+    assert all(line in rest for line in plain.splitlines())
+    for part in ("def f(): return 0", _TEN_LINES, "### Compiler diagnostic"):
+        assert part in prompt
+
+
+def test_suspect_region_on_without_a_line_changes_nothing():
+    sig = signal_from_run("0\n", "99\n", input_text="1, 2")
+    assert sig.first_error_line is None
+    assert _prompt_for(sig, suspect_window=3) == _prompt_for(sig)
+    # A line outside the code is ignored too.
+    far = signal_from_compile("lib.c:99:1: error: boom")
+    assert _prompt_for(far, suspect_window=3) == _prompt_for(far)
+
+
+def test_suspect_region_works_for_run_mismatch_when_verifier_supplies_a_line():
+    sig = signal_from_run("0\n", "99\n", input_text="1, 2")
+    sig.first_error_line = 3
+    prompt = _prompt_for(sig, suspect_window=1)
+    assert "### Suspect region" in prompt
+    assert "> 3 | let v3 = 3;" in prompt
+    assert "### Diverging run" in prompt
+
+
+def test_escalating_repair_suspect_region_is_opt_in(tmp_path: Path):
+    def run(**kwargs):
+        tier = _ScriptedTier(["fn f() -> i32 { 0 }\n"])
+        client = TieredLlmClient(
+            tiers={ModelTier.FRONTIER: tier},
+            default_cache_dir=tmp_path / f"c{len(kwargs)}",
+        )
+        verifier = _ScriptedVerifier(
+            [False, True],
+            signal_factory=lambda: signal_from_compile(
+                "error[E0308]: mismatched types\n --> lib.rs:2:5\n"
+            ),
+        )
+        res = escalating_repair(
+            "def f(): return 0",
+            source_lang="python",
+            target="rust",
+            tiered_client=client,
+            verifier=verifier,
+            initial_translate=lambda: "fn f() -> i32 {\n    1.5\n}\n",
+            **kwargs,
+        )
+        assert res.passed
+        return res, tier.calls
+
+    _, default_calls = run()
+    assert "Suspect region" not in default_calls[0]
+
+    res, on_calls = run(suspect_region=True, suspect_window=1)
+    assert "### Suspect region" in on_calls[0]
+    assert ">" in on_calls[0] and "    1.5" in on_calls[0]
+    # Graded score is recorded per attempt: error on line 2 of 3 lines, then clean.
+    assert res.history[0].score == 2 / 4
+    assert res.history[1].score == 2.0

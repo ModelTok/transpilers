@@ -35,6 +35,7 @@ import subprocess
 from dataclasses import dataclass
 
 from transpilers.frontends.errors import UnsupportedConstruct
+from transpilers.verify.score import first_error_line
 
 __all__ = [
     "BUCKETS",
@@ -72,6 +73,9 @@ class TaxonomyRecord:
     construct: str = ""  # offending construct / symbol / type hole, when known
     detail: str = ""  # first error line, free-form
     output: str | None = None  # emitted target source, when emission succeeded
+    # 1-based line of the compiler's first error in `output` (compile stage
+    # only, and only when stderr was parseable); see verify.score.
+    first_error_line: int | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -286,7 +290,13 @@ def classify_unit(
         if not result.ok:
             bucket, detail = classify_compile_stderr(result.stderr)
             return TaxonomyRecord(
-                source_lang, target, bucket, "compile", detail=detail, output=output
+                source_lang,
+                target,
+                bucket,
+                "compile",
+                detail=detail,
+                output=output,
+                first_error_line=first_error_line(result.stderr),
             )
 
     if structural:

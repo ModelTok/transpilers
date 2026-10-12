@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from transpilers.verify.score import first_error_line
 from transpilers.verify.taxonomy import classify_compile_stderr, classify_run
 
 # The signal kinds the loop recognises. Strings are reporting keys — do not
@@ -66,6 +67,12 @@ class RepairSignal:
         prompt template uses it to remind the model of the budget.
     extra:
         Free-form per-kind payload. Reserved for forward-compat.
+    first_error_line:
+        1-based line of the failing candidate (the previous attempt's code)
+        that the failure points at, when known. Set for ``compile_error`` from
+        the compiler's first error; a verifier that has coverage or
+        differential-test data may set it for ``run_mismatch``. ``None`` means
+        unknown. Used to cut the optional "suspect region" out of the prompt.
     """
 
     kind: SignalKind
@@ -78,6 +85,7 @@ class RepairSignal:
     stage: str = ""
     attempt: int = 1
     extra: dict[str, Any] = field(default_factory=dict)
+    first_error_line: int | None = None
 
     def is_clean(self) -> bool:
         """A "signal" representing a verified pass — empty diagnostic."""
@@ -102,6 +110,8 @@ class RepairSignal:
             out["hole_context"] = self.hole_context
         if self.extra:
             out["extra"] = self.extra
+        if self.first_error_line is not None:
+            out["first_error_line"] = self.first_error_line
         return out
 
 
@@ -124,6 +134,7 @@ def signal_from_compile(
         bucket=bucket,
         stage=stage,
         attempt=attempt,
+        first_error_line=first_error_line(stderr or ""),
     )
 
 
