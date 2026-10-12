@@ -36,6 +36,19 @@ features that are not present in the original source.
 ```
 {{signal_diagnostic}}
 ```
+{% if suspect_region %}
+
+### Suspect region
+
+The failure points at line {{signal_suspect_line}} of the previous attempt.
+Nearby lines are shown below (`>` marks the suspect line); the error is most
+likely here or just above it. Fix it with the smallest change possible and
+leave the rest of the translation as it is.
+
+```
+{{signal_suspect_region}}
+```
+{% endif %}
 
 {% if signal_kind == "run_mismatch" %}
 ### Diverging run

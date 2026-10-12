@@ -30,6 +30,11 @@ from transpilers.repair.signal import (
     RepairSignal,
     signal_from_compile,
 )
+from transpilers.verify.score import graded_compile_score
+
+# Lines of context either side of the suspect line when the opt-in
+# "suspect region" repair hint is enabled.
+DEFAULT_SUSPECT_WINDOW = 3
 
 # Prompt template: extends the legacy repair.md with a per-signal framing
 # block. Rendered with ``string.Template`` after a tiny pre-processor
@@ -57,6 +62,10 @@ class EscalatingRepairAttempt:
     fix_applied: str = ""
     cache_hit: bool = False
     elapsed_ms: int = 0
+    # Graded compile score of `code` (see verify.score): 2.0 when it verified,
+    # first_error_line / (n_lines + 1) for a compile error, None otherwise.
+    # Informational only; the loop does not rank or select on it.
+    score: float | None = None
 
 
 @dataclass
@@ -161,11 +170,17 @@ def _render_prompt(
     attempt: int,
     max_attempts: int,
     tier: ModelTier,
+    suspect_window: int | None = None,
 ) -> str:
     """Build the signal-aware repair prompt.
 
     Falls back to the legacy ``repair.md`` template if the signal-aware
     template is missing (e.g. a partial checkout).
+
+    *suspect_window* is off (``None``) by default, which leaves the prompt
+    exactly as it was. When set to ``N >= 0`` and the signal carries a
+    ``first_error_line`` inside *broken_code*, a "Suspect region" section with
+    that line +/- N lines is added; otherwise nothing is added.
     """
     if not _PROMPT_PATH.exists():
         return _legacy_prompt(
@@ -178,7 +193,14 @@ def _render_prompt(
             max_attempts=max_attempts,
         )
     raw_template = _PROMPT_PATH.read_text()
-    template = _strip_irrelevant_blocks(raw_template, signal.kind)
+    suspect = (
+        _format_suspect_region(broken_code, signal.first_error_line, suspect_window)
+        if suspect_window is not None
+        else ""
+    )
+    template = _strip_irrelevant_blocks(
+        raw_template, signal.kind, suspect_region=bool(suspect)
+    )
     ctx = {
         "source_lang": source_lang,
         "target_lang": target,
@@ -196,6 +218,8 @@ def _render_prompt(
         "signal_actual": signal.actual,
         "signal_hole_context": _format_hole_context(signal.hole_context),
         "signal_exception": signal.extra.get("exception", "?"),
+        "signal_suspect_line": signal.first_error_line,
+        "signal_suspect_region": suspect,
     }
     t_template = _to_dollar_placeholders(template)
     try:
@@ -220,9 +244,31 @@ def _format_hole_context(hole: dict[str, Any]) -> str:
     return json.dumps(hole, indent=2)
 
 
-def _strip_irrelevant_blocks(template: str, signal_kind: str) -> str:
+def _format_suspect_region(code: str, line: int | None, window: int) -> str:
+    """Numbered excerpt of *code* around 1-based *line*, +/- *window* lines.
+
+    The suspect line is marked with ``>``. The excerpt is clamped to the file,
+    so a line near the start or end just gets a shorter window. Returns ``""``
+    (no region) when *line* is unknown or outside the file, or *window* < 0.
+    """
+    lines = code.splitlines()
+    if line is None or window < 0 or not 1 <= line <= len(lines):
+        return ""
+    first = max(1, line - window)
+    last = min(len(lines), line + window)
+    width = len(str(last))
+    return "\n".join(
+        f"{'>' if n == line else ' '} {n:>{width}} | {lines[n - 1]}"
+        for n in range(first, last + 1)
+    )
+
+
+def _strip_irrelevant_blocks(
+    template: str, signal_kind: str, *, suspect_region: bool = False
+) -> str:
     """Strip ``{% if signal_kind == "..." %} ... {% endif %}`` blocks whose
-    condition does not match *signal_kind*."""
+    condition does not match *signal_kind*, and ``{% if suspect_region %}``
+    blocks unless *suspect_region* is true."""
     lines = template.splitlines()
     out: list[str] = []
     skip = False
@@ -235,7 +281,7 @@ def _strip_irrelevant_blocks(template: str, signal_kind: str) -> str:
             body = stripped[3:]
             end = body.find("%")
             cond = body[2:end].strip()  # skip "if"
-            keep = _eval_cond(cond, signal_kind)
+            keep = _eval_cond(cond, signal_kind, suspect_region)
             skip = not keep
             continue
         if stripped == "{% endif %}":
@@ -246,8 +292,10 @@ def _strip_irrelevant_blocks(template: str, signal_kind: str) -> str:
     return "\n".join(out) + "\n"
 
 
-def _eval_cond(cond: str, signal_kind: str) -> bool:
+def _eval_cond(cond: str, signal_kind: str, suspect_region: bool = False) -> bool:
     """Evaluate ``signal_kind == "compile_error"`` and similar one-liners."""
+    if cond == "suspect_region":
+        return suspect_region
     if "==" not in cond:
         return False
     left, right = (s.strip() for s in cond.split("==", 1))
@@ -389,6 +437,8 @@ def escalating_repair(
     flywheel: Flywheel | None = None,
     tracker: RepairTracker | None = None,
     enable_cache: bool = True,
+    suspect_region: bool = False,
+    suspect_window: int = DEFAULT_SUSPECT_WINDOW,
 ) -> EscalatingRepairResult:
     """Run the verification-driven repair loop with escalating tiers.
 
@@ -420,7 +470,17 @@ def escalating_repair(
     enable_cache
         When ``False``, the CACHED tier is bypassed (force a fresh LLM
         call). Useful for measuring the loop's incremental lift.
+    suspect_region
+        Off by default. When ``True``, a retry prompt for a signal with a
+        ``first_error_line`` also gets a short "Suspect region" excerpt of the
+        previous attempt around that line (localised repair hint), in
+        addition to the full source and previous attempt. Prompts, and so
+        cache keys, are unchanged when this is off.
+    suspect_window
+        Lines of context either side of the suspect line (default
+        :data:`DEFAULT_SUSPECT_WINDOW`). Ignored unless *suspect_region*.
     """
+    window = suspect_window if suspect_region else None
     if verifier is None:
         verifier = _wrap_legacy_verifier(target)
     if initial_translate is None:
@@ -490,6 +550,7 @@ def escalating_repair(
                 attempt=attempt,
                 max_attempts=max_attempts,
                 tier=tier,
+                suspect_window=window,
             )
             cache_hit = False
             fix_applied = ""
@@ -548,6 +609,7 @@ def escalating_repair(
                 fix_applied=fix_applied,
                 cache_hit=cache_hit,
                 elapsed_ms=elapsed_ms,
+                score=_attempt_score(current_code, outcome),
             )
         )
 
@@ -566,6 +628,7 @@ def escalating_repair(
                     flywheel=flywheel,
                     enable_cache=enable_cache,
                     max_attempts=max_attempts,
+                    suspect_window=window,
                 ),
                 tracker=tracker,
                 source=source,
@@ -591,6 +654,23 @@ def escalating_repair(
         source=source,
         source_lang=source_lang,
         target=target,
+    )
+
+
+def _attempt_score(code: str, outcome: VerificationOutcome) -> float | None:
+    """Graded compile score for one attempt, or ``None`` if not applicable.
+
+    Only a pass or a ``compile_error`` signal is scored: other kinds mean the
+    code compiled (or failed before compiling), which the score cannot rank.
+    """
+    n_lines = len(code.splitlines())
+    if outcome.ok:
+        return graded_compile_score(ok=True, n_lines=n_lines)
+    sig = outcome.signal
+    if sig is None or sig.kind != "compile_error":
+        return None
+    return graded_compile_score(
+        ok=False, n_lines=n_lines, error_line=sig.first_error_line
     )
 
 
@@ -673,6 +753,7 @@ def _on_verified_pass(
     flywheel: Flywheel | None,
     enable_cache: bool,
     max_attempts: int,
+    suspect_window: int | None = None,
 ) -> EscalatingRepairResult:
     """Handle the verified-pass branch: pin to CACHED, record flywheel."""
     if enable_cache and last_signal is not None and attempt > 1:
@@ -686,6 +767,7 @@ def _on_verified_pass(
             attempt=attempt,
             max_attempts=max_attempts,
             tier=tier,
+            suspect_window=suspect_window,
         )
         tiered_client.cache_store(prompt, current_code, tier=ModelTier.CACHED)
 
@@ -711,6 +793,7 @@ def _on_verified_pass(
             attempt=attempt,
             max_attempts=max_attempts,
             tier=tier,
+            suspect_window=suspect_window,
         )
         flywheel.record(
             source_lang=source_lang,
