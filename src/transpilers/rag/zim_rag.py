@@ -35,7 +35,6 @@ from pathlib import Path
 
 ZIM_DIR_DEFAULT = Path(os.environ.get("ZIM_DIR", r"D:\zim"))
 
-# Map source API patterns → search terms in the target language doc
 CPP_TO_PYTHON_HINTS: dict[str, list[str]] = {
     "std::sort": ["sorted", "list.sort"],
     "std::vector": ["list", "array"],
@@ -105,7 +104,7 @@ class DocResult:
     snippet: str = ""
     url: str = ""
     target_api: str = ""
-    source: str = ""  # "zim" | "hint_table" | "not_found"
+    source: str = ""
 
 
 def find_zim_files(zim_dir: Path | str = ZIM_DIR_DEFAULT) -> list[Path]:
@@ -144,7 +143,7 @@ class ZimRag:
 
     def __init__(self, zim_dir: Path | str = ZIM_DIR_DEFAULT) -> None:
         self.zim_dir = Path(zim_dir)
-        self._zim_cache: dict[str, object] = {}  # path -> libzim.Archive
+        self._zim_cache: dict[str, object] = {}
 
     def _open_zim(self, path: Path) -> object | None:
         """Lazy-open a zim archive. Returns None if libzim not installed."""
@@ -152,7 +151,7 @@ class ZimRag:
         if key in self._zim_cache:
             return self._zim_cache[key]
         try:
-            import libzim  # type: ignore
+            import libzim
 
             archive = libzim.Archive(str(path))
             self._zim_cache[key] = archive
@@ -167,7 +166,7 @@ class ZimRag:
     ) -> list[str]:
         """Search a zim archive, return list of article snippets."""
         try:
-            import libzim  # type: ignore
+            import libzim
 
             searcher = libzim.Searcher(archive)
             results = searcher.search(libzim.Query().set_query(query))
@@ -178,7 +177,6 @@ class ZimRag:
                 try:
                     item = entry.get_item()
                     content = bytes(item.content).decode("utf-8", errors="replace")
-                    # Strip HTML tags for snippet
                     clean = re.sub(r"<[^>]+>", " ", content)
                     clean = re.sub(r"\s+", " ", clean).strip()
                     snippets.append(clean[:500])
@@ -199,7 +197,6 @@ class ZimRag:
 
         First tries the hint table (fast, no I/O), then searches .zim files.
         """
-        # 1. Check hint table
         hints_map = (
             CPP_TO_PYTHON_HINTS if target_lang == "python" else CPP_TO_MOJO_HINTS
         )
@@ -215,12 +212,11 @@ class ZimRag:
                     source="hint_table",
                 )
 
-        # 2. Search zim files
         target_pattern = _lang_zim_pattern(target_lang)
         zim_files = find_zim_files(self.zim_dir)
         target_zims = [f for f in zim_files if target_pattern in f.name.lower()]
 
-        for zim_path in target_zims[:2]:  # search top-2 most recent zims
+        for zim_path in target_zims[:2]:
             archive = self._open_zim(zim_path)
             if archive is None:
                 break
@@ -259,7 +255,6 @@ class ZimRag:
         return "\n".join(lines)
 
 
-# Module-level convenience function
 _default_rag: ZimRag | None = None
 
 

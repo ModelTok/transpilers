@@ -69,7 +69,6 @@ def main():
         exp = run_py(lf["python_unit"], lf["python_driver"])
         if not exp:
             print(f"[{i}/{len(leaves)}] {lf['name']:28s} SKIP (python oracle failed)", flush=True); continue
-        # mirror the python_driver in a Mojo main()
         mojo_driver = "def main():\n" + "\n".join("    " + ln for ln in lf["python_driver"].splitlines())
         instr = ("Transpile the provided Python implementation into a functionally equivalent "
                  f"implementation in Mojo.\n\n```python\n{lf['python_unit'].strip()}\n```")

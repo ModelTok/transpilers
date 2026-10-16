@@ -13,7 +13,7 @@ from transformers import AutoTokenizer
 DATASET_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data", "sft", "cpp_mojo",
-)  # scripts/sft/<this file> -> repo root
+)
 TOKENIZER = "Qwen/Qwen2.5-Coder-3B-Instruct"
 
 print(f"Loading tokenizer {TOKENIZER}...")
@@ -36,7 +36,6 @@ for ds_name in ["mojo_acquisition"]:
         try:
             data = json.load(f)
         except:
-            # Try JSONL
             f.seek(0)
             data = [json.loads(l) for l in f if l.strip()]
 
@@ -45,10 +44,8 @@ for ds_name in ["mojo_acquisition"]:
     if data:
         print(f"Sample[0]: {str(data[0])[:200]}")
 
-    # Tokenize and measure
     lengths = []
-    for i, sample in enumerate(data[:50]):  # Check first 50
-        # Build text similar to how LF does it
+    for i, sample in enumerate(data[:50]):
         text = ""
         for v in sample.values():
             if isinstance(v, str):

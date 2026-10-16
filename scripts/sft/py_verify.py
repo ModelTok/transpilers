@@ -42,7 +42,6 @@ def run(cmd, **kw):
 def _norm_tokens(line: str):
     """Split a printed line into comparable tokens, stripping tuple/list syntax."""
     s = line.strip()
-    # normalize bracket/paren/comma structure -> whitespace-separated tokens
     s = re.sub(r"[()\[\],]", " ", s)
     return s.split()
 
@@ -50,7 +49,6 @@ def _norm_tokens(line: str):
 def _tok_eq(a: str, b: str) -> bool:
     if a == b:
         return True
-    # bool <-> 1/0
     bmap = {"true": "1", "false": "0"}
     aa, bb = bmap.get(a.lower(), a), bmap.get(b.lower(), b)
     if aa == bb:
@@ -72,7 +70,6 @@ def _lines_eq(a: str, b: str) -> bool:
 def verify(item) -> tuple[bool, str]:
     with tempfile.TemporaryDirectory() as td:
         t = Path(td)
-        # --- Mojo (ground truth: already verified == C++) ---
         (t / "b.mojo").write_text(item["mojo_unit"] + "\n\n" + item["mojo_driver"] + "\n")
         r = run([MOJO_BIN, "build", "-Xlinker", "-ldl", str(t / "b.mojo"), "-o", str(t / "b")], env=MOJO_ENV)
         if r.returncode != 0:
@@ -84,13 +81,11 @@ def verify(item) -> tuple[bool, str]:
         mojo_out = r.stdout.strip().splitlines()
         if not mojo_out:
             return False, "mojo_no_output"
-        # --- Python (candidate) ---
         (t / "a.py").write_text(item["python_unit"] + "\n\n" + item["python_driver"] + "\n")
         r = run([PY_BIN, str(t / "a.py")])
         if r.returncode != 0:
             return False, "py_run: " + (r.stderr.strip().splitlines()[-1][:50] if r.stderr.strip() else "?")
         py_out = r.stdout.strip().splitlines()
-    # --- compare ---
     if len(py_out) != len(mojo_out):
         return False, f"line_count py{len(py_out)}!=mojo{len(mojo_out)}"
     for a, b in zip(py_out, mojo_out):

@@ -17,8 +17,6 @@ class CompileResult:
 
 
 def _fortran_compiler() -> str | None:
-    # resolve_tool returns the which() absolute path, or the bare name
-    # unchanged when nothing matched — the comparison detects "not found".
     for name in ("gfortran", "flang"):
         if (path := resolve_tool(name)) != name:
             return path

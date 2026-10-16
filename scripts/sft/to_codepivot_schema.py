@@ -39,7 +39,6 @@ MOJO_RUNTIME = ("- The Mojo execution environment is Mojo 1.0 (Modular), built w
 
 def system_prompt() -> str:
     s = SYS_SRC.read_text()
-    # insert the Mojo runtime line right after the Rust runtime spec
     anchor = "serde_json package."
     if anchor in s and "Mojo execution environment" not in s:
         s = s.replace(anchor, anchor + "\n" + MOJO_RUNTIME, 1)
@@ -88,13 +87,11 @@ def main():
     sysprompt = system_prompt()
     (OUT / "system.txt").write_text(sysprompt)
 
-    # C++ -> Mojo (from the raw verified pairs)
     mojo_rows = []
     for p in (json.loads(l) for l in (REPO / "data/cpp_mojo_pairs.jsonl").read_text().splitlines() if l.strip()):
         mojo_rows.append(record(p["cpp_source"], p["mojo_source"], "Mojo", "mojo", sysprompt))
     (OUT / "cpp_mojo_sft.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in mojo_rows))
 
-    # C++ -> Python (already instruction-formatted; re-wrap into the schema)
     py_rows = []
     for p in (json.loads(l) for l in (REPO / "data/sft/cpp_python_pairs.jsonl").read_text().splitlines() if l.strip()):
         py_rows.append(record(p["input"], p["output"], "Python", "python", sysprompt))

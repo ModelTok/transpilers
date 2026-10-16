@@ -20,14 +20,10 @@ for f in sorted(Path("benchmarks/tasks").glob("*.json")):
         errors.append(f"{task['id']} {task['name']}: exec failed: {e}")
         continue
 
-    # Look up by task name first (avoids picking up imported helpers like Counter, deque, etc.)
     fn = ns.get(task["name"])
     if fn is None:
-        # Fallback: first callable defined in this module (not imported)
-        # We distinguish by checking if the object's __module__ key etc. is set from exec
         for k, v in ns.items():
             if callable(v) and not k.startswith("_") and k not in ("__builtins__",):
-                # Skip well-known imports that end up in the namespace
                 if getattr(v, "__module__", None) is None or k[0].isupper():
                     continue
                 fn = v

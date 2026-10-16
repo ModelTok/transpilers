@@ -55,8 +55,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
-from transpilers.cli.main import transpile  # noqa: E402
-from transpilers.verify.behavioral import (  # noqa: E402
+from transpilers.cli.main import transpile
+from transpilers.verify.behavioral import (
     check_behavioral_equivalence,
     infer_param_tags,
 )
@@ -69,15 +69,8 @@ LANG_NAME = {
     "cpp": "C++",
 }
 
-# Targets the in-process behavioral harness can actually drive here. Anything
-# else is emitted but flagged unverified rather than falsely claimed correct.
 PY_VERIFIABLE_TARGETS = {"python", "rust"}
 
-# Wall-clock guard for a single behavioral check. The Python source *oracle*
-# runs untrusted-shaped fuzz inputs through real algorithms; some (Ackermann,
-# Collatz on negatives) can recurse deeply or loop forever on inputs outside
-# their intended domain. A SIGALRM cap keeps the generator from hanging — a
-# timed-out check is reported unverified, never as a pass.
 VERIFY_TIMEOUT_S = 10
 
 
@@ -93,7 +86,7 @@ def _time_limit(seconds: int):
         yield
         return
 
-    def _raise(signum, frame):  # noqa: ARG001
+    def _raise(signum, frame):
         raise _VerifyTimeout()
 
     old = signal.signal(signal.SIGALRM, _raise)
@@ -105,7 +98,6 @@ def _time_limit(seconds: int):
         signal.signal(signal.SIGALRM, old)
 
 
-# Three-way verification status (see module docstring).
 VERIFIED = "verified"
 NO_RUNNER = "unverified_no_runner"
 FAILED = "failed"
@@ -169,14 +161,9 @@ def _verify(source: str, source_lang: str, target: str, output: str) -> tuple[st
     funcs = _public_funcs(source)
     if not funcs:
         return NO_RUNNER, "no verifiable top-level function"
-    # The Rust runner appends its own ``fn main`` harness; the emitted code
-    # already carries a translated ``main``, so a verbatim hand-off collides
-    # ("name `main` defined multiple times"). Strip the emitted entry point —
-    # we only drive the named functions, never ``main``.
     runner_code = _strip_main(output, target)
     checked = 0
     for fn in funcs:
-        # Only drive functions whose signature the harness understands.
         if infer_param_tags(source, fn) is None:
             continue
         try:
@@ -190,8 +177,6 @@ def _verify(source: str, source_lang: str, target: str, output: str) -> tuple[st
                     n_inputs=12,
                 )
         except _VerifyTimeout:
-            # Source domain issue (looping on out-of-domain fuzz), not a wrong
-            # translation — keep the pair, just don't claim it verified.
             return NO_RUNNER, f"{fn}: verification timed out (>{VERIFY_TIMEOUT_S}s)"
         if not rep.supported:
             continue
@@ -215,7 +200,6 @@ def _strip_main(code: str, target: str) -> str:
     if target in ("rust", "c"):
         idx = code.find("fn main")
         if target == "c":
-            # crude: C main is usually `int main(`
             import re
 
             m = re.search(r"\n\s*(?:int|void)\s+main\s*\(", code)
@@ -236,7 +220,6 @@ def _strip_main(code: str, target: str) -> str:
                     return (code[:idx] + code[i + 1 :]).strip() + "\n"
             i += 1
         return code[:idx].rstrip() + "\n"
-    # Python / Mojo: drop a top-level `def main(` block by indentation.
     lines = code.splitlines()
     out: list[str] = []
     skipping = False
@@ -273,7 +256,7 @@ def build(corpus: Path, source_lang: str, target: str) -> list[Pair]:
             continue
         try:
             output = transpile(source, source_lang=source_lang, target=target).strip()
-        except Exception as exc:  # noqa: BLE001 — record the gap, keep going
+        except Exception as exc:
             print(f"  skip {path.name} {source_lang}->{target}: {type(exc).__name__}: {exc}")
             continue
         if not output:
@@ -295,9 +278,6 @@ def build(corpus: Path, source_lang: str, target: str) -> list[Pair]:
     return pairs
 
 
-# (source_lang, corpus-dir, target). The headline #57 asks are the ->mojo
-# directions + cpp->python; python->{rust,c} is a behaviorally-verifiable
-# bonus. rust->mojo is omitted: the transpiler has no Rust frontend.
 DIRECTIONS = [
     ("cpp", "examples/cpp_algorithms", "mojo"),
     ("c", "examples/c_algorithms", "mojo"),

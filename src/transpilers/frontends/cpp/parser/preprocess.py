@@ -33,15 +33,6 @@ import subprocess
 from pathlib import Path
 from typing import Final
 
-# Minimal std:: namespace shadow so the user's templates can refer to
-# common types (std::vector<T>, std::totally_ordered<T>, std::swap, ...)
-# without dragging in a full libcxx. We declare them as opaque class
-# templates; the backends treat any of these names as list[T] / str / etc.
-# via the existing _type_text aliases.
-#
-# This is the *parser* preamble -- it is *not* user code. The HIR never
-# sees it: only top-level decls from the original file are kept. We add
-# it to the preprocessed source so libclang can build a valid AST.
 PARSER_PREAMBLE: Final[str] = """
 namespace std {
     template <typename T> class vector {
@@ -238,24 +229,12 @@ using std::numeric_limits;
 using std::underflow_error;
 """
 
-# Line markers clang emits (e.g. '# 42 "foo.cpp" 2'). Strip them so
-# the byte stream we feed to libclang is just user code + the preamble.
 _LINEMARKER_RE = re.compile(r"^#\s*\d+\s+\"[^\"]+\".*$", re.MULTILINE)
-# `include` may or may not have a space between the directive and
-# the header (`#include<string>` vs `#include <string>`). The
-# `\s*` after `include` is the only thing keeping both forms working.
 _INCLUDE_RE = re.compile(r"^#\s*include\s*[<\"][^\"<>]+[>\"]\s*$", re.MULTILINE)
 _IFNDEF_RE = re.compile(r"^\s*#\s*ifndef\s+(\S+)\s*$")
 _DEFINE_GUARD_RE = re.compile(r"^\s*#\s*define\s+(\S+)\s*$")
 _ENDIF_RE = re.compile(r"^\s*#\s*endif\b")
-# Any other conditional-opening directive. Needed so `#endif` always pops the
-# frame it actually closes -- see the note in _strip_header_guard about why
-# only tracking #ifndef on the stack is unsound.
 _OTHER_IF_OPEN_RE = re.compile(r"^\s*#\s*(?:if|ifdef)\b")
-# C++20 `requires` constraints that confuse our libclang + template
-# combination (the parser confuses `void` with a type-cast). Match
-# both the standalone form (`requires std::foo<T>` on its own line) and
-# the inline form (`requires std::foo<T> void name(...)`).
 _REQUIRES_LINE_RE = re.compile(r"^\s*requires\s+std::\S.*$", re.MULTILINE)
 _REQUIRES_INLINE_RE = re.compile(r"requires\s+std::\w+<[^>]*>\s*")
 
@@ -296,7 +275,6 @@ def _strip_header_guard(text: str) -> str:
     """
     lines = text.splitlines(keepends=True)
     out: list[str] = []
-    # Each stack entry is True if this #if-family level is a stripped guard.
     guard_stack: list[bool] = []
     i = 0
     n = len(lines)
@@ -310,7 +288,7 @@ def _strip_header_guard(text: str) -> str:
             m_define = _DEFINE_GUARD_RE.match(lines[j]) if j < n else None
             if m_define and m_define.group(1) == m_ifndef.group(1):
                 guard_stack.append(True)
-                i = j + 1  # drop both the #ifndef and the #define line
+                i = j + 1
                 continue
             guard_stack.append(False)
             out.append(line)

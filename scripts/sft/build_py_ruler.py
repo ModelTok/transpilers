@@ -53,7 +53,7 @@ def main():
         name = fr["name"]
         p = pyv.get(name)
         if not p or not p.get("python_unit"):
-            skipped += 1; continue   # no verified Python source for this frozen fn
+            skipped += 1; continue
         ref = cpp_outputs(fr["cpp_unit"], fr["cpp_driver"])
         if not ref:
             skipped += 1; continue

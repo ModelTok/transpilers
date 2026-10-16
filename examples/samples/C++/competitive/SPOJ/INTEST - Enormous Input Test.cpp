@@ -1,4 +1,3 @@
-//http://stackoverflow.com/questions/9052757/getchar-unlocked-vs-scanf-vs-cin
 
 #define get_un  getchar_unlocked
 
@@ -12,7 +11,6 @@ int main() {
 	ll n,k,c=0,t;
 	scanf("%lld",&n);
 	scanf("%lld",&k);
-	//cout<<n<<endl<<k<<endl;
 	while(n--){
 		scanf("%lld",&t);
 		if( t%k == 0)	c++;

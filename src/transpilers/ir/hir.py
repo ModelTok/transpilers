@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Global monotonic counter for HIR node ids.
 _HIR_NODE_ID_COUNTER = 0
 
 
@@ -59,9 +58,6 @@ class HirFunction(HirNode):
     params: list["HirParam"]
     return_annotation: str | None
     body: list[HirNode]
-    # True for a C++ `static` method: no implicit `self`/`this`, callable
-    # via `ClassName::method(...)` with no receiver instance. `params`
-    # holds only the explicit parameters in this case (no injected `self`).
     is_static: bool = False
 
 
@@ -148,14 +144,14 @@ class HirCompare(HirNode):
 
 @dataclass
 class HirBoolOp(HirNode):
-    op: str  # "and" or "or"
+    op: str
     left: HirNode
     right: HirNode
 
 
 @dataclass
 class HirUnaryOp(HirNode):
-    op: str  # "not" or "-"
+    op: str
     operand: HirNode
 
 
@@ -208,7 +204,7 @@ class HirAssign(HirNode):
     target: str
     value: HirNode
     annotation: str | None
-    augmented_op: str | None = None  # "+", "-", "*", "/" for `x += 1` etc.
+    augmented_op: str | None = None
 
 
 @dataclass

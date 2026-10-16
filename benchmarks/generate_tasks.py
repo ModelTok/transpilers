@@ -10,9 +10,6 @@ os.makedirs("benchmarks/tasks", exist_ok=True)
 
 TASKS = []
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 1. BITWISE OPERATIONS  (tier 1 – token level)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "001", "name": "bitwise_ops", "tier": 1,
     "concept": "bitwise_arithmetic",
@@ -36,9 +33,6 @@ fn bitwise_ops(a: Int, b: Int) -> Tuple[Int, Int, Int, Int, Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. FAST EXPONENTIATION  (tier 2 – syntactic + algorithm)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "002", "name": "fast_power", "tier": 2,
     "concept": "recursion_divide_and_conquer",
@@ -83,9 +77,6 @@ fn fast_power(base: Int, exp: Int, mod: Int) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. STRING REVERSE  (tier 1)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "003", "name": "string_reverse", "tier": 1,
     "concept": "string_manipulation",
@@ -115,9 +106,6 @@ fn string_reverse(s: String) -> String:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. PALINDROME CHECK  (tier 1)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "004", "name": "is_palindrome", "tier": 1,
     "concept": "string_two_pointer",
@@ -164,9 +152,6 @@ fn is_palindrome(s: String) -> Bool:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. RUN-LENGTH ENCODING  (tier 2)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "005", "name": "run_length_encode", "tier": 2,
     "concept": "string_compression",
@@ -222,9 +207,6 @@ fn run_length_encode(s: String) -> String:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 6. FIZZBUZZ  (tier 1)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "006", "name": "fizzbuzz", "tier": 1,
     "concept": "conditionals_modulo",
@@ -271,9 +253,6 @@ fn fizzbuzz(n: Int) -> List[String]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 7. COLLATZ SEQUENCE LENGTH  (tier 2)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "007", "name": "collatz_length", "tier": 2,
     "concept": "while_loop_conditional",
@@ -315,9 +294,6 @@ fn collatz_length(n: Int) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 8. FIBONACCI RECURSIVE  (tier 2)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "008", "name": "fibonacci_recursive", "tier": 2,
     "concept": "recursion_base_case",
@@ -346,9 +322,6 @@ fn fibonacci_recursive(n: Int) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 9. FIBONACCI WITH MEMOIZATION  (tier 3)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "009", "name": "fibonacci_memo", "tier": 3,
     "concept": "memoization_hashmap",
@@ -386,9 +359,6 @@ fn fibonacci_memo(n: Int, memo: Dict[Int, Int]) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 10. BINARY SEARCH  (tier 2)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "010", "name": "binary_search", "tier": 2,
     "concept": "searching_divide_and_conquer",
@@ -436,9 +406,6 @@ fn binary_search(arr: List[Int], target: Int) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 11. TWO SUM  (tier 3 – library/hashmap)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "011", "name": "two_sum", "tier": 3,
     "concept": "hashmap_lookup",
@@ -481,9 +448,6 @@ fn two_sum(nums: List[Int], target: Int) -> List[Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 12. MAX SUBARRAY (KADANE)  (tier 2)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "012", "name": "max_subarray", "tier": 2,
     "concept": "dynamic_programming_local_global",
@@ -523,9 +487,6 @@ fn max_subarray(nums: List[Int]) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 13. MERGE SORT  (tier 2)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "013", "name": "merge_sort", "tier": 2,
     "concept": "sorting_divide_and_conquer",
@@ -592,9 +553,6 @@ fn merge_sort(arr: List[Int]) -> List[Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 14. FREQUENCY COUNT  (tier 3 – hashmap)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "014", "name": "frequency_count", "tier": 3,
     "concept": "hashmap_counting",
@@ -631,9 +589,6 @@ fn frequency_count(s: String) -> Dict[String, Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 15. SET OPERATIONS  (tier 3)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "015", "name": "set_ops", "tier": 3,
     "concept": "set_operations",
@@ -680,9 +635,6 @@ fn set_ops(a: List[Int], b: List[Int]) -> Tuple[List[Int], List[Int], List[Int]]
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 16. STACK WITH MIN  (tier 3 – OOP + data structure)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "016", "name": "min_stack", "tier": 3,
     "concept": "oop_class_stack",
@@ -757,9 +709,6 @@ fn min_stack(values: List[Int]) -> Tuple[Int, Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 17. BINARY SEARCH TREE  (tier 3)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "017", "name": "bst_insert_search", "tier": 3,
     "concept": "binary_tree_recursion",
@@ -849,9 +798,6 @@ fn bst_insert_search(values: List[Int]) -> List[Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 18. BFS SHORTEST PATH  (tier 3)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "018", "name": "bfs_shortest_path", "tier": 3,
     "concept": "graph_bfs",
@@ -909,9 +855,6 @@ fn bfs_shortest_path(n: Int, adj: List[List[Int]], src: Int, dst: Int) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 19. DFS CYCLE DETECTION  (tier 3)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "019", "name": "has_cycle", "tier": 3,
     "concept": "graph_dfs_cycle",
@@ -970,9 +913,6 @@ fn has_cycle(n: Int, adj: List[List[Int]]) -> Bool:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 20. OPERATOR OVERLOADING – VECTOR2D  (tier 3 – OOP)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "020", "name": "vector2d", "tier": 3,
     "concept": "oop_operator_overloading",
@@ -1040,9 +980,6 @@ fn vector2d(ax: Float64, ay: Float64, bx: Float64, by: Float64
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 21. MATRIX MULTIPLICATION  (tier 3 – numerical)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "021", "name": "matrix_multiply", "tier": 3,
     "concept": "numerical_matrix",
@@ -1087,9 +1024,6 @@ fn matrix_multiply(A: List[List[Int]], B: List[List[Int]]) -> List[List[Int]]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 22. STATISTICS  (tier 3 – numerical)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "022", "name": "statistics_ops", "tier": 3,
     "concept": "numerical_statistics",
@@ -1142,9 +1076,6 @@ fn statistics_ops(v: List[Float64]) -> Tuple[Float64, Float64, Float64]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 23. GCD AND LCM  (tier 2 – number theory)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "023", "name": "gcd_lcm", "tier": 2,
     "concept": "number_theory_gcd",
@@ -1178,9 +1109,6 @@ fn gcd_lcm(a: Int, b: Int) -> Tuple[Int, Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 24. SIEVE OF ERATOSTHENES  (tier 3)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "024", "name": "sieve_primes", "tier": 3,
     "concept": "sieve_boolean_array",
@@ -1235,9 +1163,6 @@ fn sieve_primes(n: Int) -> List[Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 25. COIN CHANGE (DP)  (tier 4 – algorithmic)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "025", "name": "coin_change", "tier": 4,
     "concept": "dynamic_programming_1d",
@@ -1282,9 +1207,6 @@ fn coin_change(coins: List[Int], amount: Int) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 26. EDIT DISTANCE (DP)  (tier 4)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "026", "name": "edit_distance", "tier": 4,
     "concept": "dynamic_programming_2d",
@@ -1343,9 +1265,6 @@ fn edit_distance(a: String, b: String) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 27. ACTIVITY SELECTION (GREEDY)  (tier 4)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "027", "name": "activity_selection", "tier": 4,
     "concept": "greedy_interval_scheduling",
@@ -1397,9 +1316,6 @@ fn activity_selection(start: List[Int], end_: List[Int]) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 28. DIJKSTRA  (tier 4)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "028", "name": "dijkstra", "tier": 4,
     "concept": "graph_shortest_path_weighted",
@@ -1470,9 +1386,6 @@ fn dijkstra(n: Int, adj: List[List[Tuple[Int,Int]]], src: Int) -> List[Int]:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 29. UNION-FIND  (tier 4)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "029", "name": "union_find", "tier": 4,
     "concept": "disjoint_set_path_compression",
@@ -1552,9 +1465,6 @@ fn union_find(n: Int, edges: List[Tuple[Int,Int]]) -> Int:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 30. NEWTON'S METHOD (SQRT)  (tier 3 – numerical)
-# ─────────────────────────────────────────────────────────────────────────────
 TASKS.append({
     "id": "030", "name": "newton_sqrt", "tier": 3,
     "concept": "numerical_iteration_convergence",
@@ -1593,14 +1503,7 @@ fn newton_sqrt(x: Float64) -> Float64:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 31-40: ENERGYPLUS REAL-WORLD TASKS
-# Source: EnergyPlus open-source building energy simulator (BSD-3-Clause)
-# Each function is extracted verbatim from the EnergyPlus C++ codebase and
-# adapted to be standalone (no EnergyPlusData* state, no logging sinks).
-# ─────────────────────────────────────────────────────────────────────────────
 
-# 31. ORDINAL DAY  (General.cc:706, Linda K. Lawrie, Sept 1997)
 TASKS.append({
     "id": "031", "name": "ep_ordinal_day", "tier": 2,
     "concept": "date_arithmetic",
@@ -1640,7 +1543,6 @@ fn ep_ordinal_day(month: Int, day: Int, leap: Int) -> Int:
     ]
 })
 
-# 32. SAFE DIVIDE  (General.cc:905)
 TASKS.append({
     "id": "032", "name": "ep_safe_divide", "tier": 1,
     "concept": "numerical_guard",
@@ -1680,7 +1582,6 @@ fn ep_safe_divide(a: Float64, b: Float64) -> Float64:
     ]
 })
 
-# 33. CLAMP  (PlantUtilities.cc:1508, Edwin Lee, Sept 2010)
 TASKS.append({
     "id": "033", "name": "ep_clamp", "tier": 1,
     "concept": "numeric_clamp",
@@ -1706,7 +1607,6 @@ fn ep_clamp(value: Float64, lo: Float64, hi: Float64) -> Float64:
     ]
 })
 
-# 34. INTEGER RANGE CHECK  (PlantUtilities.cc:1533, Edwin Lee, Sept 2010)
 TASKS.append({
     "id": "034", "name": "ep_int_in_range", "tier": 1,
     "concept": "range_validation",
@@ -1732,7 +1632,6 @@ fn ep_int_in_range(value: Int, lo: Int, hi: Int) -> Bool:
     ]
 })
 
-# 35. AZIMUTH DIFFERENCE  (General.cc:1565)
 TASKS.append({
     "id": "035", "name": "ep_azimuth_diff", "tier": 2,
     "concept": "circular_angle_arithmetic",
@@ -1772,7 +1671,6 @@ fn ep_azimuth_diff(azm_a: Float64, azm_b: Float64) -> Float64:
     ]
 })
 
-# 36. TO UPPER  (UtilityRoutines.cc:609, Linda K. Lawrie, Sept 1997)
 TASKS.append({
     "id": "036", "name": "ep_to_upper", "tier": 1,
     "concept": "string_case_conversion",
@@ -1805,7 +1703,6 @@ fn ep_to_upper(s: String) -> String:
     ]
 })
 
-# 37. FIRST NON-SPACE  (UtilityRoutines.cc:673, Linda K. Lawrie, Sept 1997)
 TASKS.append({
     "id": "037", "name": "ep_first_nonspace", "tier": 1,
     "concept": "string_scanning",
@@ -1840,7 +1737,6 @@ fn ep_first_nonspace(s: String) -> Int:
     ]
 })
 
-# 38. MOIST AIR ENTHALPY  (Psychrometrics.hh PsyHFnTdbW, George Shih, May 1976)
 TASKS.append({
     "id": "038", "name": "ep_moist_enthalpy", "tier": 2,
     "concept": "psychrometric_formula",
@@ -1875,7 +1771,6 @@ fn ep_moist_enthalpy(tdb: Float64, dw: Float64) -> Float64:
     ]
 })
 
-# 39. HEAT OF VAPORIZATION  (Psychrometrics.hh PsyHfgAirFnWTdb, Richard Liesen, May 2001)
 TASKS.append({
     "id": "039", "name": "ep_heat_vaporization", "tier": 2,
     "concept": "thermodynamic_formula",
@@ -1906,7 +1801,6 @@ fn ep_heat_vaporization(temp: Float64) -> Float64:
     ]
 })
 
-# 40. AIR DENSITY  (Psychrometrics.hh PsyRhoAirFnPbTdbW, G.S. Wright, June 1994)
 TASKS.append({
     "id": "040", "name": "ep_rho_air", "tier": 2,
     "concept": "ideal_gas_law",
@@ -1946,9 +1840,6 @@ fn ep_rho_air(pb: Float64, tdb: Float64, dw: Float64) -> Float64:
     ]
 })
 
-# ─────────────────────────────────────────────────────────────────────────────
-# WRITE TO JSON FILES
-# ─────────────────────────────────────────────────────────────────────────────
 for task in TASKS:
     path = f"benchmarks/tasks/{task['id']}_{task['name']}.json"
     with open(path, "w", encoding="utf-8") as f:

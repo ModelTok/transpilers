@@ -14,7 +14,7 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from transpilers.lift import lift_source  # noqa: E402
+from transpilers.lift import lift_source
 
 EP = "/home/db/EnergyPlus/src"
 OBJEXX = "/home/db/EnergyPlus/third_party/ObjexxFCL/src"
@@ -34,7 +34,7 @@ for i, f in enumerate(files):
         rows.append({"file": name, "loc": loc, "nodes": nodes, "todo": todo,
                      "mech_pct": round(pct, 1), "dt": round(time.time() - t0, 1),
                      "err": None})
-    except Exception as e:  # never-refuse should not crash; record if it does
+    except Exception as e:
         rows.append({"file": name, "loc": loc, "nodes": 0, "todo": 0,
                      "mech_pct": 0.0, "dt": round(time.time() - t0, 1),
                      "err": f"{type(e).__name__}: {e}"[:120]})

@@ -47,17 +47,14 @@ from .signal import (
 )
 
 __all__ = [
-    # legacy
     "repair",
     "RepairResult",
     "RepairPass",
-    # new (issue #47)
     "escalating_repair",
     "EscalatingRepairResult",
     "EscalatingRepairAttempt",
     "VerificationOutcome",
     "Verifier",
-    # shared
     "RepairSignal",
     "signal_from_compile",
     "signal_from_hole",
@@ -68,7 +65,6 @@ __all__ = [
     "FlywheelRecord",
     "read_flywheel",
     "merge_dedup",
-    # data flywheel (issue #51)
     "RepairOutcome",
     "RepairTracker",
     "rollup",

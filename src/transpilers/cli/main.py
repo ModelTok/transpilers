@@ -18,9 +18,7 @@ from pathlib import Path
 
 from transpilers.llm import LlmClient, make_llm_inferencer, make_llm_renamer
 
-# Canonical registries live in the stage-decomposed pipeline; re-exported here
-# because tests and scripts import them from this module.
-from transpilers.pipeline.stages import (  # noqa: F401  (re-exports)
+from transpilers.pipeline.stages import (
     EXT_TO_SOURCE,
     FRONTENDS,
     TARGETS,
@@ -49,7 +47,6 @@ def transpile(
     ).output
 
 
-# Convenience wrappers — kept stable for tests and external callers.
 def transpile_python_to_rust(
     source: str, *, llm_fill=None, trace_types_hints=None
 ) -> str:
@@ -148,8 +145,6 @@ def transpile_cpp_to_python_to_mojo(
     )
 
 
-# Convenience wrappers for the new frontends. Targets are picked at the call
-# site; tests assemble the pairs they need.
 def transpile_java(source: str, target: str = "rust", *, llm_fill=None) -> str:
     return transpile(source, source_lang="java", target=target, llm_fill=llm_fill)
 
@@ -298,8 +293,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     source_lang = args.source_lang or EXT_TO_SOURCE.get(args.source.suffix)
     if source_lang is None:
-        # Binaries with no extension fall through here — default to asm so
-        # the staged-Ghidra path picks them up.
         if not args.source.suffix:
             source_lang = "asm"
         else:
@@ -309,16 +302,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
 
-    # Asm frontend takes a path string (not text content), since the input
-    # may be a non-UTF-8 binary that read_text would reject.
     if source_lang == "asm":
         src_input = str(args.source)
     elif source_lang in ("c", "cpp") and args.include_dirs:
-        # Opt-in (only when -I is given, so every existing single-file/no-flag
-        # invocation is byte-for-byte unaffected): transitively inline local
-        # #include "X.h" headers reachable from the entry file, so a
-        # multi-file project's class declarations are visible to the parser
-        # instead of failing with "use of undeclared identifier".
         from transpilers.frontends.cpp.parser.includes import resolve_local_includes
 
         src_input = resolve_local_includes(
@@ -327,15 +313,6 @@ def main(argv: list[str] | None = None) -> int:
             include_impls=args.include_impls,
         )
     elif source_lang == "cpp" and args.cbm_repo:
-        # Opt-in (only when --cbm is given): recover the cross-file
-        # class/method/macro surface for this file from a codebase-memory-mcp
-        # knowledge graph and inject it as a project preamble (issue #79).
-        # This is the inverse of manual header-flattening: out-of-line
-        # `Class::Method` definitions resolve against the recovered class
-        # declaration instead of failing with "undeclared identifier".
-        # The preamble file is consumed by parse_cpp via
-        # $TRANSPILERS_CPP_PREAMBLE_FILE (core._project_preamble),
-        # so the existing parse path is untouched when --cbm is absent.
         from transpilers.frontends.cpp.parser import cbmpreamble
         import tempfile
 
@@ -343,7 +320,6 @@ def main(argv: list[str] | None = None) -> int:
         try:
             rel = str(args.source.relative_to(Path(args.cbm_repo)))
         except ValueError:
-            # Source lives outside the repo root: still try a basename probe.
             rel = args.source.name
         try:
             for warning in cbmpreamble.check_index(
@@ -368,12 +344,8 @@ def main(argv: list[str] | None = None) -> int:
             os.environ["TRANSPILERS_CPP_PREAMBLE_FILE"] = str(cbm_tmp)
             src_input = args.source.read_text(encoding="utf-8", errors="replace")
     else:
-        # Legacy Fortran/C/C++ sources often carry non-UTF-8 bytes (e.g. the
-        # © in author headers, latin-1 names), so decode leniently.
         src_input = args.source.read_text(encoding="utf-8", errors="replace")
 
-    # Both LLM-augmented passes share a single client so they hit the same
-    # on-disk cache. Lazy-construct so non-LLM runs never touch credentials.
     client = LlmClient() if (args.infer_with_llm or args.llm_rename) else None
     llm_fill = make_llm_inferencer(client) if (client and args.infer_with_llm) else None
     rename_fill = make_llm_renamer(client) if (client and args.llm_rename) else None
@@ -397,9 +369,6 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stderr.write(f"  {fn_name}: params={ptypes}, ret={rtype}\n")
             sys.stderr.write("--- end trace types hints ---\n")
 
-    # ------------------------------------------------------------------
-    # Two-stage python_pivot path: C++ → Python → <target>
-    # ------------------------------------------------------------------
     if args.path == "python_pivot":
         if source_lang != "cpp":
             print(
@@ -436,9 +405,6 @@ def main(argv: list[str] | None = None) -> int:
 
         return 0
 
-    # ------------------------------------------------------------------
-    # Default direct path
-    # ------------------------------------------------------------------
     try:
         trace = run_stages(
             src_input,
@@ -450,8 +416,6 @@ def main(argv: list[str] | None = None) -> int:
             trace_types_hints=trace_types_hints,
         )
     except Exception as exc:
-        # Verify-gate instrumentation (failure taxonomy): tag the failure
-        # bucket before the traceback propagates, so sweeps can grep it.
         from transpilers.verify.taxonomy import classify_exception
 
         bucket, construct = classify_exception("transpile", exc)

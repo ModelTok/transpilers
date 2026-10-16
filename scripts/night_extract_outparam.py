@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_cpp_mojo_dataset import (_match_delims, _match_braces,  # noqa: E402
+from build_cpp_mojo_dataset import (_match_delims, _match_braces,
                                     _strip_comments, _split_top_level,
                                     _SCALAR_TYPE)
 
@@ -75,8 +75,6 @@ def main() -> int:
             params = parse_params(text[paren_open + 1:paren_end - 1])
             if params is None:
                 continue
-            # plain definition check: only qualifiers/comments between `)` and `{`
-            # (linear scan — the original _POST_PAREN regex backtracks badly)
             brace_open = text.find("{", paren_end)
             if brace_open < 0 or brace_open - paren_end > 400:
                 continue

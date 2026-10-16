@@ -29,12 +29,10 @@ from trl import SFTConfig, SFTTrainer
 REPO = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO / "data" / "sft" / "cpp_mojo"
 
-# Model selection
 MODEL_ID = os.environ.get("MODEL", "Qwen/Qwen2.5-Coder-3B-Instruct")
 model_short = MODEL_ID.split("/")[-1].replace(".", "-")
 OUTPUT_DIR = REPO / "saves" / model_short / "lora" / "cpp_mojo_v1"
 
-# Config per model size
 needs_quant = "12b" in MODEL_ID.lower() or "7b" in MODEL_ID.lower()
 CUTOFF_LEN = 1024 if needs_quant else 1024
 
@@ -51,7 +49,6 @@ if not torch.cuda.is_available():
 p = torch.cuda.get_device_properties(0)
 print(f"GPU: {p.name}  VRAM: {p.total_memory/1e9:.1f}GB  ROCm: {torch.version.hip}")
 
-# Load datasets
 def load_mojo_acquisition(path: Path) -> list[dict]:
     data = json.loads(path.read_text(encoding="utf-8"))
     msgs = []
@@ -83,7 +80,6 @@ all_examples = acq + tr; rng.shuffle(all_examples)
 print(f"  total: {len(all_examples)}")
 dataset = Dataset.from_list(all_examples)
 
-# Load model
 kwargs = dict(
     device_map="auto",
     torch_dtype=torch.bfloat16,

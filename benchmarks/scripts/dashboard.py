@@ -31,9 +31,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Rich import with graceful fallback
-# ---------------------------------------------------------------------------
 
 try:
     from rich.console import Console
@@ -48,24 +45,19 @@ try:
 except ImportError:
     RICH_AVAILABLE = False
 
-# Root of transpilation-bench (one level up from scripts/)
 _BENCH_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_RESULTS_DIR = _BENCH_ROOT / "results"
 
-# Approximate cost per 1 k tokens (rough defaults; override via env vars if needed).
 _COST_PER_1K_IN: dict[str, float] = {
     "gpt-4o":                       0.005,
     "gpt-4o-mini":                  0.00015,
     "claude-3-5-sonnet-20241022":   0.003,
     "claude-opus-4-7":              0.015,
 }
-_DEFAULT_COST_PER_1K_IN  = 0.003   # fallback
-_DEFAULT_COST_PER_1K_OUT = 0.015   # fallback (output is ~5× input for Anthropic)
+_DEFAULT_COST_PER_1K_IN  = 0.003
+_DEFAULT_COST_PER_1K_OUT = 0.015
 
 
-# ---------------------------------------------------------------------------
-# Data loading
-# ---------------------------------------------------------------------------
 
 def _load_results(results_dir: Path) -> list[dict]:
     """Load all *_*.json result files from *results_dir* (excluding leaderboard)."""
@@ -110,14 +102,11 @@ def _compute_telemetry(runs: list[dict]) -> list[dict]:
             if latency > 0:
                 s["latency_count"] += 1
 
-            # Rough token estimate from meta (run_eval.py doesn't log tokens directly).
-            # Use cpp_source length as a proxy: chars/4 ≈ tokens.
             tokens_in = meta.get("tokens_in", 0)
             tokens_out = meta.get("tokens_out", 0)
             s["total_tokens_in"] += tokens_in
             s["total_tokens_out"] += tokens_out
 
-            # Cost estimate.
             cost_per_k = _COST_PER_1K_IN.get(model, _DEFAULT_COST_PER_1K_IN)
             s["total_cost_usd"] += (tokens_in / 1000) * cost_per_k
             s["total_cost_usd"] += (tokens_out / 1000) * _DEFAULT_COST_PER_1K_OUT
@@ -174,7 +163,7 @@ def _migration_rows(runs: list[dict]) -> list[dict]:
 
 def _tier_pass_rates(runs: list[dict]) -> dict[int, tuple[int, int]]:
     """Return {tier: (passed, total)} across all runs."""
-    stats: dict[int, list[int]] = {}  # tier -> [passed, total]
+    stats: dict[int, list[int]] = {}
     for run in runs:
         for task in run.get("tasks", []):
             t = task.get("tier", 0)
@@ -201,9 +190,6 @@ def _recent_errors(runs: list[dict], limit: int = 10) -> list[dict]:
     return errors[-limit:]
 
 
-# ---------------------------------------------------------------------------
-# ASCII bar chart (no Rich required)
-# ---------------------------------------------------------------------------
 
 def _ascii_bar(value: float, width: int = 20) -> str:
     """Return an ASCII progress bar for *value* in [0, 1]."""
@@ -211,9 +197,6 @@ def _ascii_bar(value: float, width: int = 20) -> str:
     return "[" + "#" * filled + "." * (width - filled) + "]"
 
 
-# ---------------------------------------------------------------------------
-# Plain-text fallback renderer
-# ---------------------------------------------------------------------------
 
 def _render_plain(runs: list[dict], results_dir: Path) -> None:
     if not runs:
@@ -231,11 +214,10 @@ def _render_plain(runs: list[dict], results_dir: Path) -> None:
     print(f"  Transpilation-Bench Dashboard  |  {now}")
     print(f"{'='*70}\n")
 
-    # Migration Status
     print("=== Migration Status ===")
     print(f"{'file':<35} {'src':<6} {'tgt':<6} {'status':<12} {'tier':<5}")
     print("-" * 70)
-    for r in migration[-20:]:  # show last 20
+    for r in migration[-20:]:
         print(
             f"{r['file']:<35} {r['source_lang']:<6} {r['target_lang']:<6} "
             f"{r['status']:<12} {r['tier']:<5}"
@@ -244,7 +226,6 @@ def _render_plain(runs: list[dict], results_dir: Path) -> None:
         print(f"  ... and {len(migration) - 20} more")
     print()
 
-    # LLM Telemetry
     print("=== LLM Telemetry ===")
     print(f"{'model':<40} {'calls':>6} {'tok_in':>8} {'tok_out':>8} {'cost':>9} {'avg_ms':>8}")
     print("-" * 85)
@@ -256,7 +237,6 @@ def _render_plain(runs: list[dict], results_dir: Path) -> None:
         )
     print()
 
-    # Pass@1 by Tier
     print("=== Pass@1 by Tier ===")
     for tier, (passed, total) in tier_rates.items():
         rate = passed / total if total else 0.0
@@ -264,7 +244,6 @@ def _render_plain(runs: list[dict], results_dir: Path) -> None:
         print(f"  Tier {tier}: {bar} {rate:.1%}  ({passed}/{total})")
     print()
 
-    # Recent Errors
     if errors:
         print("=== Recent Errors ===")
         for e in errors[-5:]:
@@ -273,9 +252,6 @@ def _render_plain(runs: list[dict], results_dir: Path) -> None:
         print()
 
 
-# ---------------------------------------------------------------------------
-# Rich renderer
-# ---------------------------------------------------------------------------
 
 def _make_migration_table(migration: list[dict]) -> "Table":
     table = Table(
@@ -401,9 +377,6 @@ def _render_rich(runs: list[dict], results_dir: Path, console: "Console") -> Non
     console.print()
 
 
-# ---------------------------------------------------------------------------
-# Watch mode
-# ---------------------------------------------------------------------------
 
 def _watch_rich(results_dir: Path, interval: int) -> None:
     console = Console()
@@ -414,7 +387,7 @@ def _watch_rich(results_dir: Path, interval: int) -> None:
                 buf = Console(file=StringIO(), force_terminal=True, width=console.width)
                 runs = _load_results(results_dir)
                 _render_rich(runs, results_dir, buf)
-                live.update(buf.file.getvalue())  # type: ignore[arg-type]
+                live.update(buf.file.getvalue())
                 time.sleep(interval)
     except KeyboardInterrupt:
         pass
@@ -431,9 +404,6 @@ def _watch_plain(results_dir: Path, interval: int) -> None:
         pass
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -468,7 +438,6 @@ def main(argv: list[str] | None = None) -> int:
             _watch_plain(results_dir, args.interval)
         return 0
 
-    # Single render.
     runs = _load_results(results_dir)
 
     if RICH_AVAILABLE:

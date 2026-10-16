@@ -46,26 +46,21 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
-# Make the package importable when run from anywhere in the repo.
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
-from transpilers.repair.outcomes import (  # noqa: E402
+from transpilers.repair.outcomes import (
     DEFAULT_LOG_PATH,
     RepairOutcome,
     RepairTracker,
     rollup,
 )
 
-# Default output locations
 STDLIB_MAP_PATH = REPO / "src" / "transpilers" / "stdlib_maps" / "auto_generated.yaml"
 SFT_OUT_PATH = REPO / "data" / "sft" / "flywheel_pairs.jsonl"
 PROMOTION_LOG_PATH = REPO / "data" / "sft" / "flywheel_promotions.jsonl"
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _priority(o: RepairOutcome) -> int:
@@ -87,9 +82,6 @@ def _section_name(source_lang: str, target: str) -> str:
     return f"{src}_to_{target}"
 
 
-# ---------------------------------------------------------------------------
-# Tiny YAML roundtrip - we only need the shape gen_stdlib_maps.py writes
-# ---------------------------------------------------------------------------
 
 
 def _load_yaml(path: Path) -> dict:
@@ -136,10 +128,6 @@ def _dump_yaml(path: Path, mapping: dict, *, header: str) -> None:
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
-# ---------------------------------------------------------------------------
-# Idempotency: a small JSONL log of every (fingerprint, target) we have
-# already promoted. Re-runs skip these.
-# ---------------------------------------------------------------------------
 
 
 def _load_already_promoted(promotion_log: Path) -> set:
@@ -176,9 +164,6 @@ def _record_promotion(
         fh.write(json.dumps(rec, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-# ---------------------------------------------------------------------------
-# 1. stdlib_maps: extract source->target mappings from frontier-only repairs
-# ---------------------------------------------------------------------------
 
 
 def promote_stdlib_maps(
@@ -248,10 +233,6 @@ def promote_stdlib_maps(
     return dict(added)
 
 
-# ---------------------------------------------------------------------------
-# 2. SFT corpus: write Alpaca-schema training records for every passing
-#    repair (priority-weighted: frontier > llm > rule > algorithmic).
-# ---------------------------------------------------------------------------
 
 
 def _build_sft_record(
@@ -360,9 +341,6 @@ def promote_sft_corpus(
     return dict(added)
 
 
-# ---------------------------------------------------------------------------
-# Main / CLI
-# ---------------------------------------------------------------------------
 
 
 def _load_outcomes(log_path, since_ts):
@@ -424,7 +402,6 @@ def main(argv=None) -> int:
     )
     args = ap.parse_args(argv)
 
-    # Per-run path overrides
     stdlib_path = args.stdlib
     sft_path = args.sft
     promotion_log = args.promotion_log

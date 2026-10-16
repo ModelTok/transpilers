@@ -54,8 +54,6 @@ class MojoFn(LirNode):
     return_type: str
     body: list[LirNode]
     raises: bool = False
-    # A C++ `static` method: no `self` param, emitted with `@staticmethod`
-    # and called as `StructName.method(...)`, no instance needed.
     is_static: bool = False
 
 
@@ -80,14 +78,14 @@ class MojoCompare(LirNode):
 
 @dataclass
 class MojoBoolOp(LirNode):
-    op: str  # "and" / "or"
+    op: str
     left: LirNode
     right: LirNode
 
 
 @dataclass
 class MojoUnary(LirNode):
-    op: str  # "not" / "-"
+    op: str
     operand: LirNode
 
 
@@ -182,7 +180,7 @@ class MojoSlice(LirNode):
 class MojoIndex(LirNode):
     value: LirNode
     index: LirNode
-    byte: bool = False  # String indexing uses `s[byte=i]` in Mojo
+    byte: bool = False
 
 
 @dataclass

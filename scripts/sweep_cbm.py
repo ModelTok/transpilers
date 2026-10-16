@@ -15,8 +15,8 @@ SRC_DIR = os.path.join(TOPO, "TopologicCore", "src")
 
 sys.path.insert(0, r"C:/Users/amd/Documents/GitHub/transpilers/src")
 
-from transpilers.frontends.cpp.parser import cbmpreamble as cp  # noqa: E402
-from transpilers.frontends.cpp.parser.core import parse_cpp  # noqa: E402
+from transpilers.frontends.cpp.parser import cbmpreamble as cp
+from transpilers.frontends.cpp.parser.core import parse_cpp
 
 
 def bucket_err(msg: str) -> str:
@@ -44,7 +44,6 @@ def main() -> int:
         out = os.path.join(tempfile.gettempdir(), f"cbm_sweep_{name}.inc")
         written = cp.write_preamble_for_file(TOPO, rel, out)
         had_preamble = written is not None
-        # Reproduce the --cbm CLI path: set env, parse the real source.
         if had_preamble:
             os.environ["TRANSPILERS_CPP_PREAMBLE_FILE"] = out
         else:
@@ -80,7 +79,6 @@ def main() -> int:
     print("Failure buckets:")
     for b, c in buckets.most_common():
         print(f"    {b}: {c}")
-    # The two #80-style overload collapses we specifically expect from the index:
     return 0
 
 

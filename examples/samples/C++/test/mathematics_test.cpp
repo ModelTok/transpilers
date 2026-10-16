@@ -163,4 +163,4 @@ TEST(mathematics, totient_function_phi)
     }
 }
 
-} // namespace mehara::mathematics::test
+}

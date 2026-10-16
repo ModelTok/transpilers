@@ -21,9 +21,6 @@ from typing import Any, Iterable, Iterator
 from transpilers.llm.client import ModelTier
 from transpilers.repair.signal import RepairSignal
 
-# Default path for the flywheel JSONL log. The loop appends a record per
-# verified pass and the SFT pipeline (issue #51) reads it back. The default
-# lives next to the LLM cache so the whole "hard-case" pipeline is colocated.
 DEFAULT_FLYWHEEL_PATH = (
     Path(__file__).resolve().parent.parent / "llm" / "cache" / "flywheel.jsonl"
 )
@@ -57,7 +54,7 @@ class FlywheelRecord:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "FlywheelRecord":
         """Inverse of :meth:`to_jsonl` — robust to extra keys."""
-        known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
+        known = {f for f in cls.__dataclass_fields__}
         kwargs = {k: v for k, v in d.items() if k in known}
         return cls(**kwargs)
 
@@ -121,9 +118,6 @@ class Flywheel:
         return rec
 
     def _append_line(self, line: str) -> None:
-        # We open in append mode every time so a long-running daemon that
-        # imports the module does not pin the file descriptor and block the
-        # SFT promotion step from reading it.
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(line)
             fh.write("\n")

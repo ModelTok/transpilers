@@ -23,7 +23,7 @@ SRC = REPO / "scripts/sft/generated_general.mojo"
 
 MOJO_RULES = [
     ("no C++ std::", lambda s: "std::" not in s),
-    ("no C++ // comments only (block ok)", lambda s: True),  # cosmetic
+    ("no C++ // comments only (block ok)", lambda s: True),
     ("uses `def` fn syntax", lambda s: bool(re.search(r"\bdef \w+\(", s))),
     ("typed params (Float64/Int)", lambda s: "Float64" in s and "Int" in s),
     ("uses `var`/`let`", lambda s: "var " in s or "let " in s),
@@ -48,15 +48,12 @@ def main() -> int:
         ok = fn(s)
         print(f"  [{'Y' if ok else 'N'}] {name}")
         bad += 0 if ok else 1
-    # also: extract the two fn bodies and run the faithful-exec oracle
     import math
-    # SafeDivide
     def sd(a, b):
         SMALL = 1e-10
         if abs(b) >= SMALL:
             return a / b
         return a / math.copysign(SMALL, b)
-    # OrdinalDay
     e = [31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
     def od(month, day, leap):
         if month == 1:
@@ -66,7 +63,6 @@ def main() -> int:
         if month >= 3 and month <= 12:
             return day + e[month - 2] + leap
         return 0
-    # fuzz vs C++ reference
     sd_bad = 0
     for (a, b) in [(5., 2.), (7., 0.), (-3., 1e-12), (0., 0.), (10., -1e-11), (9., 4.)]:
         SMALL = 1e-10

@@ -115,7 +115,6 @@ def main() -> int:
 
     source_root = Path(args.source_root).resolve() if args.source_root else source_dir
 
-    # Target: same parent, source_dir name + "-Mojo"
     target_root = source_dir.parent / (source_dir.name + "-Mojo")
     exclude_set = set(args.exclude)
 

@@ -35,7 +35,6 @@ import types
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Tags that identify tasks amenable to SMT verification
 PURE_TAGS = {"bitwise", "number_theory", "range", "validation", "date", "real_world"}
 FLOAT_CONCEPTS = {"numerical_statistics", "numerical_iteration_convergence",
                   "psychrometric_formula", "thermodynamic_formula", "ideal_gas_law",
@@ -86,14 +85,13 @@ def smt_verify_task(task: dict, translated_code: str) -> SMTResult:
         return SMTResult(task_id=tid, task_name=name, skipped=True, skip_reason=reason)
 
     try:
-        import z3  # type: ignore  # noqa: F401
+        import z3
         HAS_Z3 = True
     except ImportError:
-        HAS_Z3 = False  # fall back to dense sampling — still useful
+        HAS_Z3 = False
 
     import time
 
-    # Execute both functions
     ref_ns: dict = {}
     trans_ns: dict = {}
     try:
@@ -108,7 +106,6 @@ def smt_verify_task(task: dict, translated_code: str) -> SMTResult:
         return SMTResult(task_id=tid, task_name=name,
                          error=f"function '{name}' not found in one of the namespaces")
 
-    # Infer parameter count from test cases
     tests = task.get("tests", [])
     if not tests:
         return SMTResult(task_id=tid, task_name=name, skipped=True,
@@ -117,7 +114,6 @@ def smt_verify_task(task: dict, translated_code: str) -> SMTResult:
     n_params = len(tests[0]["args"])
     first_args = tests[0]["args"]
 
-    # Determine if params are int or float from test cases
     param_types = []
     for arg in first_args:
         if isinstance(arg, bool):
@@ -131,25 +127,19 @@ def smt_verify_task(task: dict, translated_code: str) -> SMTResult:
         else:
             param_types.append("other")
 
-    # Skip if non-scalar params (lists, nested structures)
     if any(t in ("other",) for t in param_types) or any(
         isinstance(a, (list, dict)) for a in first_args
     ):
         return SMTResult(task_id=tid, task_name=name, skipped=True,
                          skip_reason="non-scalar parameters — z3 encoding not supported")
 
-    # Skip float params (z3 real arithmetic may give spurious fp diffs)
     if "float" in param_types or "str" in param_types:
         return SMTResult(task_id=tid, task_name=name, skipped=True,
                          skip_reason="float/str parameters — use empirical testing")
 
-    # Dense-sampling equivalence check.
-    # When z3 is installed, a full symbolic check can be layered on top;
-    # for now, enumerate a large grid of concrete values.
     t0 = time.perf_counter()
     import itertools
 
-    # Build sample grid from test case args + extra samples
     sample_sets = []
     for i, pt in enumerate(param_types):
         vals = sorted(set(
@@ -157,7 +147,6 @@ def smt_verify_task(task: dict, translated_code: str) -> SMTResult:
             list(range(-5, 6)) +
             [100, 200, 255, 1000]
         ))
-        # Filter to valid range for the specific param
         sample_sets.append([v for v in vals if isinstance(v, int)])
 
     counterexample = None
@@ -208,7 +197,6 @@ def smt_verify_all(tasks_dir: str = "benchmarks/tasks") -> list[SMTResult]:
     results = []
     for f in sorted(Path(tasks_dir).glob("*.json")):
         task = json.loads(f.read_text())
-        # Self-check: translate == reference (should always pass)
         result = smt_verify_task(task, task["python_reference"])
         results.append(result)
     return results

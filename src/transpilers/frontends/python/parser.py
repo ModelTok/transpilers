@@ -33,29 +33,18 @@ def parse_python(source: str) -> hir.HirModule:
     tree = cst.parse_module(source)
     body: list[hir.HirNode] = []
     for stmt in tree.body:
-        # Skip top-level constructs that don't translate semantically: imports,
-        # `if __name__ == "__main__"` guards, bare statement-position calls
-        # (script entrypoints), and the shebang/coding comments libcst exposes
-        # as EmptyLine. The pipeline transpiles function definitions; module-
-        # level side effects are dropped here rather than partway through.
         if isinstance(stmt, cst.SimpleStatementLine):
             inner = stmt.body
             if all(isinstance(s, (cst.Import, cst.ImportFrom)) for s in inner):
                 continue
             if all(isinstance(s, cst.Expr) for s in inner):
-                # Bare function-call statements at module scope: drop.
                 continue
         if isinstance(stmt, cst.If):
-            # Skip the conventional `if __name__ == "__main__":` guard.
             if _is_main_guard(stmt):
                 continue
         try:
             body.append(_convert(stmt))
         except UnsupportedConstruct as exc:
-            # Walk inside FunctionDef even if we can't parse module-level
-            # constructs around it. For non-FunctionDef siblings we skip,
-            # but say so: a class-only module (e.g. topologicpy) would
-            # otherwise "succeed" with an empty translation (issue #79).
             if isinstance(stmt, cst.FunctionDef):
                 raise
             name = getattr(getattr(stmt, "name", None), "value", "")
@@ -112,7 +101,6 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
                 target=target.value, value=_convert(node.value), annotation=None
             )
         if isinstance(target, cst.Subscript):
-            # `xs[i] = v` — only plain single-index form (no slice).
             if len(target.slice) != 1 or not isinstance(
                 target.slice[0].slice, cst.Index
             ):
@@ -194,9 +182,6 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
         )
 
     if isinstance(node, cst.IfExp):
-        # `<body> if <test> else <orelse>` → the shared `__ternary__` builtin
-        # (test, then, else), which every backend already lowers to its native
-        # conditional expression.
         return hir.HirCall(
             func="__ternary__",
             args=[_convert(node.test), _convert(node.body), _convert(node.orelse)],
@@ -235,7 +220,6 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
                 func=node.func.value, args=[_convert(a.value) for a in node.args]
             )
         if isinstance(node.func, cst.Attribute):
-            # `obj.method(args)` — method call.
             receiver = _convert(node.func.value)
             return hir.HirMethodCall(
                 receiver=receiver,
@@ -244,7 +228,6 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
             )
         raise UnsupportedConstruct(f"call target {type(node.func).__name__}")
     if isinstance(node, cst.Attribute):
-        # `obj.field` access at expression position.
         return hir.HirFieldAccess(value=_convert(node.value), field=node.attr.value)
 
     if isinstance(node, cst.List):
@@ -257,9 +240,6 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
         return hir.HirSubscript(value=_convert(node.value), index=_convert(idx))
 
     if isinstance(node, cst.With):
-        # `with cm() as name: body` lowers to `name = cm(); body`. Context-
-        # manager cleanup is dropped, but the `as` binding flows through so
-        # the body actually parses with the variable in scope.
         if isinstance(node.body, cst.IndentedBlock):
             prelude: list[hir.HirNode] = []
             for item in node.items:
@@ -272,15 +252,11 @@ def _convert(node: cst.CSTNode) -> hir.HirNode:
                                 target=target.value, value=ctx_expr, annotation=None
                             )
                         )
-                # No `as`: the context expression is evaluated for side
-                # effect; we drop it.
             body_stmts = [_convert(s) for s in node.body.body]
             return FlattenBlock(stmts=prelude + body_stmts)
     raise UnsupportedConstruct(f"{type(node).__name__}")
 
 
-# Block-flatten markers live in transpilers.frontends._markers — both
-# `with` desugar, tuple-unpacking, and the `pass` filter use them.
 
 
 def _tuple_assign(target: cst.Tuple, value: cst.BaseExpression) -> hir.HirNode:
@@ -295,8 +271,6 @@ def _tuple_assign(target: cst.Tuple, value: cst.BaseExpression) -> hir.HirNode:
     rhs_exprs = [e.value for e in value.elements if isinstance(e, cst.Element)]
     if len(rhs_exprs) != len(targets):
         raise UnsupportedConstruct("tuple unpacking arity mismatch")
-    # Stash each RHS in a fresh tmp first, then assign tmps to targets —
-    # this models Python's "evaluate all RHS, then bind" exactly.
     tmps = [f"__xpile_swap_{i}" for i in range(len(targets))]
     stmts: list[hir.HirNode] = []
     for tmp, rhs in zip(tmps, rhs_exprs):
@@ -330,17 +304,10 @@ def _tuple_assign(target: cst.Tuple, value: cst.BaseExpression) -> hir.HirNode:
 
 def _convert_function(fn: cst.FunctionDef) -> hir.HirFunction:
     sig = fn.params
-    # Variadic forms can't be modelled in the typed subset — refuse loudly
-    # rather than silently drop them (the prior behaviour for keyword-only
-    # params, which produced a no-arg signature with a body using them).
     if isinstance(sig.star_arg, cst.Param):
         raise UnsupportedConstruct("*args variadic parameter")
     if sig.star_kwarg is not None:
         raise UnsupportedConstruct("**kwargs variadic parameter")
-    # Positional-only, normal, and keyword-only params all become ordinary
-    # typed params. Python's keyword-only call convention (the `*,` marker) is
-    # relaxed to positional-or-keyword; the computation is identical and every
-    # target backend renders a flat typed parameter list.
     cst_params = [
         *getattr(sig, "posonly_params", ()),
         *sig.params,
@@ -368,9 +335,6 @@ def _convert_block(body: cst.BaseSuite) -> list[hir.HirNode]:
         if isinstance(node, FlattenBlock):
             out.extend(node.stmts)
             continue
-        # Drop bare string-literal expression statements (docstrings):
-        # no runtime effect but leak into emit as raw quoted text on
-        # targets without a comment-statement form.
         if isinstance(node, hir.HirStringLiteral):
             continue
         if isinstance(node, PassMarker):
@@ -385,7 +349,6 @@ def _convert_if(node: cst.If) -> hir.HirIf:
     orelse: list[hir.HirNode] = []
     if node.orelse is not None:
         if isinstance(node.orelse, cst.If):
-            # elif → nested HirIf
             orelse = [_convert_if(node.orelse)]
         elif isinstance(node.orelse, cst.Else):
             orelse = _convert_block(node.orelse.body)
@@ -407,13 +370,11 @@ def _convert_for(node: cst.For) -> hir.HirNode:
         raise UnsupportedConstruct("for-else clause")
     target, it = node.target, node.iter
 
-    # `for <name> in range(...)` — the original indexed-range form, untouched.
     if isinstance(target, cst.Name) and _is_call_named(it, "range"):
         return hir.HirFor(
             target=target.value, iter=_convert(it), body=_convert_block(node.body)
         )
 
-    # `for <index>, <value> in enumerate(<name>)` — indexed iteration.
     if isinstance(target, cst.Tuple) and _is_call_named(it, "enumerate"):
         elts = [e.value for e in target.elements if isinstance(e, cst.Element)]
         if len(elts) != 2 or not all(isinstance(e, cst.Name) for e in elts):
@@ -434,7 +395,6 @@ def _convert_for(node: cst.For) -> hir.HirNode:
             body=_convert_block(node.body),
         )
 
-    # `for <value> in <name>` — plain foreach over a bare-name collection.
     if isinstance(target, cst.Name) and isinstance(it, cst.Name):
         return hir.HirForEach(
             value_name=target.value,
@@ -507,7 +467,7 @@ def _cmp_symbol(op: cst.BaseCompOp) -> str:
         cst.GreaterThan: ">",
         cst.GreaterThanEqual: ">=",
         cst.Is: "==",
-        cst.IsNot: "!=",  # `x is None` → `x == None` at MIR
+        cst.IsNot: "!=",
     }
     for kls, sym in table.items():
         if isinstance(op, kls):
@@ -516,8 +476,6 @@ def _cmp_symbol(op: cst.BaseCompOp) -> str:
 
 
 def _unquote(literal: str) -> str:
-    # libcst's SimpleString.value includes the surrounding quotes; strip them.
-    # Real escape handling lives in a future pass — current subset is exact-text.
     if literal.startswith(("'''", '"""')):
         return literal[3:-3]
     return literal[1:-1]

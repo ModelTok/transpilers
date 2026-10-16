@@ -52,16 +52,12 @@ def emit_fortran(module: lir.FortranModule) -> str:
     main_fn = next((f for f in fns if f.name == "main"), None)
     lib_fns = [f for f in fns if f.name != "main"]
 
-    # Collect method functions from derived types.
     method_fns: list[lir.FortranFn] = []
     for t in types:
         method_fns.extend(t.methods)
 
-    # All non-main functions go into the module.
     all_lib = method_fns + lib_fns
 
-    # Build module block — always emit a module so functions have a proper
-    # interface available to callers (including the program block).
     type_blocks = "\n\n".join(_emit_type_decl_only(t) for t in types)
     fn_blocks = "\n\n".join(_emit_fn(f) for f in all_lib)
     program_body = _emit_program(main_fn) if main_fn else ""
@@ -145,7 +141,6 @@ def _collect_assigned_names(nodes: list[lir.LirNode]) -> set[str]:
     assigned: set[str] = set()
     for node in nodes:
         if isinstance(node, lir.FortranAssign):
-            # name may be "obj%field" — take the root name before any `%`.
             assigned.add(node.name.split("%")[0])
         elif isinstance(node, lir.FortranSubscriptAssign):
             if isinstance(node.obj, lir.FortranName):
@@ -201,7 +196,6 @@ def _calls_name_expr(node: lir.LirNode | None, name: str) -> bool:
 def _emit_fn(fn: lir.FortranFn) -> str:
     is_subroutine = fn.return_type is None
     keyword = "subroutine" if is_subroutine else "function"
-    # Fortran requires the RECURSIVE prefix if the function calls itself.
     is_recursive = _calls_name(fn.body, fn.name)
     recursive_prefix = "recursive " if is_recursive else ""
     params = ", ".join(n for n, _ in fn.params)
@@ -209,34 +203,20 @@ def _emit_fn(fn: lir.FortranFn) -> str:
     if not is_subroutine:
         head += f" result({fn.result_name})"
 
-    # Detect params that are assigned to in the body — they can't be intent(in).
     assigned_in_body = _collect_assigned_names(fn.body)
 
     decl_lines = [f"{INDENT}implicit none"]
     for name, ty in fn.params:
-        # Array params are assumed-shape via `dimension(:)` — `intent(in)`
-        # places after the shape attribute is the conventional ordering.
-        # Scalar params that are reassigned in the body use `value` so Fortran
-        # makes a local copy (Fortran passes by reference by default, so
-        # writing to a scalar param called with a literal would segfault).
-        # Array params cannot use `value` (VALUE conflicts with DIMENSION).
         is_array = "dimension(:)" in ty
         if name in assigned_in_body and not is_array:
-            # Scalar param reassigned in body: pass by value so literals don't
-            # segfault (Fortran is pass-by-reference by default).
             decl_lines.append(f"{INDENT}{ty}, value :: {name}")
         elif name in assigned_in_body and is_array:
-            # Array param that's subscript-assigned: must be intent(inout)
-            # since VALUE conflicts with DIMENSION.
             decl_lines.append(f"{INDENT}{ty}, intent(inout) :: {name}")
         else:
             decl_lines.append(f"{INDENT}{ty}, intent(in) :: {name}")
     if not is_subroutine:
         decl_lines.append(f"{INDENT}{fn.return_type} :: {fn.result_name}")
     for name, ty in fn.locals:
-        # Locals declared with array shape need `allocatable` so a later
-        # `xs = [...]` assignment triggers auto-(re)allocation under
-        # F2003 -frealloc-lhs (default in gfortran ≥ 4.7).
         if "dimension(:)" in ty:
             decl_lines.append(f"{INDENT}{ty}, allocatable :: {name}")
         else:
@@ -270,16 +250,9 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> list[str]:
     if isinstance(node, lir.FortranAssign):
         return [f"{pad}{node.name} = {_emit_expr(node.value)}"]
     if isinstance(node, lir.FortranSubscriptAssign):
-        # Fortran arrays are 1-indexed by default; +1 to bridge our 0-based
-        # MIR. Real shape-aware lowering would track this in the type
-        # lattice; the +1 is correct for any plain rank-1 array.
         return [
             f"{pad}{_emit_expr(node.obj)}({_emit_expr(node.index)} + 1) = {_emit_expr(node.value)}"
         ]
-    # `print(x, y, z)` lowers to a FortranCall but Fortran's print is a
-    # statement form, not a function call — rewrite at emit.
-    # Use explicit format '(*(g0, 1x))' so integers/floats print without
-    # leading spaces (list-directed `print *` uses wide fixed-width fields).
     if isinstance(node, lir.FortranCall) and node.func in ("print", "println"):
         rendered = ", ".join(_emit_expr(a) for a in node.args)
         return [f"{pad}print '(*(g0, 1x))', {rendered}"]
@@ -288,7 +261,6 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> list[str]:
         for inner in node.body:
             out.extend(_emit_stmt(inner, depth + 1))
         if node.orelse:
-            # Collapse `else if` chain when else is a single FortranIf.
             if len(node.orelse) == 1 and isinstance(node.orelse[0], lir.FortranIf):
                 nested = node.orelse[0]
                 out.append(f"{pad}else if ({_emit_expr(nested.test)}) then")
@@ -331,8 +303,6 @@ def _emit_inclusive_stop(stop: lir.LirNode) -> str:
         and stop.op == "+"
         and isinstance(stop.right, lir.FortranIntLiteral)
     ):
-        # `n + 1` (a common pattern coming from inclusive→exclusive adjustments
-        # in the frontend) → just `n`.
         new_value = stop.right.value - 1
         if new_value == 0:
             return _emit_expr(stop.left)
@@ -358,8 +328,6 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
     if isinstance(node, lir.FortranRaw):
-        # No inline comments mid-expression in Fortran; preserve the snippet
-        # in a marker call argument.
         text = _flatten_snippet(node.snippet).replace("'", "''")
         return f"todo_port('{text}')"
     if isinstance(node, lir.FortranBinOp):
@@ -381,7 +349,7 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         text = repr(node.value)
         if "." not in text and "e" not in text:
             text += ".0"
-        return text + "_8"  # double-precision kind suffix
+        return text + "_8"
     if isinstance(node, lir.FortranBoolLiteral):
         return ".true." if node.value else ".false."
     if isinstance(node, lir.FortranStringLiteral):
@@ -393,22 +361,15 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.FortranFieldAccess):
         return f"{_emit_expr(node.value)}%{node.field}"
     if isinstance(node, lir.FortranStructInit):
-        # Fortran derived-type ctor — positional, takes values in field
-        # declaration order.
         args = ", ".join(_emit_expr(v) for _, v in node.field_values)
         return f"{node.name}({args})"
     if isinstance(node, lir.FortranArrayLit):
         if not node.elements:
-            # Fortran rejects `[]`; the typed-empty constructor `[T ::]` is
-            # the only legal form, so elem_type must be known by lowering.
             assert node.elem_type, "empty FortranArrayLit requires elem_type"
             return f"[{node.elem_type} ::]"
         elems = ", ".join(_emit_expr(e) for e in node.elements)
         return f"[{elems}]"
     if isinstance(node, lir.FortranSubscript):
-        # 1-indexed; bridge from our 0-based MIR with +1. Constant-fold
-        # when the index is itself a literal so `xs[0]` prints as `xs(1)`
-        # rather than `xs(0 + 1)`. Also fold `i + k` → `i + (k+1)`.
         if isinstance(node.index, lir.FortranIntLiteral):
             return f"{_emit_expr(node.value)}({node.index.value + 1})"
         if (

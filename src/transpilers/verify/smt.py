@@ -36,9 +36,6 @@ from typing import Any, Callable
 
 from transpilers.verify._exec_timeout import ExecTimeout, time_limit
 
-# Wall-clock cap on exec()-ing untrusted-shaped source to pull out a callable
-# (definitions only, so this should be near-instant; a hang here means
-# pathological top-level code, not a slow function body).
 _EXEC_TIMEOUT_S = 5
 
 
@@ -46,10 +43,10 @@ _EXEC_TIMEOUT_S = 5
 class SMTConfig:
     """Configuration for the SMT verifier."""
 
-    bound: int = 1000  # Integer domain: [-bound, +bound]
-    sample_limit: int = 50_000  # Max concrete samples when z3 is unavailable
-    recursion_depth: int = 10  # Unrolling depth for recursive funcs
-    timeout_ms: int = 30_000  # z3 solver timeout in milliseconds
+    bound: int = 1000
+    sample_limit: int = 50_000
+    recursion_depth: int = 10
+    timeout_ms: int = 30_000
 
 
 @dataclass
@@ -61,13 +58,13 @@ class SMTResult:
     skip_reason: str = ""
     counterexample: dict[str, Any] | None = None
     error: str = ""
-    backend: str = ""  # "z3" | "sampling" | "skipped"
+    backend: str = ""
     elapsed_ms: float = 0.0
 
 
 def _try_import_z3():
     try:
-        import z3  # type: ignore
+        import z3
 
         return z3
     except ImportError:
@@ -101,7 +98,7 @@ def _sampling_verify(
         elif pt == "bool":
             sample_sets.append([False, True])
         else:
-            return True, None  # skip
+            return True, None
 
     checked = 0
     try:
@@ -123,10 +120,6 @@ def _sampling_verify(
                 except Exception:
                     continue
     except ExecTimeout:
-        # A pathological input (infinite loop, runaway recursion) hung one of
-        # the calls. Sampling is a best-effort check, not a proof -- treat
-        # this the same as exhausting `sample_limit` early: report what we
-        # checked so far as inconclusive-but-clean, not a false failure.
         pass
     return True, None
 
@@ -139,7 +132,6 @@ def _z3_verify(
     z3,
 ) -> tuple[bool, dict | None]:
     """Symbolic z3 verification for integer-only functions."""
-    # Create symbolic variables
     syms = []
     for i, pt in enumerate(param_types):
         if pt == "int":
@@ -147,33 +139,27 @@ def _z3_verify(
         elif pt == "bool":
             syms.append(z3.Bool(f"x{i}"))
         else:
-            return True, None  # not symbolically encodable
+            return True, None
 
-    # Build z3 interpretation of both functions by evaluating on symbolic args.
-    # This only works for functions whose Python bodies z3 can interpret via
-    # operator overloading (arithmetic, comparison). Complex control flow
-    # falls back to sampling automatically.
     try:
         ref_out = ref_fn(*syms)
         trans_out = trans_fn(*syms)
     except Exception:
-        return True, None  # not z3-symbolic — caller will use sampling
+        return True, None
 
     solver = z3.Solver()
     solver.set("timeout", config.timeout_ms)
 
-    # Add bounds constraints
     for s, pt in zip(syms, param_types):
         if pt == "int":
             solver.add(s >= -config.bound)
             solver.add(s <= config.bound)
 
-    # Check if ref(x) != trans(x) is satisfiable (find counterexample)
     solver.add(ref_out != trans_out)
     check = solver.check()
 
     if check == z3.unsat:
-        return True, None  # Proved equivalent
+        return True, None
     elif check == z3.sat:
         model = solver.model()
         ce = {}
@@ -188,7 +174,6 @@ def _z3_verify(
             "translated_output": str(trans_val),
         }
     else:
-        # unknown / timeout — fall back to sampling
         return True, None
 
 
@@ -218,11 +203,9 @@ def smt_verify(
 
     t0 = time.perf_counter()
 
-    # Skip non-verifiable param types via z3
     symbolic_types = {"int", "bool"}
     use_z3 = all(pt in symbolic_types for pt in param_types)
 
-    # Load functions
     ref_fn = _exec_fn(ref_code, func_name)
     trans_fn = _exec_fn(trans_code, func_name)
 
@@ -242,7 +225,6 @@ def smt_verify(
             verified, ce = _z3_verify(ref_fn, trans_fn, param_types, config, z3)
             backend = "z3"
         except Exception:
-            # z3 failed symbolically — fall back to sampling
             pass
 
     if backend != "z3":
@@ -290,9 +272,6 @@ def smt_verify_pair(
     )
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import argparse

@@ -33,7 +33,7 @@ from transpilers.frontends.errors import UnsupportedConstruct
 
 
 TS_TYPE_ALIASES: dict[str, str] = {
-    "number": "int",  # see module docstring
+    "number": "int",
     "bigint": "int",
     "boolean": "bool",
     "string": "str",
@@ -65,7 +65,6 @@ def parse_typescript(source: str) -> hir.HirModule:
                     if inner.type == "function_declaration":
                         body.append(_convert_function(inner))
             continue
-        # Top-level non-function statements — script style. Skip.
         if c.type in (
             "expression_statement",
             "lexical_declaration",
@@ -169,7 +168,6 @@ def _convert_for(node: Node) -> list[hir.HirNode]:
     body_node = required_field(node, "body")
     if init_node is not None:
         out.extend(_convert_stmt(init_node))
-    # The condition in JS/TS for-statement is wrapped in expression_statement.
     if cond_node is not None and cond_node.type == "expression_statement":
         cond_kids = named_children(cond_node)
         cond_expr = (
@@ -261,7 +259,6 @@ def _convert_update(node: Node) -> hir.HirNode:
     )
 
 
-# ---------- expressions ----------
 
 
 def _convert_expr(node: Node) -> hir.HirNode:
@@ -299,7 +296,6 @@ def _convert_binary(node: Node) -> hir.HirNode:
     left = _convert_expr(required_field(node, "left"))
     right = _convert_expr(required_field(node, "right"))
     op = text(required_field(node, "operator"))
-    # JS/TS uses === and !== for strict equality; we collapse onto Python-style.
     if op in ("==", "==="):
         return hir.HirCompare(op="==", left=left, right=right)
     if op in ("!=", "!=="):
@@ -337,15 +333,11 @@ ARITH_OPS = {"+", "-", "*", "/", "%"}
 LOGICAL_OPS = {"&&", "||"}
 
 
-# ---------- types ----------
 
 
 def _return_type_text(node: Node | None) -> str | None:
     if node is None:
         return None
-    # In TS the return type sits as a separate field on function_declaration —
-    # tree-sitter typically wraps it in `type_annotation` whose only named
-    # child is the actual type.
     return _type_annotation_text(node)
 
 

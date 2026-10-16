@@ -35,8 +35,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from transpilers.pipeline.stages import TARGETS, run_stages  # noqa: E402
-from transpilers.verify.behavioral import (  # noqa: E402
+from transpilers.pipeline.stages import TARGETS, run_stages
+from transpilers.verify.behavioral import (
     SUPPORTED_TAGS,
     check_behavioral_equivalence,
     infer_param_tags,
@@ -88,7 +88,7 @@ def sweep(root: Path, target: str, limit: int) -> Totals:
         t.files += 1
         try:
             target_code = run_stages(source, source_lang="python", target=target).output
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"  TRANSPILE-FAIL {path.name}: {type(exc).__name__}: {exc}")
             continue
 

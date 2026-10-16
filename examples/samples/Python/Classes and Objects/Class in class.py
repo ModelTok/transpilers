@@ -1,4 +1,3 @@
-#First method
 """class person:
     class dob:
         def __init__(self,date):

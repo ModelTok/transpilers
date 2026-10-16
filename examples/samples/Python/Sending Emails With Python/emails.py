@@ -30,28 +30,22 @@ def sending_emails(sender_id, sender_pass, receiver_id):
                 Thank You
                 '''
 
-        # The mail addresses and password
         sender_address = sender_id
         sender_pass = sender_pass
         receiver_address = receiver_id
 
-        # Setup the MIME
         message = MIMEMultipart()
         message['From'] = sender_address
         message['To'] = receiver_address
 
-        # The subject line
         message['Subject'] = 'A test mail sent by Python. It has an attachment.'
 
-        # The body and the attachments for the mail
         message.attach(MIMEText(mail_content, 'plain'))
 
-        # Create SMTP session for sending the mail
-        session = smtplib.SMTP('smtp.gmail.com', 587)  # use gmail with port
+        session = smtplib.SMTP('smtp.gmail.com', 587)
 
-        session.starttls()  # enable security
+        session.starttls()
 
-        # login with mail_id and password
         session.login(sender_address, sender_pass)
         text = message.as_string()
         session.sendmail(sender_address, receiver_address, text)

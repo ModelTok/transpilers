@@ -10,9 +10,6 @@ from transpilers.ir import lir
 
 INDENT = "    "
 
-# Mojo reserved words that are valid C++ identifiers — rename on emit (append _)
-# so e.g. a C++ variable named `var`/`ref`/`out` doesn't collide. Deterministic,
-# so declaration and uses stay consistent without a rename map.
 _MOJO_KEYWORDS = frozenset(
     {
         "var",
@@ -54,8 +51,6 @@ def emit_mojo(module: lir.MojoModule) -> str:
     body = "\n\n".join(_emit_item(item, mutating_names) for item in module.items) + "\n"
     imports = getattr(module, "imports", None)
     if imports:
-        # Entries may be bare module names (`math`) or full statements
-        # (`from math import sqrt`); emit the latter verbatim.
         lines = [
             m if m.startswith(("from ", "import ")) else f"import {m}" for m in imports
         ]
@@ -139,11 +134,6 @@ def _mutates_self(nodes: object, mutating_names: frozenset[str]) -> bool:
     if isinstance(nodes, lir.MojoSubscriptAssign) and _touches_self(nodes.obj):
         return True
     if isinstance(nodes, lir.MojoReassign) and nodes.name == "self":
-        # `self = expr` -- the "replace my whole value" idiom for a
-        # mutate-via-copy-assign method (C++'s `(*this) = Multiplied(...);`,
-        # see `_is_this_deref` in the C++ frontend). Reassigning `self`
-        # outright is just as much a mutation as assigning one of its
-        # fields, and needs the same `mut self`.
         return True
     if (
         isinstance(nodes, lir.MojoMethodCall)
@@ -196,8 +186,6 @@ def _compute_mutating_method_names(module: lir.MojoModule) -> frozenset[str]:
 
 def _emit_fn(fn: lir.MojoFn, mutating_names: frozenset[str], *, depth: int = 0) -> str:
     indent = INDENT * depth
-    # `__init__` takes `out self`; a method that mutates self takes `mut self`;
-    # otherwise the default immutable borrow `self`.
     mut_self = (
         fn.params
         and fn.params[0][0] == "self"
@@ -265,10 +253,8 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         head = f"{pad}if {_emit_expr(node.test)}:"
         body = _emit_block(node.body, depth + 1) or (pad + INDENT + "pass")
         if node.orelse:
-            # Collapse `else: if ...` chain into `elif`.
             if len(node.orelse) == 1 and isinstance(node.orelse[0], lir.MojoIf):
                 inner = _emit_stmt(node.orelse[0], depth)
-                # Replace `if` with `elif` at this indent level.
                 elif_inner = inner.replace(f"{pad}if ", f"{pad}elif ", 1)
                 return f"{head}\n{body}\n{elif_inner}"
             else_body = _emit_block(node.orelse, depth + 1) or (pad + INDENT + "pass")
@@ -307,8 +293,6 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
     if isinstance(node, lir.MojoRaw):
-        # Expr position: no trailing `#` comment (would swallow the rest of an
-        # enclosing line). Encode the snippet in a never-called marker call.
         text = _flatten_snippet(node.snippet).replace("\\", "\\\\").replace('"', '\\"')
         return f'__todo_port__("{text}")'
     if isinstance(node, lir.MojoBinOp):
@@ -339,14 +323,10 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         items = ", ".join(_emit_expr(e) for e in node.elements)
         return f"({items})"
     if isinstance(node, lir.MojoSlice):
-        # Mojo slicing returns a Span; the C++ iterator-range ctor copies, so
-        # materialize into a List.
         return f"List({_emit_expr(node.value)}[{_emit_expr(node.lo)}:{_emit_expr(node.hi)}])"
     if isinstance(node, lir.MojoFieldAccess):
         return f"{_emit_expr(node.value)}.{node.field}"
     if isinstance(node, lir.MojoStructInit):
-        # @fieldwise_init synthesizes a positional constructor in declaration
-        # order; emit as `Point(0, 0)`.
         args = ", ".join(_emit_expr(v) for _, v in node.field_values)
         return f"{node.name}({args})"
     if isinstance(node, lir.MojoIndex):

@@ -15,7 +15,6 @@ public class PrimeNumberChecker {
 
         boolean isPrime = true;
 
-        //Prime number checker
         for (int i = 2; i <= Math.sqrt(number); i++) {
             if (number % i == 0) {
                 isPrime = false;

@@ -38,10 +38,10 @@ class FortranModule(LirNode):
 @dataclass
 class FortranFn(LirNode):
     name: str
-    params: list[tuple[str, str]]  # (name, fortran_type)
-    return_type: str | None  # None for subroutines / void
-    result_name: str  # name of the result variable to assign
-    locals: list[tuple[str, str]]  # extra declarations beyond params + result
+    params: list[tuple[str, str]]
+    return_type: str | None
+    result_name: str
+    locals: list[tuple[str, str]]
     body: list[LirNode]
 
 
@@ -74,14 +74,14 @@ class FortranCompare(LirNode):
 
 @dataclass
 class FortranBoolOp(LirNode):
-    op: str  # ".and." / ".or."
+    op: str
     left: LirNode
     right: LirNode
 
 
 @dataclass
 class FortranUnary(LirNode):
-    op: str  # ".not." / "-"
+    op: str
     operand: LirNode
 
 
@@ -169,7 +169,7 @@ class FortranArrayLit(LirNode):
     can produce `[<type> ::]` (Fortran requires a typed constructor)."""
 
     elements: list[LirNode]
-    elem_type: str | None = None  # e.g. "logical", "integer"
+    elem_type: str | None = None
 
 
 @dataclass

@@ -21,9 +21,6 @@ from dataclasses import dataclass
 from typing import Any
 
 
-# ---------------------------------------------------------------------------
-# Provenance data
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -43,9 +40,6 @@ class HirProvenance:
     hir_repr: str = ""
 
 
-# ---------------------------------------------------------------------------
-# Provenance map
-# ---------------------------------------------------------------------------
 
 
 class ProvenanceMap:
@@ -58,10 +52,8 @@ class ProvenanceMap:
     """
 
     def __init__(self) -> None:
-        # id(node) -> HirProvenance
         self._map: dict[int, HirProvenance] = {}
 
-    # -- recording -----------------------------------------------------------
 
     def record(self, node: object, provenance: HirProvenance) -> None:
         """Associate *node* with its *provenance*."""
@@ -103,7 +95,6 @@ class ProvenanceMap:
             prov = self._map[id(source)]
         self._map[id(target)] = prov
 
-    # -- querying ------------------------------------------------------------
 
     def lookup(self, node: object) -> HirProvenance | None:
         """Return the ``HirProvenance`` for *node*, or ``None``."""
@@ -121,7 +112,6 @@ class ProvenanceMap:
     def __repr__(self) -> str:
         return f"ProvenanceMap({len(self)} entries)"
 
-    # -- iteration over entries -----------------------------------------------
 
     def items(self):
         """Yield ``(id(node), HirProvenance)`` pairs."""
@@ -131,7 +121,6 @@ class ProvenanceMap:
         """Yield all ``HirProvenance`` values."""
         return self._map.values()
 
-    # -- serialization -------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-serializable dict representation.
@@ -181,7 +170,6 @@ class ProvenanceMap:
                 source_span=entry.get("source_span"),
                 hir_repr=entry.get("hir_repr", ""),
             )
-            # Store by hir_id for look-up after deserialization.
             pm._map[entry["hir_id"]] = prov
         return pm
 

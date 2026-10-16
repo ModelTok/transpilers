@@ -59,9 +59,6 @@ from .types import (
 
 _log = logging.getLogger(__name__)
 
-# Cursor kinds that always mark the boundary between a complete
-# declaration and its body. When we walk the AST we use these as the
-# points at which to record "this name has this type".
 _DECL_KINDS: frozenset[ci.CursorKind] = frozenset(
     k
     for k in (
@@ -77,9 +74,6 @@ _DECL_KINDS: frozenset[ci.CursorKind] = frozenset(
         ci.CursorKind.ENUM_DECL,
         ci.CursorKind.TYPEDEF_DECL,
         ci.CursorKind.TYPE_ALIAS_DECL,
-        # FUNCTION_TEMPLATE: the per-kind check below is what actually
-        # decides what to record, but adding it to _DECL_KINDS keeps
-        # the dispatch logic uniform.
         ci.CursorKind.FUNCTION_TEMPLATE,
     )
     if k is not None
@@ -131,11 +125,6 @@ def _to_type(t: "ci.Type | None") -> Type:
     if t is None:
         return UnknownT()
     spelling = t.spelling
-    # Strip cv-qualifiers and references for the alias lookup. We
-    # don't recurse through references/pointers here -- the
-    # caller (the AST walker) handles that for free by giving us
-    # the canonical / pointee type when the user wrote
-    # ``std::vector<int>&``.
     cleaned = (
         spelling.replace("const ", "")
         .replace("volatile ", "")
@@ -144,25 +133,11 @@ def _to_type(t: "ci.Type | None") -> Type:
         .strip()
     )
     if cleaned in CPP_TYPE_ALIASES:
-        # Map the C++ type-text string back to a Type instance.
         from ._to_mir_type import text_to_type
 
         return text_to_type(CPP_TYPE_ALIASES[cleaned])
-    # Templates: spelled ``std::vector<int>`` -- collapse to ListT.
-    # We recurse through the libclang type to get the *actual*
-    # template argument (e.g. `T` for an uninstantiated template,
-    # `int` for a concrete instantiation). This is the difference
-    # between ``ListT(elem=StructT("T"))`` (informative) and
-    # ``ListT(elem=UnknownT())`` (a hole).
-    #
-    # NB: the `template_argument_type` accessor doesn't work on
-    # reference / pointer kinds (libclang returns -1). For a
-    # ``std::vector<T>&`` the recursion below peels the reference
-    # off first and queries the template arguments on the pointee.
     if cleaned.startswith(("vector<", "std::vector<")) and cleaned.endswith(">"):
         target = t
-        # Unwrap references / pointers so the template-argument
-        # accessor returns a non-negative count.
         if target.kind in (
             ci.TypeKind.LVALUEREFERENCE,
             ci.TypeKind.RVALUEREFERENCE,
@@ -177,14 +152,6 @@ def _to_type(t: "ci.Type | None") -> Type:
             if num_args > 0:
                 arg_ty = target.get_template_argument_type(0)
                 elem = _to_type(arg_ty)
-                # If the arg is a template type parameter (UNEXPOSED
-                # with spelling == the param name like 'T'), keep the
-                # *spelling* as a StructT (a real Type, not a bare str --
-                # every backend's type-lattice walk expects a Type
-                # instance) so the ground truth reads
-                # `ListT(elem=StructT("T"))` rather than collapsing to
-                # `ListT(elem=UnknownT())`. This is the difference
-                # between an informative ground truth and a hole.
                 if isinstance(elem, UnknownT) and arg_ty.spelling:
                     return ListT(elem=StructT(name=arg_ty.spelling))
                 if not isinstance(elem, UnknownT):
@@ -192,7 +159,6 @@ def _to_type(t: "ci.Type | None") -> Type:
         except Exception:
             pass
         return ListT(elem=UnknownT(hint="vector element"))
-    # String shapes: ``std::string``, ``std::string_view``.
     if cleaned in (
         "string",
         "std::string",
@@ -208,8 +174,6 @@ def _to_type(t: "ci.Type | None") -> Type:
         from ._to_mir_type import text_to_type
 
         return text_to_type(SIMD_TYPE_ALIASES[cleaned])
-    # Fallback: try the libclang kind, with a canonical-type recursion
-    # for AUTO / ELABORATED / TYPEDEF that hides the underlying type.
     try:
         kind = t.kind
         if kind == ci.TypeKind.VOID:
@@ -267,9 +231,6 @@ class TypeGroundTruth:
     func_returns: dict[str, Type] = field(default_factory=dict)
     func_params: dict[str, list[Type]] = field(default_factory=dict)
     call_returns: dict[str, Type] = field(default_factory=dict)
-    # Auxiliary: qualified name -> source loc of its decl. Lets later
-    # passes look up a function's parameter/return types from a call
-    # site by the callee spelling.
     decl_locs: dict[str, str] = field(default_factory=dict)
 
     @classmethod
@@ -297,10 +258,6 @@ class TypeGroundTruth:
             f = c.location.file
             if f is None or f.name != "input.cpp":
                 return False
-            # Skip the parser preamble -- it's the first
-            # ``PARSER_PREAMBLE + _project_preamble`` lines of the
-            # unsaved file. ``_compute_user_first_line`` is computed
-            # lazily here so a single TU walk does the lookup once.
             try:
                 first = self._user_first_line
             except AttributeError:
@@ -337,15 +294,8 @@ class TypeGroundTruth:
             ci.CursorKind.CXX_METHOD,
             ci.CursorKind.CONSTRUCTOR,
             ci.CursorKind.DESTRUCTOR,
-            # FUNCTION_TEMPLATE: a template definition is a function
-            # for the purpose of *signature lookup* (param/return types).
-            # The IR doesn't instantiate templates, so the body is a
-            # HirRaw hole -- but call sites that hit the template name
-            # can still pull `void bubble_sort(vector<T>&)` from here.
             ci.CursorKind.FUNCTION_TEMPLATE,
         ):
-            # Skip non-definitions: bare declarations of an existing
-            # function shouldn't overwrite the definition's signature.
             if not cursor.is_definition():
                 return
             qname = _qualified_name(cursor) or name
@@ -361,9 +311,6 @@ class TypeGroundTruth:
             ci.CursorKind.STRUCT_DECL,
             ci.CursorKind.CLASS_DECL,
         ):
-            # For class/struct decls we record a synthetic StructT so
-            # downstream HIR->MIR can resolve ``Point`` -> ``StructT("Point")``
-            # without re-walking the AST.
             self.var_types[loc] = StructT(name=name)
 
     def _record_call(self, cursor) -> None:

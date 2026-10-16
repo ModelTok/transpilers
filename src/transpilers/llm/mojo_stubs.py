@@ -32,9 +32,6 @@ K = TypeVar("K")
 V = TypeVar("V")
 
 
-# ---------------------------------------------------------------------------
-# Mojo stdlib stub definitions (as Python type stubs)
-# ---------------------------------------------------------------------------
 
 MOJO_STDLIB_STUBS = '''\
 # Mojo Standard Library — Python-syntax stubs
@@ -158,11 +155,7 @@ struct Error:
 fn raise_error(e: Error): ...
 '''
 
-# ---------------------------------------------------------------------------
-# Per-API stub fragments for targeted injection
-# ---------------------------------------------------------------------------
 
-# Maps C++ API names → list of stub categories to inject
 _CPP_TO_STUB_CATEGORIES: dict[str, list[str]] = {
     "std::vector": ["List"],
     "std::unordered_map": ["Dict"],
@@ -187,7 +180,6 @@ _CPP_TO_STUB_CATEGORIES: dict[str, list[str]] = {
     "std::tuple": ["Tuple"],
 }
 
-# Stub fragments by category (short forms for prompt injection)
 STUB_FRAGMENTS: dict[str, str] = {
     "List": "struct List[T]: fn append(inout self, value: T): ... fn __len__(self) -> Int: ... fn __getitem__(self, idx: Int) -> T: ...",
     "Dict": "struct Dict[K, V]: fn __setitem__(inout self, key: K, val: V): ... fn __getitem__(self, key: K) -> V: ... fn __contains__(self, key: K) -> Bool: ...",

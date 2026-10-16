@@ -51,7 +51,7 @@ def topo(entry: str, byname: dict, names: set[str]) -> list[str] | None:
     def visit(n):
         if n in seen:
             return True
-        if n in stack:                       # cycle — still fine for one TU, but skip self-recursion dups
+        if n in stack:
             return True
         stack.add(n)
         for c in callees(byname[n].body, names):
@@ -72,22 +72,20 @@ def main():
     names = set(byname)
     from transpilers.cli.main import transpile_cpp_to_mojo
 
-    # find functions that FAIL standalone but whose full closure is in-set
     targets = []
     for f in fns:
         try:
             transpile_cpp_to_mojo(f.body)
-            continue                          # already works standalone
+            continue
         except Exception:
             pass
         order = topo(f.name, byname, names)
-        if order and len(order) > 1:          # has resolvable scalar deps
+        if order and len(order) > 1:
             targets.append((f, order))
 
     print(f"bundling candidates (fail standalone, closure in-set): {len(targets)}")
     pairs = []; ok = 0; tp = 0; vf = 0
     for entry, order in targets:
-        # combined C++: callees (definition order) then entry last
         combined = "\n\n".join(byname[n].body for n in order)
         bundle = bcm.CppFn(name=entry.name, ret=entry.ret, params=entry.params,
                            body=combined, source_file=entry.source_file)

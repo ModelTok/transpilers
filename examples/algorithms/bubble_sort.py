@@ -1,5 +1,3 @@
-# Bubble sort — in-place. Exercises subscript assignment (`xs[i] = ...`),
-# nested loops, and the common "swap" idiom across targets.
 
 
 def bubble_sort(xs: list[int]) -> int:

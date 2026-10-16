@@ -172,11 +172,6 @@ def resolve_local_includes(
     if not include_impls:
         return out
 
-    # Second pass: for every header resolved above (including ones an
-    # impl's own broader #include list discovers along the way -- hence
-    # the index-based loop over a list still being appended to, a
-    # fixed-point walk rather than a single fixed-size iteration),
-    # append its sibling impl once, in discovery order.
     impl_done: set[Path] = set()
     impl_parts: list[str] = []
     i = 0

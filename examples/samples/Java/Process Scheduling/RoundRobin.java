@@ -1,25 +1,6 @@
-/*
- * Copyright 2020 Jinit Jain
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-// Java program to implement Round Robin
-// Scheduling with different arrival time
 import java.util.*;
-//import java.util.concurrent.CompletableFuture;
 public class RoundRobin {
     public static void findWaitingTime(int process[],int wt_time[],int n ,int brusttime[],int quantum,int completion_time[],int arrival_time[]){
-         // copy the value of brusttime array into wt_time array.
         int rem_time[] = new int[n];
          
         for(int i=0;i<wt_time.length;i++){
@@ -27,9 +8,7 @@ public class RoundRobin {
         }
         int t=0;
         int arrival=0;
-        // processing until the value of element of rem_time array is 0
         while(true){
-//            ;
             boolean done = true;
             for(int i=0;i<n;i++){
                 if(rem_time[i]>0){

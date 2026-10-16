@@ -1,14 +1,9 @@
-# Sieve of Eratosthenes — count primes below n. Exercises list mutation
-# (write into an index), an outer/inner loop pattern, and the `// 2`
-# upper-bound trick that closed-form integer arithmetic needs.
 
 
 def count_primes_below(n: int) -> int:
     if n < 2:
         return 0
-    sieve: list[bool] = [True, True, True, True]  # placeholder; size adjusted at run time
-    # We can't construct `[False] * n` portably in our subset; build the
-    # array via a loop instead.
+    sieve: list[bool] = [True, True, True, True]
     flags: list[bool] = []
     i: int = 0
     while i < n:

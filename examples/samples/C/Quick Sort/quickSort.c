@@ -47,14 +47,12 @@ int partition(int *A, int p, int r) {
 		if (*(A + j) <= x) {
 			i++;
 
-			//swap
 			temp = *(A + i);
 			*(A + i) = *(A + j);
 			*(A + j) = temp;
 		}
 	}
 
-	//swap
 	temp = *(A + (i + 1));
 	*(A + (i + 1)) = *(A + r);
 	*(A + r) = temp;

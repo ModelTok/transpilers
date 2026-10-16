@@ -3,9 +3,6 @@
 import json
 import sys
 
-# std::fmod via truncated-division emulation (exact for |a/b| within the
-# sampled domain); unqualified C++ `abs(double)` resolves to int abs -> the
-# faithful Mojo truncates through Int the same way.
 WIND_MOJO = """\
 def CalcWindSurfaceTheta(WindDir: Float64, SurfAzimuth: Float64) -> Float64:
     var windDir: Float64 = WindDir - 360.0 * Float64(Int(WindDir / 360.0))

@@ -32,7 +32,7 @@ from transpilers.ir.types import (
 from ._mir_lower_base import MirLoweringBase, is_string_concat
 
 
-RESULT_VAR = "result_"  # synthesized to avoid clashing with user identifiers
+RESULT_VAR = "result_"
 
 _CMP_OPS = {
     "==": ".eq.",
@@ -55,7 +55,6 @@ class _FortranLowering(MirLoweringBase):
     def type_str(self, ty: Type) -> str:
         return _fortran_type(ty)
 
-    # -- struct: type + free `Name_method` functions ----------------------- #
 
     def lower_struct_items(self, s: mir.MirStruct) -> list[lir.LirNode]:
         methods: list[lir.FortranFn] = []
@@ -71,7 +70,6 @@ class _FortranLowering(MirLoweringBase):
             )
         ]
 
-    # -- function: locals decl-block + result var -------------------------- #
 
     def lower_function(self, fn: mir.MirFunction) -> lir.FortranFn:
         params = [(p.name, _fortran_type(p.ty)) for p in fn.params]
@@ -81,7 +79,6 @@ class _FortranLowering(MirLoweringBase):
             else None
         )
 
-        # Collect every local name and its type in a single MIR walk.
         locals_map: dict[str, Type] = {}
         _collect_locals(
             fn.body, locals_map, exclude={p.name for p in fn.params} | {RESULT_VAR}
@@ -100,13 +97,10 @@ class _FortranLowering(MirLoweringBase):
             body=body,
         )
 
-    # -- statements -------------------------------------------------------- #
 
     def lower_stmt(self, node: mir.MirNode, declared: set[str], mut: set[str]):
         result_name = self._result_name
         if isinstance(node, mir.MirFieldAssign):
-            # Fortran field assignment: `obj%field = value` — emit as a plain
-            # FortranAssign with the path baked into `name`.
             return lir.FortranAssign(
                 name=_emit_field_path(node.obj, node.field),
                 value=self.lower_expr(node.value),
@@ -158,7 +152,6 @@ class _FortranLowering(MirLoweringBase):
                 body=[self.lower_stmt(n, declared, mut) for n in node.body],
             )
         if isinstance(node, mir.MirCall) and node.func == "print":
-            # Match Python's repr output for bool and float args.
             args = [self._lower_print_arg(a) for a in node.args]
             return lir.FortranCall(func="print", args=args)
         return self.lower_expr(node)
@@ -189,18 +182,15 @@ class _FortranLowering(MirLoweringBase):
             )
         return self.lower_expr(node)
 
-    # -- expressions ------------------------------------------------------- #
 
     def lower_expr_special(self, node: mir.MirNode):
         if isinstance(node, mir.MirBinOp) and node.op == "//":
-            # Fortran `/` on integers is integer division.
             return lir.FortranBinOp(
                 op="/",
                 left=self.lower_expr(node.left),
                 right=self.lower_expr(node.right),
             )
         if isinstance(node, mir.MirBinOp) and node.op == "%":
-            # Fortran modulo is an intrinsic function, not an operator.
             return lir.FortranCall(
                 func="mod",
                 args=[self.lower_expr(node.left), self.lower_expr(node.right)],
@@ -224,9 +214,6 @@ class _FortranLowering(MirLoweringBase):
             raise NotImplementedError(
                 "Fortran string concat requires fixed-length char buffers; not yet supported"
             )
-        # List concatenation: `xs + [v]` → `[xs, v]`. Re-allocates per use
-        # (O(n) copy); acceptable for our algorithm corpus. Flattening both
-        # sides avoids ragged `[[a, b], c]` constructors that Fortran rejects.
         if (
             node.op == "+"
             and isinstance(getattr(node.left, "ty", None), ListT)
@@ -260,8 +247,6 @@ class _FortranLowering(MirLoweringBase):
         return lir.FortranUnary(op=op, operand=self.lower_expr(node.operand))
 
     def lower_null(self, node: mir.MirNullLiteral):
-        # Fortran has no null/None; pointers exist but cleanup requires a
-        # typed allocation strategy out of scope for this lowering.
         raise NotImplementedError("fortran has no null literal")
 
     def lower_subscript(self, node: mir.MirSubscript):
@@ -280,12 +265,8 @@ class _FortranLowering(MirLoweringBase):
         return lir.FortranArrayLit(elements=elements, elem_type=elem_ty)
 
     def lower_call(self, node: mir.MirCall):
-        # `len(xs)` → Fortran intrinsic `size(xs)` on arrays.
         if node.func == "len" and len(node.args) == 1:
             return lir.FortranCall(func="size", args=[self.lower_expr(node.args[0])])
-        # `__ternary__(cond, then, else)` → `merge(then, else, cond)`.
-        # Fortran's merge takes (true_val, false_val, mask) — matches the
-        # ternary slot order with a swap.
         if node.func == "__ternary__" and len(node.args) == 3:
             return lir.FortranCall(
                 func="merge",
@@ -315,7 +296,6 @@ def mir_to_fortran_lir(module: mir.MirModule) -> lir.FortranModule:
     return _LOWERING.lower_module(module)
 
 
-# ---------- local collection ----------
 
 
 def _collect_locals(
@@ -370,23 +350,14 @@ def _fortran_type(ty: Type) -> str:
     if isinstance(ty, IntT):
         return "integer"
     if isinstance(ty, FloatT):
-        # `real(8)` is fortran-portable for f64; `real` alone is single
-        # precision on most compilers. Use the kind suffix.
         return "real(8)" if ty.bits == 64 else "real"
     if isinstance(ty, BoolT):
         return "logical"
     if isinstance(ty, StrT):
-        # Fortran character lengths must be declared; use a generous default
-        # for the type signature. Real use needs per-variable lengths.
         return "character(len=*)"
     if isinstance(ty, NoneT):
         return ""
     if isinstance(ty, ListT):
-        # Assumed-shape array. The param declaration in `_emit_fn` produces:
-        #   `integer, dimension(:), intent(in) :: xs`
-        # For locals we'd need `allocatable` too; that's handled by tagging
-        # local list types with the allocatable attribute. Empty-list
-        # initialization via `xs = []` then auto-allocates.
         return f"{_fortran_type(ty.elem)}, dimension(:)"
     if isinstance(ty, StructT):
         return f"type({ty.name})"

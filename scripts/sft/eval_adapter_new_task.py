@@ -20,9 +20,6 @@ BASE = "Qwen/Qwen2.5-Coder-3B-Instruct"
 ADAPTER = str(REPO / "out/adapter_3b_cuda")
 TRAIN_FILE = REPO / "data/sft/cpp_mojo/train_translation.jsonl"
 
-# A NEW task: RAII unique_ptr + custom deleter -> Mojo Owned/RAII pattern.
-# This class of problem (custom deleters, move-only ownership) was NOT in the
-# small 1005-line training set, so it is a genuine generalization probe.
 NEW_CPP = r'''
 #include <memory>
 #include <cstdio>
@@ -61,7 +58,6 @@ def is_novel() -> bool:
     if not TRAIN_FILE.exists():
         return True
     blob = TRAIN_FILE.read_text(encoding="utf-8")
-    # crude signature: the for-loop sum-with-bracket pattern is unique to this probe
     return "operator=(const Buf&) = delete" not in blob and "delete[] data" not in blob
 
 
@@ -96,7 +92,6 @@ def main() -> int:
     print(gen.strip())
     print("\n=== END ===")
 
-    # rough quality signals
     mojo = gen.lower()
     signals = {
         "uses `def`": "def " in mojo,

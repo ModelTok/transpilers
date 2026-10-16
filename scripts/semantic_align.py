@@ -37,9 +37,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# ---------------------------------------------------------------------------
-# Sample input generation
-# ---------------------------------------------------------------------------
 
 _SCALAR_SAMPLES: list[Any] = [0, 1, -1, 2, 10, 100, -5]
 _LIST_SAMPLES: list[Any] = [[], [1], [1, 2, 3], [0, -1, 5]]
@@ -52,15 +49,11 @@ def _gen_inputs(n_params: int, max_samples: int = 4) -> list[tuple]:
     if n_params == 1:
         samples: list[Any] = _SCALAR_SAMPLES + _LIST_SAMPLES
         return [(s,) for s in samples[:max_samples]]
-    # Multi-param: combine scalar samples
     from itertools import product
     scalars = _SCALAR_SAMPLES[:3]
     return list(product(scalars, repeat=n_params))[:max_samples]
 
 
-# ---------------------------------------------------------------------------
-# Python function extraction and execution
-# ---------------------------------------------------------------------------
 
 @dataclass
 class FuncResult:
@@ -81,8 +74,8 @@ class FuncResult:
 def _load_module_from_source(source_code: str, module_name: str = "_transpiler_mod"):
     """Dynamically load a Python module from source code string."""
     spec = importlib.util.spec_from_loader(module_name, loader=None)
-    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    exec(compile(source_code, module_name, "exec"), mod.__dict__)  # noqa: S102
+    mod = importlib.util.module_from_spec(spec)
+    exec(compile(source_code, module_name, "exec"), mod.__dict__)
     return mod
 
 
@@ -120,9 +113,6 @@ def _get_arity(fn: Any) -> int:
         return 1
 
 
-# ---------------------------------------------------------------------------
-# Python-to-Python alignment
-# ---------------------------------------------------------------------------
 
 def align_python_python(
     source_code: str,
@@ -152,14 +142,11 @@ def align_python_python(
             )
             results.append(res)
             if not res.aligned:
-                break  # first diverging input is enough to flag the function
+                break
 
     return results
 
 
-# ---------------------------------------------------------------------------
-# Python-to-compiled alignment (function-level run)
-# ---------------------------------------------------------------------------
 
 _RUST_WRAPPER = """\
 {code}
@@ -190,9 +177,8 @@ def _run_compiled_function(
     for inputs in _gen_inputs(arity):
         src_out, src_err = _call_safe(source_fn, inputs)
         if src_err:
-            continue  # skip if source errors on this input
+            continue
 
-        # Build a tiny compiled harness that calls fn with inputs and prints result
         args_str = ", ".join(str(a) for a in inputs)
         if target == "rust":
             harness = f"""
@@ -213,7 +199,7 @@ int main() {{
             full = target_code + "\n" + harness
             tgt_out, tgt_err = _compile_and_run_c(full)
         else:
-            continue  # unsupported compiled target for block-level alignment
+            continue
 
         try:
             tgt_parsed: Any = int(tgt_out.strip()) if tgt_out.strip().lstrip("-").isdigit() else tgt_out.strip()
@@ -264,9 +250,6 @@ def _compile_and_run_c(code: str) -> tuple[str, str]:
         return run.stdout, run.stderr if run.returncode != 0 else ""
 
 
-# ---------------------------------------------------------------------------
-# Auto-transpile
-# ---------------------------------------------------------------------------
 
 def auto_transpile(source_path: Path, target: str) -> str | None:
     """Transpile *source_path* to *target* and return the output code, or None."""
@@ -277,9 +260,6 @@ def auto_transpile(source_path: Path, target: str) -> str | None:
     return proc.stdout if proc.returncode == 0 else None
 
 
-# ---------------------------------------------------------------------------
-# Report
-# ---------------------------------------------------------------------------
 
 def _fmt_val(v: Any) -> str:
     s = repr(v)
@@ -337,9 +317,6 @@ def print_report(results: list[FuncResult], source_path: Path, target_path: Path
     return 1 if drifted else 0
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -374,7 +351,6 @@ def main(argv: list[str] | None = None) -> int:
     elif args.target_file is not None:
         target_code = args.target_file.read_text(errors="replace")
         target_path = args.target_file
-        # Detect target language from extension
         ext_to_target = {".py": "python", ".rs": "rust", ".c": "c"}
         args.target = ext_to_target.get(args.target_file.suffix, "python")
     else:

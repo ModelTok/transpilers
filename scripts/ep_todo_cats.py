@@ -9,7 +9,7 @@ import sys
 from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from transpilers.lift import lift_source  # noqa: E402
+from transpilers.lift import lift_source
 
 EP = "/home/db/EnergyPlus/src"
 OBJEXX = "/home/db/EnergyPlus/third_party/ObjexxFCL/src"
@@ -32,7 +32,6 @@ for f in files:
             continue
         total += 1
         snip = m.group(1).strip()
-        # bucket by leading token / shape
         head = re.match(r"[A-Za-z_][A-Za-z0-9_]*|\W+", snip)
         key = head.group(0)[:24] if head else snip[:24]
         cats[key] += 1

@@ -42,4 +42,4 @@ TEST(LinearSearch, Default)
     ASSERT_EQ(linear_search(data, 9, index), false);
 }
 
-} // namespace mehara::test
+}

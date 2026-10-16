@@ -28,7 +28,6 @@ def _lift_simd_intrinsic(name: str, args: list[hir.HirNode]) -> hir.HirNode | No
     if op in _SIMD_BINOP and len(args) == 2:
         return hir.HirBinOp(op=_SIMD_BINOP[op], left=args[0], right=args[1])
     if op == "set" and args:
-        # Intel's `_mm256_set_pd(d, c, b, a)` reverses lane order.
         return hir.HirCall(func="simd_pack", args=list(reversed(args)))
     if op == "set1" and len(args) == 1:
         return hir.HirCall(func="simd_splat", args=args)

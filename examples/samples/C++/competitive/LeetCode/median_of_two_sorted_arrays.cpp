@@ -1,20 +1,6 @@
-// Copyright 2020 Sakshi Sharma
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 double findMedianSortedArrays(vector<int>& nums1, vector<int>& nums2) {
         
-    //Take smaller array as first one
     if(nums1.size() > nums2.size())
         return findMedianSortedArrays(nums2,nums1);
         
@@ -22,7 +8,7 @@ double findMedianSortedArrays(vector<int>& nums1, vector<int>& nums2) {
     int low=0, high=x;
         
     while(low <= high){
-        int partition_x = (low+high)/2; //number of elements from nums1 on left
+        int partition_x = (low+high)/2;
         int partition_y = ((x+y+1)/2) - partition_x;
         int maxleft_x = (partition_x == 0) ? INT_MIN : (nums1[partition_x-1]);
         int minright_x = (partition_x == x) ? INT_MAX : (nums1[partition_x]);

@@ -21,9 +21,6 @@ from pathlib import Path
 
 from transpilers.ir.types import BoolT, FloatT, IntT, NoneT, Type, UnknownT
 
-# ---------------------------------------------------------------------------
-# LLVM primitive type → transpiler type
-# ---------------------------------------------------------------------------
 
 _LLVM_PRIMITIVES: dict[str, Type] = {
     "void": NoneT(),
@@ -41,13 +38,11 @@ _LLVM_PRIMITIVES: dict[str, Type] = {
     "bfloat": FloatT(),
 }
 
-# LLVM IR function definition line (handles common attribute keywords)
 _DEFINE_RE = re.compile(
     r"^define\b[^@]*@([^\s(]+)\(([^)]*)\)",
     re.MULTILINE,
 )
 
-# First type token before % in a parameter description, e.g. "i32 noundef %x"
 _PARAM_TYPE_RE = re.compile(r"^\s*(\S+)(?:\s+\S+)*\s+%")
 
 _ATTR_WORDS = frozenset(

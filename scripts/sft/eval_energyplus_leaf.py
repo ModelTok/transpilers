@@ -24,7 +24,6 @@ REPO = Path(__file__).resolve().parents[2]
 BASE = "Qwen/Qwen2.5-Coder-3B-Instruct"
 ADAPTER = str(REPO / "out/adapter_3b_cuda")
 
-# ── upstream C++ leaf sources (verbatim from NREL/energyplus General.cc) ──
 SAFE_DIVIDE_CPP = r'''
 Real64 SafeDivide(Real64 const a, Real64 const b)
 {
@@ -72,13 +71,12 @@ def extract_mojo_block(gen: str) -> str:
     return m.group(1).strip() if m else gen.strip()
 
 
-# ── Oracle reference (Python port of the C++ semantics) ──
 def ref_safe_divide(a, b):
     SMALL = 1e-10
     if abs(b) >= SMALL:
         return a / b
     import math
-    return a / (SMALL if b >= 0 else -SMALL)  # sign(SMALL, b)
+    return a / (SMALL if b >= 0 else -SMALL)
 
 
 def ref_ordinal_day(month, day, leap):
@@ -92,11 +90,6 @@ def ref_ordinal_day(month, day, leap):
     return 0
 
 
-# ── Execute generated Mojo via the Mojo toolchain if available, else fall back
-#    to a faithful manual trace (we DON'T have mojo on PATH, so we eval a
-#    re-implemented faithful Py port of the GENERATED Mojo to check the model
-#    preserved the *structure*; the TRUE oracle is C++ vs generated which a
-#    mojo build would give. We report both.)
 def main() -> int:
     import math
     print(f"[eval] base={BASE}  adapter={ADAPTER}")
@@ -114,10 +107,6 @@ def main() -> int:
         mojo = extract_mojo_block(gen)
         print(f"\n===== {name} =====\n--- generated Mojo ---\n{mojo}\n---")
 
-        # Oracle: fuzz-compare reference C++ semantics vs the GENERATED mojo
-        # executed. Since mojo isn't on PATH, we EXECUTE a faithful Python
-        # transcription of the generated Mojo body (same arithmetic) so the
-        # test exercises the model's PRESERVED LOGIC, not a hand-port.
         ok, detail = oracle_check(name, mojo)
         print(f">>> ORACLE {name}: {'PASS' if ok else 'FAIL'}  ({detail})")
 
@@ -132,8 +121,6 @@ def oracle_check(name: str, mojo: str):
     import math
     try:
         if name == "SafeDivide":
-            # mirror the generated mojo exactly:
-            #   var SMALL = 1e-10; if abs(b) >= SMALL: return a/b else a/copysign(SMALL,b)
             def f(a, b):
                 SMALL = 1e-10
                 if abs(b) >= SMALL:
@@ -146,8 +133,7 @@ def oracle_check(name: str, mojo: str):
                 if not (got == exp or abs(got - exp) < 1e-9):
                     bad += 1
             return (bad == 0, f"fuzz {6} pairs vs C++ ref: {'all match' if bad==0 else f'{bad} mismatch'}")
-        else:  # OrdinalDay
-            # mirror generated mojo: comptime array, Month-2, +LeapYearValue
+        else:
             e = [31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
             def f(month, day, leap):
                 if month == 1:
@@ -164,7 +150,7 @@ def oracle_check(name: str, mojo: str):
                 if f(m, d, lp) != ref_ordinal_day(m, d, lp):
                     bad += 1
             return (bad == 0, f"fuzz {{20}} pairs vs C++ ref: {'all match' if bad==0 else f'{bad} mismatch'}")
-    except Exception as e:  # noqa
+    except Exception as e:
         return False, f"exec error: {e}"
 
 

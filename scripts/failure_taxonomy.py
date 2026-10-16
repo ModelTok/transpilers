@@ -33,7 +33,7 @@ _SRC = pathlib.Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from transpilers.verify.taxonomy import (  # noqa: E402
+from transpilers.verify.taxonomy import (
     BUCKETS,
     TaxonomyRecord,
     classify_unit,
@@ -90,7 +90,6 @@ def rollup_markdown(records: list[tuple[str, TaxonomyRecord]]) -> str:
         row = [src, tgt, str(total)] + [str(counts[b]) for b in used_buckets]
         lines.append("| " + " | ".join(row) + " |")
 
-    # Top constructs per failure bucket — the actionable part.
     constructs: dict[str, Counter] = defaultdict(Counter)
     for _, rec in records:
         if rec.bucket not in ("ok",) and (rec.construct or rec.detail):

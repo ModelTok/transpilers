@@ -29,11 +29,10 @@ import json
 import sys
 from pathlib import Path
 
-# Make the package importable when run from anywhere in the repo.
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
-from transpilers.repair.outcomes import (  # noqa: E402
+from transpilers.repair.outcomes import (
     DEFAULT_LOG_PATH,
     DEFAULT_METRICS_PATH,
     rollup,
@@ -112,7 +111,6 @@ def render_text(snap: dict) -> str:
                 f"{_fmt_pct(b['llm_fraction'])} {bar}"
             )
         lines.append("")
-        # North-star signal
         if len(trend) >= 2:
             first = trend[0]["llm_fraction"]
             last = trend[-1]["llm_fraction"]
@@ -171,7 +169,7 @@ def render_markdown(snap: dict) -> str:
             passed = sum(counts.get(v, 0) for v in ("algorithmic", "rule", "llm"))
             llm = counts.get("llm", 0)
             frac = (llm / passed) if passed else 0.0
-            fo = counts.get("llm", 0)  # frontier count is a subset of LLM here
+            fo = counts.get("llm", 0)
             lines.append(f"| {tgt} | {passed} | {_fmt_pct(frac)} | {fo} |")
         lines.append("")
 
@@ -231,7 +229,6 @@ def main(argv=None) -> int:
     )
     args = ap.parse_args(argv)
 
-    # Always refresh the JSON snapshot so downstream tools see the latest.
     snap = rollup(log_path=args.log, metrics_path=args.metrics)
     if args.json is not None:
         args.json.write_text(
@@ -245,7 +242,6 @@ def main(argv=None) -> int:
         return 0
 
     if args.trend_only:
-        # Tiny trend-only view
         trend = snap["trend"]
         if not trend:
             print("(no trend bins yet)")

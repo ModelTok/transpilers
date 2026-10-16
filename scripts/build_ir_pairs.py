@@ -33,9 +33,6 @@ from pathlib import Path
 from typing import Any
 
 
-# ---------------------------------------------------------------------------
-# LLVM IR emission
-# ---------------------------------------------------------------------------
 
 def emit_llvm_ir(
     source: Path,
@@ -69,9 +66,6 @@ def emit_llvm_ir(
         return False, "timeout"
 
 
-# ---------------------------------------------------------------------------
-# LLVM IR parsing helpers
-# ---------------------------------------------------------------------------
 
 def extract_function_signatures(ll_content: str) -> list[dict[str, str]]:
     """Extract function definitions from LLVM IR text.
@@ -84,7 +78,6 @@ def extract_function_signatures(ll_content: str) -> list[dict[str, str]]:
     while i < len(lines):
         line = lines[i].strip()
         if line.startswith("define ") and "{" in line:
-            # Collect the full function body
             start = i
             depth = line.count("{") - line.count("}")
             j = i + 1
@@ -93,17 +86,14 @@ def extract_function_signatures(ll_content: str) -> list[dict[str, str]]:
                 j += 1
             body = "\n".join(lines[start:j])
 
-            # Parse: define [linkage] <return_type> @<name>(<params>) { ... }
             try:
                 after_define = line.split("define ", 1)[1]
-                # Skip linkage keywords
                 for kw in ("dso_local ", "internal ", "private ", "weak "):
                     after_define = after_define.replace(kw, "", 1)
                 ret_and_rest = after_define.split("@", 1)
                 return_type = ret_and_rest[0].strip()
                 name_and_params = ret_and_rest[1].split("(", 1)
                 name = name_and_params[0].strip()
-                # Skip compiler-generated names
                 if name.startswith("_Z") or "llvm." in name:
                     i = j
                     continue
@@ -126,9 +116,6 @@ def compute_ir_complexity(ll_body: str) -> int:
     return branches + 1
 
 
-# ---------------------------------------------------------------------------
-# Mojo translation
-# ---------------------------------------------------------------------------
 
 def translate_to_mojo(
     cpp_source: str,
@@ -143,8 +130,7 @@ def translate_to_mojo(
     Returns the Mojo source string, or None on failure.
     """
     try:
-        # Import the transpilers pipeline (adjust import path as needed)
-        from transpilers.pipeline import translate  # type: ignore[import]
+        from transpilers.pipeline import translate
         result = translate(
             cpp_source=cpp_source,
             target="mojo",
@@ -153,7 +139,6 @@ def translate_to_mojo(
         )
         return result.code
     except ImportError:
-        # Fallback: direct OpenAI-compatible API call
         return _llm_translate_fallback(cpp_source, cpp_llvm_ir, model)
 
 
@@ -164,7 +149,7 @@ def _llm_translate_fallback(cpp_source: str, cpp_llvm_ir: str, model: str) -> st
         import os
 
         client = openai.OpenAI(
-            base_url=os.environ.get("VLLM_BASE_URL"),  # or None for OpenAI
+            base_url=os.environ.get("VLLM_BASE_URL"),
             api_key=os.environ.get("OPENAI_API_KEY", "none"),
         )
 
@@ -191,9 +176,6 @@ def _llm_translate_fallback(cpp_source: str, cpp_llvm_ir: str, model: str) -> st
         return None
 
 
-# ---------------------------------------------------------------------------
-# Mojo verification
-# ---------------------------------------------------------------------------
 
 def emit_mojo_llvm_ir(mojo_source: str, output: Path) -> tuple[bool, str]:
     """Emit LLVM IR from Mojo source using mojo build.
@@ -257,10 +239,8 @@ def verify_signature_equivalence(cpp_ll: str, mojo_ll: str) -> bool:
     mojo_fns = extract_function_signatures(mojo_ll)
     if not cpp_fns or not mojo_fns:
         return False
-    # Check at least one matching return type category
     cpp_ret = cpp_fns[0]["return_type"].lower()
     mojo_ret = mojo_fns[0]["return_type"].lower()
-    # Both double/float → compatible; both i32/i64 → compatible
     is_float = lambda t: any(x in t for x in ("double", "float"))
     is_int = lambda t: any(x in t for x in ("i32", "i64", "i16", "i8"))
     if is_float(cpp_ret) and is_float(mojo_ret):
@@ -270,9 +250,6 @@ def verify_signature_equivalence(cpp_ll: str, mojo_ll: str) -> bool:
     return cpp_ret == mojo_ret
 
 
-# ---------------------------------------------------------------------------
-# Pair building
-# ---------------------------------------------------------------------------
 
 def build_pair(
     cpp_source_path: Path,
@@ -290,7 +267,6 @@ def build_pair(
     pairs = []
     rel = cpp_source_path.stem
 
-    # Step 1: Emit C++ LLVM IR
     ir_path = ir_output_dir / f"{rel}.ll"
     ok, err = emit_llvm_ir(cpp_source_path, ir_path, std, includes)
     if not ok:
@@ -300,7 +276,6 @@ def build_pair(
     cpp_ll = ir_path.read_text(encoding="utf-8", errors="replace")
     cpp_source = cpp_source_path.read_text(encoding="utf-8", errors="replace")
 
-    # Step 2: Translate C++ → Mojo
     mojo_path = mojo_output_dir / f"{rel}.mojo"
     mojo_source = translate_to_mojo(cpp_source, cpp_ll, model)
     if not mojo_source:
@@ -309,7 +284,6 @@ def build_pair(
 
     mojo_path.write_text(mojo_source, encoding="utf-8")
 
-    # Step 3: Verify Mojo syntax
     ok, err = check_mojo_syntax(mojo_source)
     if not ok:
         print(f"  Mojo check failed: {err}")
@@ -318,7 +292,6 @@ def build_pair(
     verified = True
     verification_level = 1
 
-    # Step 4: IR-level verification
     if verify_level >= 2:
         with tempfile.NamedTemporaryFile(suffix=".ll", delete=False) as tmp_ll:
             mojo_ir_path = Path(tmp_ll.name)
@@ -334,7 +307,6 @@ def build_pair(
         print("  Equivalence check failed")
         return []
 
-    # Compute complexity
     complexity = compute_ir_complexity(cpp_ll)
 
     pair = {
@@ -355,9 +327,6 @@ def build_pair(
     return pairs
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -444,7 +413,6 @@ def main() -> int:
     total_pairs = 0
     estimated_cost = 0.0
 
-    # Cost estimate: ~$0.01 per function for claude-3-5-sonnet
     cost_per_function = 0.01
 
     with open(args.pairs_output, "a", encoding="utf-8") as out_f:
@@ -452,7 +420,6 @@ def main() -> int:
             rel_name = cpp_file.name
             print(f"[{i:>5}/{len(cpp_files)}] {rel_name}")
 
-            # Resume: skip if already processed
             if args.resume:
                 mojo_check = args.mojo_output / f"{cpp_file.stem}.mojo"
                 if mojo_check.exists():
@@ -460,7 +427,6 @@ def main() -> int:
                     skipped += 1
                     continue
 
-            # Cost guard
             if args.max_cost and estimated_cost >= args.max_cost:
                 print(f"  Reached cost limit ${args.max_cost:.2f}, stopping.")
                 break

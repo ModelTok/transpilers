@@ -28,33 +28,18 @@ __all__ = [
     "score_compile",
 ]
 
-# Score of a candidate the compiler accepted. Strictly above any rejection
-# score, which is always < 1.
 CLEAN_SCORE = 2.0
 
 
-# --------------------------------------------------------------------------- #
-# First-error line extraction
-# --------------------------------------------------------------------------- #
 
-# rustc: a header line (``error[E0425]: ...`` / ``warning: ...``) followed by
-# `` --> path:LINE:COL``. Only the location after an *error* header counts.
 _RUSTC_HEADER_RE = re.compile(r"^(error|warning)(?:\[\w+\])?:")
 _RUSTC_LOC_RE = re.compile(r"^\s*-->\s+.+?:(?P<line>\d+):\d+\s*$")
 
-# gcc / clang / mojo: ``path:LINE:COL: error: msg`` (column is optional, and
-# gcc says ``fatal error`` for some). Lazy path so Windows ``C:\..`` is fine.
 _CC_ERROR_RE = re.compile(r"^.+?:(?P<line>\d+)(?::\d+)?: (?:fatal )?error:")
 
-# gfortran prints the location on its own line (``path:LINE:COL:`` — older
-# releases use ``LINE.COL``), then a source snippet, then ``Error: msg``. The
-# same header shape precedes warnings, so remember it until the verdict line.
 _GFORTRAN_LOC_RE = re.compile(r"^.+?:(?P<line>\d+)[:.]\d+(?:-\d+)?:\s*$")
 _GFORTRAN_ERROR_RE = re.compile(r"^(?:Fatal )?Error:")
 
-# Python SyntaxError, both as the interpreter prints it
-# (``  File "x.py", line 2``) and as ``verify.python`` reports it
-# (``<msg> at line 2``). Only tried when no native-compiler format matched.
 _PY_TRACEBACK_RE = re.compile(r'^\s*File ".*", line (?P<line>\d+)')
 _PY_VERIFY_RE = re.compile(r" at line (?P<line>\d+)\s*$")
 
@@ -70,8 +55,8 @@ def first_error_line(stderr: str) -> int | None:
     if not stderr:
         return None
 
-    rustc_error = False  # last rustc header seen was an `error`
-    gfortran_line: int | None = None  # last gfortran location header
+    rustc_error = False
+    gfortran_line: int | None = None
     for raw in stderr.splitlines():
         line = raw.rstrip()
         if m := _RUSTC_HEADER_RE.match(line):
@@ -94,9 +79,6 @@ def first_error_line(stderr: str) -> int | None:
     return None
 
 
-# --------------------------------------------------------------------------- #
-# Score
-# --------------------------------------------------------------------------- #
 
 
 def length_factor(hyp_len: float, ref_len: float) -> float:

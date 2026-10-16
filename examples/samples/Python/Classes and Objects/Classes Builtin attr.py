@@ -1,4 +1,3 @@
-#Q-1) Class Average
 """class Student:
     class_avg=0
     list12=[]
@@ -37,7 +36,6 @@ obj2=Student(2,"Archit",list2)
 obj1.display()
 obj2.display()"""
 
-#Q-2) instance variable
 """class ins:
     count=0
     def display(self):
@@ -48,7 +46,6 @@ Obj1=ins()
 Obj.display()
 Obj1.display()"""
 
-#Q-3) Emp to my class
 """class emp:
     def __init__(self,name,eno):
         self.name=name

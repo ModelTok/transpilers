@@ -14,12 +14,10 @@ from pathlib import Path
 
 EP_CPP = Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus"))
 EP_MOJO = Path(os.environ.get("EP_MOJO_REPO", "/home/bart/github/EnergyPlusMojo"))
-TRANSP = Path(__file__).resolve().parents[2]  # scripts/rag/<this file> -> repo root
+TRANSP = Path(__file__).resolve().parents[2]
 OUT = TRANSP / "data/rag"; OUT.mkdir(parents=True, exist_ok=True)
 
-# C++ function/method: RetType [Ns::]Name(args) {   (brace-matched body)
 CPP_FN = re.compile(r"\n([A-Za-z_][\w:<>,\s\*&]*?\s+(?:[A-Za-z_]\w*::)?([A-Za-z_]\w*)\s*\([^;{)]*\)\s*(?:const\s*)?\{)")
-# Mojo def/struct/fn
 MOJO_DEF = re.compile(r"\n((?:def|fn|struct|trait)\s+([A-Za-z_]\w*))")
 
 def brace_body(text, open_idx):
@@ -75,7 +73,6 @@ def main():
     for f in EP_MOJO.rglob("*.mojo"):
         if ".pixi" in str(f): continue
         chunks += chunk_mojo(f)
-    # Mojo idiom docs (the syntax skill) as retrievable reference chunks
     skill = Path(os.environ.get(
         "MOJO_SYNTAX_SKILL", str(Path.home() / ".claude/skills/mojo-syntax/SKILL.md")
     ))

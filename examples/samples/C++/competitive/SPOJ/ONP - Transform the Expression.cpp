@@ -36,19 +36,16 @@ void stack::push(typ el){
 	return ;
     }
     else{
-	//cout<<"top-"<<top<<endl;
 	data[++top] = el;
     }
 }
 
 typ stack::pop(){
-    //empty stack is taken care of while calling pop
 	return data[top--];
 
 }
 
 typ stack::get_top(){
-	//empty stack is taken care of while calling get_top
 	return data[top];
 }
 
@@ -65,7 +62,7 @@ void stack::display(){
 int opert (const char b)
 {
   switch (b)
-    {//+, -, *, /, ^
+    {
     case '+': return 1;
     case '-': return 2;
     case '*': return 3;
@@ -94,44 +91,33 @@ int main(){
 	while(exp[k]!='\0')
 	    k++;
 	siz strsize = k;
-		    // now i = size+1
-	//cout<<strsize<<endl;	    
-	//displayAR(exp,strsize);
-	///*
 	stack st;
 	for(siz j=0;j<=strsize;j++){
-	    //cout<<"inhand->"<<exp[j]<<endl;
-	    //cout<<"top->"<<st.get_top()<<endl;
 	    if(isalpha(exp[j])){
 		str[s++] = exp[j];
-		//cout<<"aplha-takn"<<endl;
 	    }
-	    else if(exp[j]!='(' && exp[j]!=')'){	// operators
-		if(st.isempty() || opert(exp[j]) > opert(st.get_top()) || st.get_top()=='(')		// when 1st thing == 1 '||' dont check 2nd so no problem of empty stack pop
+	    else if(exp[j]!='(' && exp[j]!=')'){
+		if(st.isempty() || opert(exp[j]) > opert(st.get_top()) || st.get_top()=='(')
 		    {st.push(exp[j]);
-			//cout<<"op pushed in stack\n";
 			}
 		else if( opert(exp[j]) < opert(st.get_top()) ){
 		    while((opert(exp[j]) < opert(st.get_top())) && !st.isempty() && st.get_top()!='('){
-			//cout<<"poped"<<st.get_top()<<endl;
 			if(st.get_top()!='(')
 			    str[s++] = st.get_top();
 			st.pop();
-			//cout<<"poped"<<endl;
 		    }
 		    st.push(exp[j]);
 		}
 	    }
-	    else{				// brackets
+	    else{
 		if(exp[j]=='(')	st.push(exp[j]);
 		else {
 		    while(st.get_top() != '(' && !st.isempty()){
 			if(st.get_top()!='(')
 			    str[s++] = st.get_top();
 			st.pop();
-			//cout<<"popped\n";
 		    }
-		    if(!st.isempty())	st.pop();	//last ) remaining
+		    if(!st.isempty())	st.pop();
 		    
 		    
 		}	
@@ -145,11 +131,8 @@ int main(){
 	}
 	str[s] = '\0';
 	
-	//displayAR(str,strsize+1);
 	cout<<str<<endl;
-	//*/
     }
-     /**/
     return 0;
 }
 

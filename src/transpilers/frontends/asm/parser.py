@@ -77,7 +77,6 @@ def parse_asm(source: str) -> hir.HirModule:
     return module
 
 
-# ---------- PyGhidra invocation ----------
 
 _PYGHIDRA_STARTED = False
 
@@ -89,14 +88,12 @@ def _ensure_pyghidra_started() -> None:
     if _PYGHIDRA_STARTED:
         return
     os.environ.setdefault("GHIDRA_INSTALL_DIR", str(GHIDRA_HOME))
-    import pyghidra  # noqa: F401 — side-effect: JVM setup
+    import pyghidra
 
     pyghidra.start(verbose=False)
     _PYGHIDRA_STARTED = True
 
 
-# CRT / linker-injected stubs that Ghidra always recovers but the user never
-# wants. Filter at the source so they don't pollute the parse.
 CRT_FUNCTION_NAMES = {
     "_init",
     "_fini",
@@ -141,10 +138,7 @@ def _decompile_via_pyghidra(binary_path: Path) -> str:
     return "\n\n".join(fragments)
 
 
-# ---------- cleanup ----------
 
-# Ghidra's pseudo-C uses these non-standard width types; collapse onto
-# stdint-compatible names that pycparser accepts.
 GHIDRA_TYPE_REWRITES = {
     "undefined": "int",
     "undefined1": "char",
@@ -165,9 +159,6 @@ GHIDRA_TYPE_REWRITES = {
 }
 
 
-# Standard-C int sizes that we know are valid identifiers in a clean type
-# context. Everything else that *looks* like a type but isn't in this set
-# becomes `void *` so pycparser can swallow it (the user can refine later).
 KNOWN_C_TYPES = {
     "void",
     "char",
@@ -188,7 +179,6 @@ KNOWN_C_TYPES = {
     "extern",
     "register",
     "inline",
-    # stdint flavors after our rewrites:
     "int8_t",
     "int16_t",
     "int32_t",
@@ -205,13 +195,9 @@ KNOWN_C_TYPES = {
 
 
 def _clean_ghidra_c(text: str) -> str:
-    # Strip `/* WARNING ... */` blocks — they sometimes contain characters
-    # that confuse pycparser even though plain block comments are fine.
     text = re.sub(r"/\*\s*WARNING.*?\*/\s*", "", text, flags=re.DOTALL)
-    # Replace Ghidra-specific type spellings with C-portable equivalents.
     for src, dst in GHIDRA_TYPE_REWRITES.items():
         text = re.sub(rf"\b{re.escape(src)}\b", dst, text)
-    # Strip calling-convention modifiers pycparser doesn't recognize.
     for cc in (
         "__fastcall ",
         "__cdecl ",
@@ -221,11 +207,6 @@ def _clean_ghidra_c(text: str) -> str:
     ):
         text = text.replace(cc, "")
 
-    # Replace unknown library-recovered type names (`EVP_PKEY_CTX`, etc.) with
-    # `void *`. Heuristic: identifiers that appear in a pointer-decl position
-    # `<TYPE> *<ident>` where <TYPE> is uppercase / underscored and not a
-    # known C type. This handles the common case without needing a full
-    # typedef table.
     def _opaque_type(match: re.Match) -> str:
         ident = match.group(1)
         if ident in KNOWN_C_TYPES:
@@ -236,8 +217,6 @@ def _clean_ghidra_c(text: str) -> str:
     return text
 
 
-# Optional helper for raw asm source: assemble then decompile. Exposed for
-# future use; the SIMD-direct frontend will likely supersede this.
 def _assemble_and_decompile(asm_source: str) -> hir.HirModule:
     if not shutil.which("as"):
         raise UnsupportedConstruct("`as` (GNU assembler) not found")

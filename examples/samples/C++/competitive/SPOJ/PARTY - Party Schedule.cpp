@@ -6,19 +6,17 @@ int max(int a, int b){
     if (a>=b) return a;
     else return b;
 }
-		//dbg display function
  
 void display(int lis[], int n){
 	for (int i=0 ; i<n ; ++i)
 		cout<<lis[i]<<" ";
-	cout<<endl;								// newline at end
+	cout<<endl;
 }
 
 int main(){
     int S,N,sum=0;
     cin>>S>>N;
     int siz[S+1],val[N+1],dp[N+1][S+1];
-    //cout<<S<<N<<endl;
     int i=0;
     while(i<S+1)
 	dp[0][i++] = 0;
@@ -29,7 +27,6 @@ int main(){
     siz[0]=val[0]=0;
     while(i<N+1){
 	cin>>siz[i]>>val[i];
-	//cout<<siz[i]<<val[i]<<endl;;	
 	i++;
     }
 
@@ -44,20 +41,6 @@ int main(){
 	    
 	}
     }
-    //bug
-    /*
-    for(int i=1;i<N+1;++i){
-	for(int j=1;j<S+1;++j){
-	    if(dp[i][j] - dp[i-1][j-val[i]-1] == val[i]){
-		cout<<dp[i][j]<<" "<<dp[i-1][j-val[i]-1]<<" "<<val[i]<<endl;
-		sum+=siz[i];
-		cout<<siz[i]<<endl;
-		break;
-	    }
-	    
-	}
-    }
-     */   					// display indivisual size/value array inputs
     display(siz,N+1);
     display(val,N+1);
     
@@ -67,7 +50,6 @@ int main(){
 	    }
 	    cout<<endl;
 	}
-					//display the dp matrix
    
     cout<<sum<<" "<<dp[N][S]<<endl;
 }

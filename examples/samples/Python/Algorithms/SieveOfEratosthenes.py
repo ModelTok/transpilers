@@ -17,19 +17,16 @@ limitations under the License.
 
 def SieveOfEratosthenes(n):
     isPrime = [True for i in range(n)]
-    primes = [] # list to store all prime numbers
+    primes = []
     for i in range(2, n+1):
         if isPrime[i-1]:
             primes.append(i)
             j = i*i
-            # if i is prime then we will set all its multiples upto n to False.
             while(j <= n):
                 isPrime[j-1] = False
                 j += i
     return primes
 
-# driver program to test SieveOfEratosthenes function
 n = 50
 print(SieveOfEratosthenes(n))
 
-# output : [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]

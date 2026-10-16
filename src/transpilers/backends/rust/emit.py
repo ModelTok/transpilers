@@ -52,10 +52,6 @@ def _emit_item(item: lir.LirNode) -> str:
 
 def _emit_struct(s: lir.RustStruct) -> str:
     if not s.fields:
-        # A fieldless struct (e.g. a class with only static methods) has no
-        # lines to join; the unconditional trailing ",\n}" below would
-        # otherwise emit "struct Empty {\n,\n}" -- a stray leading comma
-        # that's a syntax error, not just an empty-looking struct.
         return f"struct {s.name} {{}}"
     field_lines = ",\n".join(f"{INDENT}{n}: {t}" for n, t in s.fields)
     return f"struct {s.name} {{\n{field_lines},\n}}"
@@ -69,7 +65,6 @@ def _emit_impl(impl: lir.RustImpl) -> str:
 def _emit_fn(fn: lir.RustFn, *, depth: int = 0) -> str:
     indent = INDENT * depth
     params = ", ".join(_emit_param(n, t) for n, t in fn.params)
-    # Drop `-> ()` for unit-returning fns.
     ret = "" if fn.return_type == "()" else f" -> {fn.return_type}"
     header = f"{indent}fn {fn.name}({params}){ret} {{"
     body = _emit_block(fn.body, depth + 1)
@@ -77,9 +72,6 @@ def _emit_fn(fn: lir.RustFn, *, depth: int = 0) -> str:
 
 
 def _emit_param(name: str, ty: str) -> str:
-    # Convention: a parameter named `self` is the method receiver — emit as
-    # `&self` (immutable borrow) regardless of the declared type. Method
-    # mutation would need `&mut self`, which we don't yet model.
     if name == "self":
         return "&self"
     return f"{name}: {ty}"
@@ -124,14 +116,11 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     if isinstance(node, lir.RustFieldAssign):
         return f"{pad}{_emit_expr(node.obj)}.{node.field} = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustSubscriptAssign):
-        # Rust indexing requires `usize`; our IntT lowers to `i64`, so cast.
-        # Parenthesise the index so `j + 1 as usize` doesn't parse as `j + (1 as usize)`.
         return f"{pad}{_emit_expr(node.obj)}[({_emit_expr(node.index)}) as usize] = {_emit_expr(node.value)};"
     if isinstance(node, lir.RustIf):
         head = f"{pad}if {_emit_expr(node.test)} {{"
         body = _emit_block(node.body, depth + 1)
         if node.orelse:
-            # Collapse `else { if ... }` into `else if ...` for readability.
             if len(node.orelse) == 1 and isinstance(node.orelse[0], lir.RustIf):
                 inner = _emit_stmt(node.orelse[0], depth).lstrip()
                 tail = f"{pad}}} else {inner}"
@@ -150,7 +139,6 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         head = f"{pad}for {node.target} in {rng} {{"
         body = _emit_block(node.body, depth + 1)
         return f"{head}\n{body}\n{pad}}}"
-    # Expression-statement fallthrough.
     return f"{pad}{_emit_expr(node)};"
 
 
@@ -174,7 +162,6 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.RustRaw):
         return f"/* TODO[port]: {_flatten_snippet(node.snippet)} */ Default::default()"
     if isinstance(node, lir.RustBinOp):
-        # `x as i64` style casts are emitted as binops with op="as".
         if node.op == "as":
             return f"{_emit_expr(node.left)} as {_emit_expr(node.right)}"
         return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
@@ -183,25 +170,16 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, lir.RustBoolOp):
         return f"{_paren(node.left, node.op, on_right=False)} {node.op} {_paren(node.right, node.op, on_right=True)}"
     if isinstance(node, lir.RustUnary):
-        # Unary binds tighter than most binops; parenthesize any non-atomic
-        # operand so `-(a + b)` doesn't render as `-a + b`.
         return f"{node.op}{_paren(node.operand, '__unary__', on_right=False)}"
     if isinstance(node, lir.RustName):
         return node.name
     if isinstance(node, lir.RustIntLiteral):
-        # Drop the suffix when None — Rust's type inference picks it up from
-        # context (let bindings, fn signatures, surrounding binops with a
-        # typed side). Keeps emitted source readable.
         return f"{node.value}{node.suffix or ''}"
     if isinstance(node, lir.RustFloatLiteral):
         return _format_float(node.value) + (node.suffix or "")
     if isinstance(node, lir.RustBoolLiteral):
         return "true" if node.value else "false"
     if isinstance(node, lir.RustStringLiteral):
-        # StrT lowers to `String` (owned) for parameters and returns, so
-        # literals must materialize as owned strings too. `String::from(...)`
-        # is unambiguous; for format! arguments it's slightly verbose but
-        # still correct since `format!` accepts Display on either form.
         escaped = node.value.replace("\\", "\\\\").replace('"', '\\"')
         return f'String::from("{escaped}")'
     if isinstance(node, lir.RustFormat):
@@ -232,13 +210,10 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if isinstance(node, _RustPyFloat):
         return _emit_expr(node.value)
     if isinstance(node, _RustOverflowGuard):
-        # `(left).wrapping_add(right)` — parenthesise the left operand so
-        # compound expressions like `(a + b).wrapping_mul(c)` parse correctly.
         _stem = {"+": "add", "-": "sub", "*": "mul", "/": "div", "%": "rem"}[node.op]
         method = f"{node.style}_{_stem}"
         return f"({_emit_expr(node.left)}).{method}({_emit_expr(node.right)})"
     if isinstance(node, _RustListConcat):
-        # `left + right` for Vec: clone left, extend with right's elements.
         left = _emit_expr(node.left)
         right = _emit_expr(node.right)
         return f"{{ let mut _t = {left}.clone(); _t.extend({right}); _t }}"

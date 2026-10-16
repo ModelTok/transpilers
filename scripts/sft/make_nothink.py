@@ -36,14 +36,9 @@ def rewrite_system(system: str) -> str:
     For the no-think variant we replace that trailing instruction with one that
     asks for only the <answer> block (no reasoning).
     """
-    # The reasoning directive in the original begins with a sentence like
-    # "... you provide well-reasoned and detailed responses by first thinking
-    # through the reasoning process as an internal monologue ...". Cut from the
-    # start of that sentence so no chain-of-thought instruction remains.
     marker = "you provide well-reasoned"
     idx = system.find(marker)
     if idx == -1:
-        # Fallback: cut at the structured-format sentence.
         marker2 = "Provide your response in the following structured format"
         idx = system.find(marker2)
     new_tail = (
@@ -55,7 +50,6 @@ def rewrite_system(system: str) -> str:
         "included in accordance with the given format, such as ```mojo\n{code}\n```."
     )
     if idx == -1:
-        # Could not find the format instruction; append the new directive.
         return system.rstrip() + "\n" + new_tail
     return system[:idx].rstrip() + " " + new_tail
 
@@ -87,7 +81,6 @@ def main() -> None:
 
     DST.write_text("\n".join(out_lines) + "\n")
 
-    # Verify the file we just wrote is valid JSONL.
     verified = 0
     for line in DST.read_text().splitlines():
         if line.strip():

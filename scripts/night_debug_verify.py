@@ -75,7 +75,6 @@ print("== mojo rc:", r.returncode)
 print(r.stderr[:3000])
 if r.returncode == 0:
     print("mojo lines:", len(r.stdout.splitlines()))
-    # first numeric mismatch
     rr2 = subprocess.run([str(tdp / "oracle")], capture_output=True, text=True, cwd=td)
     cpp_out = {p[0]: p[1] for p in (ln.split() for ln in rr2.stdout.splitlines()) if len(p) == 2}
     mojo_out = {}

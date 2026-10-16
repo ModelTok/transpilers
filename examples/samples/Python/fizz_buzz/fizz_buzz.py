@@ -11,17 +11,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 '''
 
-def FizzBuzz(n): #We are creating a function which takes an integer as input
-	for i in range(1,n+1):      #The loop itterates n times
+def FizzBuzz(n):
+	for i in range(1,n+1):
 		s=''
 		if i%3 == 0:
-			s+="Fizz"           #Append "Fizz" to s if i is divisible by 3
+			s+="Fizz"
 		if i%5 == 0:
-			s+="Buzz"           #Append "Buzz" to s if i is divisible by 5
+			s+="Buzz"
 		if s == '':
-			print(i)            #Print the number if divisible by neither
+			print(i)
 		else:
-			print(s)            #Print s otherwise
+			print(s)
 
-FizzBuzz(50)    #This line calls the function FizzBuzz
+FizzBuzz(50)
 

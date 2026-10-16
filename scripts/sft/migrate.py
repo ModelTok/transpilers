@@ -22,8 +22,8 @@ REPO = Path(__file__).resolve().parents[2]; SFT = REPO / "data/sft/cpp_mojo"
 def _load(n,p):
     s=importlib.util.spec_from_file_location(n,REPO/p); m=importlib.util.module_from_spec(s); sys.modules[n]=m; s.loader.exec_module(m); return m
 rh=_load("rh","scripts/sft/run_heldout_eval.py"); dv=_load("dv","scripts/sft/diff_verify.py"); mr=_load("mr","scripts/sft/mojo_repair.py")
-dc=_load("dc","scripts/sft/dep_context.py")   # deterministic dependency-context injection
-fs=_load("fs","scripts/sft/few_shot.py")       # TF-IDF few-shot example retrieval
+dc=_load("dc","scripts/sft/dep_context.py")
+fs=_load("fs","scripts/sft/few_shot.py")
 ORACLE=(SFT/"ep_oracle.h").read_text(); PRELUDE=(SFT/"ep_prelude.mojo").read_text(); SYS=(SFT/"system.txt").read_text()
 SAMPLES=[-45.0,-1.0,0.0,0.5,2.5,30.0,190.0,273.15,310.0,400.0]
 

@@ -16,11 +16,11 @@ Outputs (data/sft/benchmark/):
 """
 import json, re, collections
 from pathlib import Path
-REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
+REPO = Path(__file__).resolve().parents[2]
 DIV = REPO / "data/sft/diverse/verified.jsonl"
 OUT = REPO / "data/sft/benchmark"; OUT.mkdir(parents=True, exist_ok=True)
 THRESH = 0.6
-PER_CAT = 3   # frozen held-out items per category
+PER_CAT = 3
 
 def toks(s): return set(re.findall(r"[A-Za-z_]\w+", s))
 def jac(a, b): return len(a & b) / max(len(a | b), 1)
@@ -30,8 +30,6 @@ for p in pairs: p["_t"] = toks(p.get("cpp_unit", ""))
 bycat = collections.defaultdict(list)
 for p in pairs: bycat[p["category"]].append(p)
 
-# Pick frozen held-out per category: prefer items LEAST similar to the rest
-# (most novel) so the benchmark stresses generalization.
 frozen, frozen_names = [], set()
 for cat, ps in bycat.items():
     scored = []
@@ -39,12 +37,10 @@ for cat, ps in bycat.items():
         others = [q["_t"] for q in ps if q is not p]
         novelty = max((jac(p["_t"], o) for o in others), default=0.0)
         scored.append((novelty, p))
-    scored.sort(key=lambda x: x[0])           # most novel first
+    scored.sort(key=lambda x: x[0])
     for _, p in scored[:PER_CAT]:
         frozen.append(p); frozen_names.add(p["name"])
 
-# Hard leakage guard: training pool = pairs that are NOT frozen and NOT a
-# near-twin of any frozen item.
 ftoks = [(p["name"], p["_t"], p["category"]) for p in frozen]
 train_pool, leaked_removed = [], 0
 for p in pairs:
@@ -54,7 +50,6 @@ for p in pairs:
     if twin: leaked_removed += 1
     else: train_pool.append(p)
 
-# verify zero leakage
 maxleak = 0.0
 tp_toks = [(q["category"], q["_t"]) for q in train_pool]
 for p in frozen:

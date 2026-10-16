@@ -33,10 +33,6 @@ EPMOJO = os.environ.get("MOJO_HOME", "/home/bart/Github/NuMojo/.pixi/envs/defaul
 MOJO_BIN = f"{EPMOJO}/bin/mojo"
 MOJO_ENV = dict(os.environ, MODULAR_HOME=f"{EPMOJO}/share/max", PATH="/usr/bin:/bin:" + f"{EPMOJO}/bin")
 
-# C++ decls so libclang type-checks shim/Constant refs WITHOUT transpiling their
-# bodies (the Mojo side gets the real shims from ep_prelude).
-# Decls for parsing + REAL constant values (so strict folds them correctly,
-# instead of silently emitting 0 for unresolved namespaced constants).
 DECLS = """#include <cmath>
 #include <algorithm>
 typedef double Real64; typedef long long Int64; typedef int Int;
@@ -100,7 +96,6 @@ def bench_one(name):
     rows = sample_rows(n)
     with tempfile.TemporaryDirectory() as td:
         t = Path(td)
-        # --- C++ reference ---
         calls = "\n".join('    printf("%.10g\\n", ' + name + "(" + ",".join(map(str, r)) + "));" for r in rows)
         (t / "a.cpp").write_text(CPP_FULL + body + f"\nint main(){{\n{calls}\n  return 0;\n}}\n")
         r = run(["g++", "-O2", "-std=c++17", "-o", str(t / "a"), str(t / "a.cpp")])
@@ -110,17 +105,15 @@ def bench_one(name):
         if r.returncode != 0:
             return "skip_cpprun", None
         cpp_out = r.stdout.strip().splitlines()
-        # --- strict transpile ---
         (t / "f.cpp").write_text(DECLS + body + "\n")
         r = run(["uv", "run", "transpile", str(t / "f.cpp"), "--target", "mojo"], cwd=str(REPO))
         if r.returncode != 0 or "def " + name not in r.stdout:
             return "transpile_fail", None
         mojo_fn = r.stdout
-        # --- mojo compile + run ---
         mdrv = "\n".join(f"    print({name}({','.join(map(str, r))}))" for r in rows)
         (t / "b.mojo").write_text(PRELUDE + "\n" + mojo_fn + f"\n\ndef main() raises:\n{mdrv}\n")
         r = run([MOJO_BIN, "build", "-Xlinker", "-ldl", "-Xlinker", "-lm",
-                 str(t / "b.mojo"), "-o", str(t / "b")], env=MOJO_ENV)  # -lm: asin/acos/cbrt
+                 str(t / "b.mojo"), "-o", str(t / "b")], env=MOJO_ENV)
         if r.returncode != 0:
             errs = [ln for ln in r.stderr.splitlines() if ": error:" in ln]
             return "mojo_compile", (errs[0][:90] if errs else "link/parse")
@@ -128,13 +121,11 @@ def bench_one(name):
         if r.returncode != 0:
             return "mojo_run", None
         mojo_out = r.stdout.strip().splitlines()
-    # --- compare ---
     if len(cpp_out) != len(mojo_out):
         return "verify_lines", None
     for a, b in zip(cpp_out, mojo_out):
         try:
             fa, fb = float(a), float(b)
-            # both NaN or both same inf == same behavior (domain edge); accept
             if (fa != fa and fb != fb) or fa == fb:
                 continue
             if abs(fa - fb) <= 1e-6 * max(abs(fa), abs(fb), 1e-9):

@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from turbovec import TurboQuantIndex
 
-RAG = Path(__file__).resolve().parents[2] / "data" / "rag"  # scripts/rag/<this file> -> repo root
+RAG = Path(__file__).resolve().parents[2] / "data" / "rag"
 MODELS = ["jinaai/jina-embeddings-v2-base-code", "BAAI/bge-small-en-v1.5"]
 
 def load_model():
@@ -46,7 +46,6 @@ def main():
     idx.write(str(RAG/"index.tv"))
     json.dump({str(c["id"]): {k: c[k] for k in ("lang","kind","name","file")} for c in chunks},
               open(RAG/"meta.json","w"))
-    # keep the texts separately (meta stays small)
     json.dump({str(c["id"]): c["text"] for c in chunks}, open(RAG/"texts.json","w"))
     json.dump({"model": model.tokenizer.name_or_path if hasattr(model,"tokenizer") else MODELS[0], "dim": int(emb.shape[1]), "n": len(chunks)}, open(RAG/"index_info.json","w"))
     print(f"turbovec index written -> {RAG/'index.tv'} ({len(chunks)} chunks, {emb.shape[1]}d, 4-bit)")

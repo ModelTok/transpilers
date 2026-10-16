@@ -41,7 +41,6 @@ def isMinuteMultipleOfTimestep(minute: Int, numMinutesPerTimestep: Int) -> Bool:
         return minute - (minute // numMinutesPerTimestep) * numMinutesPerTimestep == 0
     return True"""
 
-# (name, mojo, sampler) — sampler maps a raw row to an in-domain row
 TARGETS = {
     "calculateDayOfYear": (DAYOFYEAR_MOJO,
                            lambda row: [int(abs(row[0])) % 12 + 1,

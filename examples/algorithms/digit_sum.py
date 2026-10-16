@@ -1,5 +1,3 @@
-# Sum of decimal digits — repeatedly extracts the last digit and divides
-# by 10. Exercises integer division (`//`) and the modulo loop pattern.
 
 
 def digit_sum(n: int) -> int:

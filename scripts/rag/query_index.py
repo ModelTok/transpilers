@@ -16,12 +16,12 @@ from pathlib import Path
 import numpy as np
 from turbovec import TurboQuantIndex
 
-RAG = Path(__file__).resolve().parents[2] / "data" / "rag"  # scripts/rag/<this file> -> repo root
+RAG = Path(__file__).resolve().parents[2] / "data" / "rag"
 
 @functools.lru_cache(maxsize=1)
 def _load():
     info = json.load(open(RAG/"index_info.json"))
-    idx = TurboQuantIndex.load(str(RAG/"index.tv"))   # static method -> returns the index
+    idx = TurboQuantIndex.load(str(RAG/"index.tv"))
     meta = json.load(open(RAG/"meta.json"))
     texts = json.load(open(RAG/"texts.json"))
     from sentence_transformers import SentenceTransformer
@@ -33,8 +33,8 @@ def _load():
 def retrieve(query, k=5, lang=None):
     idx, meta, texts, model = _load()
     q = model.encode([query], normalize_embeddings=True, convert_to_numpy=True).astype(np.float32)
-    kk = k * 4 if lang else k                      # over-fetch then filter by lang
-    scores, ids = idx.search(np.ascontiguousarray(q), kk)   # search wants 2D batched queries
+    kk = k * 4 if lang else k
+    scores, ids = idx.search(np.ascontiguousarray(q), kk)
     out = []
     for s, i in zip(np.asarray(scores).ravel().tolist(), np.asarray(ids).ravel().tolist()):
         m = meta.get(str(i))

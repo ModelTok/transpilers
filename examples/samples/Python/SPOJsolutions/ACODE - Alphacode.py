@@ -1,4 +1,3 @@
-#http://stackoverflow.com/questions/12838549/merge-two-integers-in-python
   
 st = str(input())
 ways = 1

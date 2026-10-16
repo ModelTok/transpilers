@@ -64,14 +64,14 @@ class PyCompare(LirNode):
 
 @dataclass
 class PyBoolOp(LirNode):
-    op: str  # "and" / "or"
+    op: str
     left: LirNode
     right: LirNode
 
 
 @dataclass
 class PyUnary(LirNode):
-    op: str  # "not" / "-"
+    op: str
     operand: LirNode
 
 
@@ -141,7 +141,7 @@ class PyCall(LirNode):
 @dataclass
 class PyClass(LirNode):
     name: str
-    fields: list[tuple[str, str | None]]  # (name, optional type annotation)
+    fields: list[tuple[str, str | None]]
     methods: list["PyFn"]
 
 

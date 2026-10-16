@@ -15,7 +15,6 @@ public class IsOdd {
 
         boolean isOdd = true;
 
-        //Odd number checker
         if (number % 2 == 0) {
             isOdd = false;
         }

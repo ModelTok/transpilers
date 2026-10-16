@@ -1,4 +1,3 @@
-# Python program to find the factorial of a number using recursion
 
 def recur_factorial(n):
    """Function to return the factorial
@@ -8,10 +7,8 @@ def recur_factorial(n):
    else:
        return n*recur_factorial(n-1)
 
-# get input from the user
 num = int(input("Enter a number: "))
 
-# check if the number is negative
 if num < 0:
    print("Sorry, factorial does not exist for negative numbers")
 elif num == 0:

@@ -1,6 +1,3 @@
-# Reverse an integer digit-by-digit using `//` and `%`, then check
-# whether the reversed value equals the original. Pure integer
-# arithmetic — no list/string subset features.
 
 
 def is_palindrome(n: int) -> bool:

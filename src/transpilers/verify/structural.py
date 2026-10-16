@@ -45,11 +45,8 @@ __all__ = [
 ]
 
 
-# Longest-first so "Fortran" wins over "For..." typos and "C" comes last.
 _DIALECT_PREFIXES = ("Fortran", "Mojo", "Rust", "Py", "C")
 
-# LIR node kinds that open a struct-like item. "Class" is Python's, "Type"
-# is Fortran's (which carries no methods — see allowed idiom set above).
 _STRUCT_KINDS = {"Struct", "Class", "Type"}
 
 
@@ -62,13 +59,7 @@ def _lir_kind(node: object) -> str:
     return ""
 
 
-# --------------------------------------------------------------------------- #
-# Skeletons
-# --------------------------------------------------------------------------- #
 
-# A control-flow shape is a tuple of entries; each entry is
-#   ("if", then_shape, else_shape) | ("loop", body_shape)
-# Loop kinds (for / foreach / while) are unified — see allowed idiom set.
 Shape = tuple
 
 
@@ -78,7 +69,6 @@ class Skeleton:
 
     functions: dict[str, Shape] = field(default_factory=dict)
     structs: set[str] = field(default_factory=set)
-    # (struct_name, method_name) -> shape
     methods: dict[tuple[str, str], Shape] = field(default_factory=dict)
 
 
@@ -115,8 +105,6 @@ def _lir_shape(body: list[LirNode]) -> Shape:
         elif kind in ("While", "ForRange"):
             out.append(("loop", _lir_shape(node.body)))
         else:
-            # Transparent statement blocks (the init+while desugar of a
-            # stepped range lives in a private block node): splice their items.
             items = getattr(node, "items", None)
             if isinstance(items, list):
                 out.extend(_lir_shape(items))
@@ -133,21 +121,18 @@ def lir_skeleton(module: LirNode) -> Skeleton:
             sk.structs.add(item.name)
             for m in getattr(item, "methods", []):
                 sk.methods[(item.name, m.name)] = _lir_shape(m.body)
-        elif kind == "Impl":  # Rust: methods live in a separate impl block
+        elif kind == "Impl":
             for m in item.methods:
                 sk.methods[(item.struct_name, m.name)] = _lir_shape(m.body)
     return sk
 
 
-# --------------------------------------------------------------------------- #
-# Comparison
-# --------------------------------------------------------------------------- #
 
 
 @dataclass
 class Divergence:
-    kind: str  # dropped-function | added-function | dropped-struct | added-struct | control-flow-shape
-    where: str  # function / struct name ("Struct.method" for methods)
+    kind: str
+    where: str
     detail: str = ""
 
     def __str__(self) -> str:
@@ -187,13 +172,11 @@ def check_structural_fidelity(
     divergences: list[Divergence] = []
     consumed_free_fns: set[str] = set()
 
-    # Structs ------------------------------------------------------------- #
     for name in sorted(src.structs - dst.structs):
         divergences.append(Divergence("dropped-struct", name))
     for name in sorted(dst.structs - src.structs):
         divergences.append(Divergence("added-struct", name))
 
-    # Methods (may legally surface as free functions — Fortran) ------------ #
     for (owner, mname), shape in src.methods.items():
         where = f"{owner}.{mname}"
         if (owner, mname) in dst.methods:
@@ -215,7 +198,6 @@ def check_structural_fidelity(
     for owner, mname in sorted(set(dst.methods) - set(src.methods)):
         divergences.append(Divergence("added-function", f"{owner}.{mname}"))
 
-    # Free functions -------------------------------------------------------- #
     for name, shape in src.functions.items():
         if name not in dst.functions:
             divergences.append(Divergence("dropped-function", name))

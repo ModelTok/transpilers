@@ -13,35 +13,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 '''
 
-# A recursive implementation of Binary Search that prints true or false if an item has been found.
-# If you are new to algorithms, read up here: https://www.khanacademy.org/computing/computer-science/algorithms
 def recursive_binary_search(target, the_values, first, last):
-    # If the sequence of values cannot be subdivided further,
-    # we are done
-    if first > last: # Base Case
+    if first > last:
         return False
-    else: # Recursive Case
-        # Find the midpoint of the sequence
+    else:
         mid = (first + last) // 2
         
-        # Does the element at the midpoint contain the target?
         if the_values[mid] == target:
-            return True # BASE CASE #2
+            return True
         
-        # or does the target precede the element at the midpoint?
         elif target < the_values[mid]:
             return recursive_binary_search(target, the_values, first, mid - 1)
 
-        # or does the target follows the element at the midpoint?
         else:
             return recursive_binary_search(target, the_values, mid + 1, last)
 
 
 if __name__ == "__main__":
-    # sample sequence
     sequence = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     
-    # returns a boolean (true or false) that indicates if a number has been found in the sequence.
     number_found = recursive_binary_search(1, seq, 0, len(seq) - 1)
     
     print(number_found)

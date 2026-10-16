@@ -37,7 +37,6 @@ class _PyLowering(MirLoweringBase):
     def type_str(self, ty: Type) -> str:
         return _py_type(ty)
 
-    # -- struct -> class --------------------------------------------------- #
 
     def lower_struct_items(self, s: mir.MirStruct) -> list[lir.LirNode]:
         fields: list[tuple[str, str | None]] = []
@@ -52,7 +51,6 @@ class _PyLowering(MirLoweringBase):
             )
         ]
 
-    # -- assign: annotation only on first occurrence ----------------------- #
 
     def lower_assign(self, node: mir.MirAssign, declared: set[str], mut: set[str]):
         if node.augmented_op is not None:
@@ -71,7 +69,6 @@ class _PyLowering(MirLoweringBase):
         )
         return lir.PyAssign(name=node.target, ty=ty, value=self.lower_expr(node.value))
 
-    # -- expressions: identity operator maps ------------------------------- #
 
     def lower_binop(self, node: mir.MirBinOp):
         return lir.PyBinOp(

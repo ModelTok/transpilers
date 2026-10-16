@@ -20,8 +20,6 @@ from pathlib import Path
 SKILL = Path("/home/bart/.claude/skills/mojo-syntax/SKILL.md")
 OUT = Path(__file__).resolve().parents[2] / "data/sft/docs_instruction.jsonl"
 RAW = OUT.parent / "raw"
-# The site publishes clean, LLM-oriented full-content docs — far better than the
-# nav-polluted ZIM HTML. Chunk these by section header into concept examples.
 LLM_DOCS = ["https://mojolang.org/llms-manual.txt",
             "https://mojolang.org/llms-reference.txt"]
 
@@ -29,11 +27,9 @@ LLM_DOCS = ["https://mojolang.org/llms-manual.txt",
 def skill_pairs():
     rows = []
     txt = SKILL.read_text(errors="ignore")
-    # parse the removed→replacement table
     for m in re.finditer(r"^\|\s*`([^|]+?)`\s*\|\s*(.+?)\s*\|\s*$", txt, re.M):
         removed = m.group(1).strip()
         repl_raw = m.group(2).strip()
-        # take the first backticked token of the replacement as the canonical form
         rm = re.search(r"`([^`]+)`", repl_raw)
         if not rm:
             continue
@@ -72,7 +68,6 @@ def doc_rows():
             print(f"  doc fetch failed {url}: {e}")
             continue
         lines = text.splitlines()
-        # collect (title, body) sections
         cur_title, cur = None, []
         sections = []
         for ln in lines:

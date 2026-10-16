@@ -1,5 +1,3 @@
-# Collatz conjecture step count. Exercises a divergent-magnitude while
-# loop with conditional branching and integer mod.
 
 
 def collatz_length(n: int) -> int:
