@@ -361,7 +361,7 @@ class PythonRunner:
                             error=f"timeout after {_PY_EXEC_TIMEOUT_S}s",
                         )
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     samples.append(
                         IOSample(
                             args=args, ok=False, error=f"{type(exc).__name__}: {exc}"
@@ -729,10 +729,10 @@ def _infer_ret_tag(source: str, func_name: str, inputs: list[tuple]) -> str:
             for args in inputs:
                 try:
                     v = fn(*args)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     continue
                 return _value_tag(v)
-    except ExecTimeout, Exception:
+    except ExecTimeout, Exception:  # noqa: BLE001
         return "int"
     return "int"
 

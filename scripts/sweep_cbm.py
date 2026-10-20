@@ -15,8 +15,8 @@ SRC_DIR = os.path.join(TOPO, "TopologicCore", "src")
 
 sys.path.insert(0, r"C:/Users/amd/Documents/GitHub/transpilers/src")
 
-from transpilers.frontends.cpp.parser import cbmpreamble as cp
-from transpilers.frontends.cpp.parser.core import parse_cpp
+from transpilers.frontends.cpp.parser import cbmpreamble as cp  # noqa: E402
+from transpilers.frontends.cpp.parser.core import parse_cpp  # noqa: E402
 
 
 def bucket_err(msg: str) -> str:

@@ -49,7 +49,7 @@ class ModelTier(Enum):
         """The escalation order, low → high cost."""
         return (cls.CACHED, cls.LOCAL_FINETUNED, cls.FRONTIER)
 
-    def __lt__(self, other: "ModelTier") -> bool:
+    def __lt__(self, other: "ModelTier") -> bool:  # type: ignore[override]
         order = self.ordered()
         return order.index(self) < order.index(other)
 
@@ -363,7 +363,7 @@ class TieredLlmClient:
                 f"tier {tier.value!r} is not configured on this TieredLlmClient"
             )
         if isinstance(target, _StubTier):
-            prompt = _hole_prompt(hole)
+            prompt = _hole_prompt(hole)  # type: ignore[arg-type]
             return target.fn(prompt, temperature)
         assert isinstance(target, LlmClient)
         if isinstance(hole, str):
@@ -374,7 +374,7 @@ class TieredLlmClient:
             raw = target._call(hole, temperature)
             target._cache_put(key, raw)
             return raw
-        return target.fill(hole, temperature=temperature)
+        return target.fill(hole, temperature=temperature)  # type: ignore[arg-type]
 
 
     def cache_lookup(
@@ -423,7 +423,7 @@ class TieredLlmClient:
         if target is None:
             return None
         if isinstance(target, _StubTier):
-            prompt = _hole_prompt(hole)
+            prompt = _hole_prompt(hole)  # type: ignore[arg-type]
             return target.cached.get(prompt)
         assert isinstance(target, LlmClient)
         if isinstance(hole, str):
@@ -450,7 +450,7 @@ def _materialise_tier(
     if cfg is None:
         return None
     if callable(cfg) and not isinstance(cfg, (LlmClient, TierConfig)):
-        return _StubTier(cfg)
+        return _StubTier(cfg)  # type: ignore[arg-type]
     if isinstance(cfg, LlmClient):
         return cfg
     if isinstance(cfg, TierConfig):

@@ -33,14 +33,14 @@ except ImportError as exc:
 _TREESITTER_AVAILABLE = False
 _TREESITTER_CPP_PARSER = None
 try:
-    import tree_sitter_languages
-    from tree_sitter import Language, Parser
+    import tree_sitter_languages  # type: ignore
+    from tree_sitter import Language, Parser  # type: ignore
 
     _TREESITTER_AVAILABLE = True
 except Exception:
     try:
-        import tree_sitter_cpp
-        from tree_sitter import Language, Parser
+        import tree_sitter_cpp  # type: ignore
+        from tree_sitter import Language, Parser  # type: ignore
 
         _TREESITTER_CPP_PARSER = Parser(Language(tree_sitter_cpp.language()))
         _TREESITTER_AVAILABLE = True

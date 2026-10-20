@@ -9,7 +9,7 @@ import sys
 from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from transpilers.lift import lift_source
+from transpilers.lift import lift_source  # noqa: E402
 
 EP = "/home/db/EnergyPlus/src"
 OBJEXX = "/home/db/EnergyPlus/third_party/ObjexxFCL/src"

@@ -1,7 +1,20 @@
+/*
+Copyright 2020 Sakshi Khachane
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 
 
 public class AVL_Tree
 {
+       //Declaring Node class
 	private class Node 
 	{
 		int data;
@@ -23,6 +36,7 @@ public class AVL_Tree
 	}
 
 	
+	//Display node Function
 	public void inOrder(Node node)
 	{ 
                  if (node != null) 
@@ -33,6 +47,7 @@ public class AVL_Tree
                  } 
          } 
 	
+	//preorder traversal
 	public void preOrder(Node node) 
 	{ 
                 if (node != null) 
@@ -43,6 +58,7 @@ public class AVL_Tree
                  } 
          } 
 	
+	//post order traversal
 	public void postOrder(Node node) 
 	{ 
                 if (node != null) 
@@ -76,22 +92,26 @@ public class AVL_Tree
 
 		int balancefac = balancefac(node1);
 
+		// L-L Case
 		if (balancefac > 1 && num < node1.left.data)
 		{
 			return rightRotate(node1);
 		}
 
+		// R-R Case
 		if (balancefac < -1 && num > node1.right.data)
 		{
 			return leftRotate(node1);
 		}
 
+		// L-R Case
 		if (balancefac > 1 && num > node1.left.data) 
 		{
 			node1.left = leftRotate(node1.left);
 			return rightRotate(node1);
 		}
 
+		// R-L Case
 		if (balancefac < -1 && num < node1.right.data) 
 		{
 			node1.right = rightRotate(node1.right);
@@ -102,6 +122,7 @@ public class AVL_Tree
 	}
 	
 
+        //Finding height of the node
 	private int height(Node num) 
 	{
 		if (num == null) 
@@ -112,6 +133,7 @@ public class AVL_Tree
 		return num.height;
 	}
 
+       //Balance Factor
 	private int balancefac(Node num)
 	{
 		if (num == null) 
@@ -122,6 +144,7 @@ public class AVL_Tree
 		return height(num.left) - height(num.right);
 	}
 
+       //performing right rotation
 	private Node rightRotate(Node node3)
 	{
 
@@ -137,6 +160,7 @@ public class AVL_Tree
 		return node4;
 	}
 
+	//performing left rotation
 	private Node leftRotate(Node node3) 
 	{
 
@@ -175,6 +199,21 @@ public class AVL_Tree
 	}
 }
 
+/* Input: 
+ * 10 20 30 40 50 25
+ */
 
 
 
+/* 
+ * Output: 
+ *
+ * Preorder display: 
+   30 20 10 25 40 50 
+
+   Inorder display: 
+   10 20 25 30 40 50 
+
+   Postorder display: 
+   10 25 20 50 40 30 
+*/

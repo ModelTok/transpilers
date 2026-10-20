@@ -387,7 +387,7 @@ def _watch_rich(results_dir: Path, interval: int) -> None:
                 buf = Console(file=StringIO(), force_terminal=True, width=console.width)
                 runs = _load_results(results_dir)
                 _render_rich(runs, results_dir, buf)
-                live.update(buf.file.getvalue())
+                live.update(buf.file.getvalue())  # type: ignore[arg-type]
                 time.sleep(interval)
     except KeyboardInterrupt:
         pass

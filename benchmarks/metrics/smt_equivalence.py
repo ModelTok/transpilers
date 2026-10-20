@@ -85,7 +85,7 @@ def smt_verify_task(task: dict, translated_code: str) -> SMTResult:
         return SMTResult(task_id=tid, task_name=name, skipped=True, skip_reason=reason)
 
     try:
-        import z3
+        import z3  # type: ignore  # noqa: F401
         HAS_Z3 = True
     except ImportError:
         HAS_Z3 = False

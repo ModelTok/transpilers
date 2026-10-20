@@ -25,8 +25,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import build_cpp_mojo_dataset as _bld
-from build_cpp_mojo_dataset import CppFn, mojo_params, verify
+import build_cpp_mojo_dataset as _bld  # noqa: E402
+from build_cpp_mojo_dataset import CppFn, mojo_params, verify  # noqa: E402
 
 if os.environ.get("TRANSPILERS_EPMOJO"):
     _p = Path(os.environ["TRANSPILERS_EPMOJO"])

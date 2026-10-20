@@ -63,7 +63,7 @@ try:
 except ImportError as _imp_err:
     ZIM_DIR_DEFAULT = Path(os.environ.get("ZIM_DIR", r"D:\zim"))
 
-    def find_zim_files(zim_dir=ZIM_DIR_DEFAULT):
+    def find_zim_files(zim_dir=ZIM_DIR_DEFAULT):  # type: ignore[misc]
         d = Path(zim_dir)
         if not d.exists():
             return []
@@ -172,7 +172,7 @@ def harvest_corpus(corpus_path: Path, top_n: int = 200) -> dict[str, int]:
 def _open_zim(path: Path) -> object | None:
     """Lazy-open a zim archive. Returns None if libzim not installed."""
     try:
-        import libzim
+        import libzim  # type: ignore
         return libzim.Archive(str(path))
     except ImportError:
         return None
@@ -184,7 +184,7 @@ def _open_zim(path: Path) -> object | None:
 def _search_article_titles(archive: object, query: str, max_results: int = 5) -> list[str]:
     """Search a zim archive and return a list of matching article titles."""
     try:
-        import libzim
+        import libzim  # type: ignore
         searcher = libzim.Searcher(archive)
         results = searcher.search(libzim.Query().set_query(query))
         titles: list[str] = []
@@ -296,7 +296,7 @@ def generate(
 
     libzim_available = False
     try:
-        import libzim
+        import libzim  # type: ignore  # noqa: F401
         libzim_available = True
     except ImportError:
         print(

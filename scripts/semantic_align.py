@@ -74,8 +74,8 @@ class FuncResult:
 def _load_module_from_source(source_code: str, module_name: str = "_transpiler_mod"):
     """Dynamically load a Python module from source code string."""
     spec = importlib.util.spec_from_loader(module_name, loader=None)
-    mod = importlib.util.module_from_spec(spec)
-    exec(compile(source_code, module_name, "exec"), mod.__dict__)
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    exec(compile(source_code, module_name, "exec"), mod.__dict__)  # noqa: S102
     return mod
 
 

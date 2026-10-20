@@ -55,8 +55,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
-from transpilers.cli.main import transpile
-from transpilers.verify.behavioral import (
+from transpilers.cli.main import transpile  # noqa: E402
+from transpilers.verify.behavioral import (  # noqa: E402
     check_behavioral_equivalence,
     infer_param_tags,
 )
@@ -86,7 +86,7 @@ def _time_limit(seconds: int):
         yield
         return
 
-    def _raise(signum, frame):
+    def _raise(signum, frame):  # noqa: ARG001
         raise _VerifyTimeout()
 
     old = signal.signal(signal.SIGALRM, _raise)
@@ -256,7 +256,7 @@ def build(corpus: Path, source_lang: str, target: str) -> list[Pair]:
             continue
         try:
             output = transpile(source, source_lang=source_lang, target=target).strip()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             print(f"  skip {path.name} {source_lang}->{target}: {type(exc).__name__}: {exc}")
             continue
         if not output:

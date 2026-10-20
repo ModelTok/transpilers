@@ -64,7 +64,7 @@ class SMTResult:
 
 def _try_import_z3():
     try:
-        import z3
+        import z3  # type: ignore
 
         return z3
     except ImportError:

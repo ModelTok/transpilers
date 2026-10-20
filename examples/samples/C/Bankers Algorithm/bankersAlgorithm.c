@@ -1,26 +1,38 @@
+/*
+Copyright 2020 Abdul Majed
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
-#define n 4
-#define m 2
+#define n 4     // Number of processes
+#define m 2     // Number of resources
 
 #include <stdio.h>
 int main ()
 {
   int i, j, k;
-  int alloc[n][m] = {
+  int alloc[n][m] = {     // This is the multi-dimensional array containing the allocation matrix
     {1, 2},
     {0, 1},
     {1, 0},
     {2, 0},
   };
   
-  int max[n][m] = {
+  int max[n][m] = {     // This is the multi-dimensional array containing the maximum-need matrix
     {4, 2},
     {1, 2},
     {1, 3},
     {3, 2},
   };
 
-  int avail[m] = {1, 1};
+  int avail[m] = {1, 1};  // This array contains the information about the available resources
 
   int f[n], ans[n], ind = 0;
   for (k = 0; k < n; k++)
@@ -61,7 +73,7 @@ int main ()
     }
   }
 
-  printf ("SAFE Sequence is: \n");
+  printf ("SAFE Sequence is: \n");      // Note: The processes are named from P1, P2,...
   for (i = 0; i < n - 1; i++)
     printf (" P%d ->", ans[i]+1);
   printf (" P%d", ans[n - 1]+1);

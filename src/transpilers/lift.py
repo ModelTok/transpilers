@@ -24,7 +24,7 @@ import os
 import re
 import clang.cindex as ci
 
-from transpilers.frontends.cpp import parser as _cfg
+from transpilers.frontends.cpp import parser as _cfg  # noqa: F401
 
 K = ci.CursorKind
 IND = "    "

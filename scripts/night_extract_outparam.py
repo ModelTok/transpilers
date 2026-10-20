@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_cpp_mojo_dataset import (_match_delims, _match_braces,
+from build_cpp_mojo_dataset import (_match_delims, _match_braces,  # noqa: E402
                                     _strip_comments, _split_top_level,
                                     _SCALAR_TYPE)
 

@@ -130,7 +130,7 @@ def translate_to_mojo(
     Returns the Mojo source string, or None on failure.
     """
     try:
-        from transpilers.pipeline import translate
+        from transpilers.pipeline import translate  # type: ignore[import]
         result = translate(
             cpp_source=cpp_source,
             target="mojo",

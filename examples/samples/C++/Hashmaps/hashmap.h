@@ -1,3 +1,18 @@
+/*
+ * Copyright 2020 Ujjwal
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include<string>
 #include<stdio.h>
@@ -47,10 +62,12 @@ class ourmap
     delete[] buckets;
   }
 
+// occupied in bucket array
 int size(){
   return count;
 }
 
+// get value corresponding to key
 V getValue(string key){
 int bucketIndex = getBucketIndex(key);
  mapNode<V> *head = buckets[bucketIndex]; 
@@ -64,6 +81,7 @@ int bucketIndex = getBucketIndex(key);
  return 0;
 }
 
+// hashcode and compression function
 private:
 int getBucketIndex(string key){
   int hashCode=0;
@@ -79,6 +97,7 @@ int getBucketIndex(string key){
     return hashCode % numBuckets;
 }
 
+// rehashing function
 void rehash(){
   mapNode<V> **temp = buckets;
   buckets = new mapNode<V> *[2 * numBuckets];
@@ -115,6 +134,7 @@ double getLoadFactor(){
   return (1.0 * count) / numBuckets; 
 }
 
+// inserting element
 void insert(string key, V value){
   int bucketIndex = getBucketIndex(key);
   mapNode<V> *head = buckets[bucketIndex]; 
@@ -136,11 +156,13 @@ buckets[bucketIndex] = node;
 
 count++;
 
+//rehashing
 double loadfactor = (1.0 * count) / numBuckets;
 if(loadfactor>0.7)
   rehash();
 }
 
+// remove the element
 V remove(string key){
   int bucketIndex = getBucketIndex(key);
   mapNode<V> *head = buckets[bucketIndex];

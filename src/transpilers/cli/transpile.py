@@ -21,9 +21,9 @@ try:
 except ImportError:
     pass
 
-from openrouter import OpenRouter
+from openrouter import OpenRouter  # noqa: E402
 
-from transpilers.cli.domain_prompts import apply_domain_guidance
+from transpilers.cli.domain_prompts import apply_domain_guidance  # noqa: E402
 
 PROMPT_TEMPLATE = """\
 Convert this C++ file to Mojo. Faithful 1:1 translation, no refactoring.

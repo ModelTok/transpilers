@@ -27,7 +27,7 @@ def time_limit(seconds: float):
         yield
         return
 
-    def _raise(signum, frame):
+    def _raise(signum, frame):  # noqa: ARG001
         raise ExecTimeout()
 
     old = signal.signal(signal.SIGALRM, _raise)

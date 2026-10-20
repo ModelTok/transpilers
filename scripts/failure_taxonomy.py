@@ -33,7 +33,7 @@ _SRC = pathlib.Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from transpilers.verify.taxonomy import (
+from transpilers.verify.taxonomy import (  # noqa: E402
     BUCKETS,
     TaxonomyRecord,
     classify_unit,

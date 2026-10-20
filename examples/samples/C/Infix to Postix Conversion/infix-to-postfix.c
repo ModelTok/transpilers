@@ -1,4 +1,23 @@
+/*
+Copyright 2020 Ram Jonchhen
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
+/*
+    GIVEN PROGRAM CONVERTS
+    INFIX EXPRESSION TO IT'S POSTFIX FORM
+    FOR STACK PURPOSE
+    DYNAMIC STACK IS CREATED USING
+    LINKED LIST
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -110,6 +129,7 @@ int isOperation(char exp)
         return 0;
 }
 
+// function to check higher precedence among two operators
 int isHighPrecedence(char top,char exp)
 {
     if(getPrecedence(top)==getPrecedence(exp))
@@ -157,7 +177,7 @@ void InfixToPostfix(char* arr)
                       result[j++]=tos();
                       pop();
                   }
-                  pop();
+                  pop(); // poping the opening bracker
         }
 
     }
@@ -172,6 +192,7 @@ void InfixToPostfix(char* arr)
 
 int main()
 {
+    // example string (a+b)*c-d^e^f
     char input[100];
     printf("Enter the expression for converting to postfix: ");
     scanf("%s",&input);
@@ -180,3 +201,11 @@ int main()
     return 0;
 }
 
+/* PROGRAM INPUT AND OUTPUT
+Enter the expression for converting to postfix: (a+b)*c-d^e^f
+
+Inputed Infix Expression: (a+b)*c-d^e^f
+
+Converted Postfix Expression: ab+c*def^^-
+
+*/

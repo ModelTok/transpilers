@@ -402,7 +402,7 @@ class DiffusionGemmaClient:
             For one-shot inference, use the llama.cpp or vLLM backends instead.
         """
         try:
-            from unsloth import FastLanguageModel
+            from unsloth import FastLanguageModel  # noqa: F401,F811
         except ImportError:
             raise RuntimeError(
                 "Unsloth backend requires the `unsloth` package. "
@@ -480,7 +480,7 @@ class DiffusionGemmaClient:
     def _check_unsloth() -> None:
         """Verify that the ``unsloth`` package is installed."""
         try:
-            import unsloth
+            import unsloth  # noqa: F401
         except ImportError:
             raise RuntimeError(
                 "Unsloth backend requires `unsloth`.  Install with:\n"
@@ -568,4 +568,4 @@ def make_diffusion_client(
     Returns:
         Configured client.
     """
-    return DiffusionGemmaClient(backend=backend, model=model, **kwargs)
+    return DiffusionGemmaClient(backend=backend, model=model, **kwargs)  # type: ignore[arg-type]

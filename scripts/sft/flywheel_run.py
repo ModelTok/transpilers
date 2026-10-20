@@ -50,7 +50,7 @@ SCRIPTS = REPO / "scripts"
 SCRIPTS_SFT = REPO / "scripts" / "sft"
 sys.path.insert(0, str(REPO / "src"))
 
-from transpilers.repair.outcomes import (
+from transpilers.repair.outcomes import (  # noqa: E402
     DEFAULT_LOG_PATH,
     DEFAULT_METRICS_PATH,
     RepairOutcome,

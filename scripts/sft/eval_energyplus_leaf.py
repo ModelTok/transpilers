@@ -150,7 +150,7 @@ def oracle_check(name: str, mojo: str):
                 if f(m, d, lp) != ref_ordinal_day(m, d, lp):
                     bad += 1
             return (bad == 0, f"fuzz {{20}} pairs vs C++ ref: {'all match' if bad==0 else f'{bad} mismatch'}")
-    except Exception as e:
+    except Exception as e:  # noqa
         return False, f"exec error: {e}"
 
 

@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 import clang.cindex as ci
 
-from transpilers.frontends.cpp import parser as _cfg
+from transpilers.frontends.cpp import parser as _cfg  # noqa: F401
 from transpilers.cli.main import transpile
 
 K = ci.CursorKind

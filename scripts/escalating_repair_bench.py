@@ -19,9 +19,9 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from transpilers.llm import TieredLlmClient
-from transpilers.repair import Flywheel, escalating_repair
-from transpilers.verify.taxonomy import classify_unit
+from transpilers.llm import TieredLlmClient  # noqa: E402
+from transpilers.repair import Flywheel, escalating_repair  # noqa: E402
+from transpilers.verify.taxonomy import classify_unit  # noqa: E402
 
 
 EXT_MAP = {

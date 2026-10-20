@@ -88,7 +88,7 @@ def _ensure_pyghidra_started() -> None:
     if _PYGHIDRA_STARTED:
         return
     os.environ.setdefault("GHIDRA_INSTALL_DIR", str(GHIDRA_HOME))
-    import pyghidra
+    import pyghidra  # noqa: F401
 
     pyghidra.start(verbose=False)
     _PYGHIDRA_STARTED = True

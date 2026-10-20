@@ -18,7 +18,7 @@ from pathlib import Path
 
 from transpilers.llm import LlmClient, make_llm_inferencer, make_llm_renamer
 
-from transpilers.pipeline.stages import (
+from transpilers.pipeline.stages import (  # noqa: F401
     EXT_TO_SOURCE,
     FRONTENDS,
     TARGETS,

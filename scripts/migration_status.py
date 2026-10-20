@@ -1987,7 +1987,7 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    load = lambda p: _load_json(p) if p else None
+    load = lambda p: _load_json(p) if p else None  # noqa: E731
     if args.before or args.after:
         if not (args.before and args.after):
             raise SystemExit("--before and --after must be given together")

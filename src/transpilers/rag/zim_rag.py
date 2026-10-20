@@ -151,7 +151,7 @@ class ZimRag:
         if key in self._zim_cache:
             return self._zim_cache[key]
         try:
-            import libzim
+            import libzim  # type: ignore
 
             archive = libzim.Archive(str(path))
             self._zim_cache[key] = archive
@@ -166,7 +166,7 @@ class ZimRag:
     ) -> list[str]:
         """Search a zim archive, return list of article snippets."""
         try:
-            import libzim
+            import libzim  # type: ignore
 
             searcher = libzim.Searcher(archive)
             results = searcher.search(libzim.Query().set_query(query))

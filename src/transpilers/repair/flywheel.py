@@ -54,7 +54,7 @@ class FlywheelRecord:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "FlywheelRecord":
         """Inverse of :meth:`to_jsonl` — robust to extra keys."""
-        known = {f for f in cls.__dataclass_fields__}
+        known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
         kwargs = {k: v for k, v in d.items() if k in known}
         return cls(**kwargs)
 

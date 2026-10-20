@@ -58,7 +58,7 @@ def load_stdlib_maps(path: Path | str | None = None) -> dict[str, dict[str, list
     text = yaml_path.read_text(encoding="utf-8")
 
     try:
-        import yaml
+        import yaml  # type: ignore
 
         data = yaml.safe_load(text)
         if isinstance(data, dict):

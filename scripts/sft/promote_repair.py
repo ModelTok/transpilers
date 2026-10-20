@@ -49,7 +49,7 @@ from typing import Iterable
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
-from transpilers.repair.outcomes import (
+from transpilers.repair.outcomes import (  # noqa: E402
     DEFAULT_LOG_PATH,
     RepairOutcome,
     RepairTracker,
