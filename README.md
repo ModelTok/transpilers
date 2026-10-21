@@ -86,9 +86,9 @@ uv run transpile examples/example.cpp --path python_pivot --target rust
 uv run transpile-levels examples/example.cpp --level file --engine lift
 ```
 
-Run any command with `--help` for the full option list. On a Windows console that
-uses a legacy code page, `transpile --help` fails on the `→` in its help text; set
-`PYTHONIOENCODING=utf-8` first.
+Run any command with `--help` for the full option list. If you redirect output on
+Windows under a legacy (non-UTF-8) code page and hit a `UnicodeEncodeError`, set
+`PYTHONUTF8=1`; a real console is not affected.
 
 ## How it works
 
