@@ -166,7 +166,25 @@ def transpile_javascript(source: str, target: str = "rust", *, llm_fill=None) ->
     return transpile(source, source_lang="javascript", target=target, llm_fill=llm_fill)
 
 
+def _ensure_utf8_output() -> None:
+    """Write UTF-8 even when stdout/stderr are redirected under a legacy code page.
+
+    Emitted source and help text can contain non-ASCII characters; a redirected
+    stream otherwise uses the locale code page (e.g. cp1250) and raises
+    UnicodeEncodeError.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None or (stream.encoding or "").lower().replace("-", "") == "utf8":
+            continue
+        try:
+            reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _ensure_utf8_output()
     parser = argparse.ArgumentParser(prog="transpile")
     parser.add_argument("source", type=Path)
     parser.add_argument(
@@ -222,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         default="direct",
         help=(
             "Translation path: 'direct' (default) performs a single-pass translation; "
-            "'python_pivot' routes C++ → Python → <target> via Python as a shared IR "
+            "'python_pivot' routes C++ -> Python -> <target> via Python as a shared IR "
             "(works with any target; requires a C++ source)."
         ),
     )
