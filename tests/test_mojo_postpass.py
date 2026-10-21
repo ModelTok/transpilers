@@ -96,7 +96,7 @@ def test_mut_handles_multiline_signatures_with_comments():
     ],
 )
 def test_products_feeding_add_or_sub_are_guarded(src, expected):
-    out = code(f"def f():\n    var y = {src}\n", syntax=False, mut=False)
+    out = code(f"def f():\n    var y = {src}\n", syntax=False, mut=False, libm=False)
     assert f"var y = {expected}\n" in out
     assert "from fp_strict import nc_mul" in out
 
@@ -385,3 +385,132 @@ def test_cli_no_arrays_flag(tmp_path: Path, capsys):
     f.write_text(ARRAY_DEF)
     assert main([str(f), "--no-arrays", "--no-fma"]) == 0
     assert "Array1D" in capsys.readouterr().out
+
+
+# --- glibc-exact maths and ObjexxFCL min/max ----------------------------------------------------
+
+
+def math(src: str, source: str | None = None, **kw) -> str:
+    return postpass(f"def f(x: Float64, y: Float64) -> Float64:\n    var r = {src}\n", fma=False, source=source, **kw).code
+
+
+@pytest.mark.parametrize("fn", ["exp", "log", "log10", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh"])
+def test_libm_calls_are_routed_to_glibc(fn):
+    out = math(f"{fn}(x)")
+    assert f"var r = libm_{fn}(x)" in out
+    assert f'external_call["{fn}", Float64, Float64](x)' in out
+    assert "from std.ffi import external_call" in out
+
+
+def test_two_argument_libm_and_pow_forms():
+    out = math("pow(x, 0.25) + atan2(y, x)")
+    assert "libm_pow(x, 0.25) + libm_atan2(y, x)" in out
+    assert out.count("def libm_pow(") == 1 and out.count("def libm_atan2(") == 1
+    assert 'external_call["pow", Float64, Float64, Float64](x, y)' in out
+    assert "libm_pow(" in math("(1.4 * y) ** 6")
+
+
+def test_squares_and_reciprocals_follow_the_c_compiler():
+    assert "var r = nc_mul(x, x) + nc_mul(y, y)" in math("pow(x, 2) + y ** 2")
+    assert "var r = nc_mul(x + y, x + y)" in math("pow(x + y, 2.0)")
+    assert "var r = (1.0 / x)" in math("x ** -1")
+    assert "libm_pow(x, 3)" in math("x ** 3")
+
+
+def test_nested_calls_and_untouched_statements():
+    out = math("exp(pow(x, 0.5) + sin(y))")
+    assert "var r = libm_exp(libm_pow(x, 0.5) + libm_sin(y))" in out
+    src = "def f(x: Float64) -> Float64:\n    return sqrt(x) + abs(x)\n"
+    assert postpass(src, fma=False).code == src
+
+
+def test_max_is_ep_max_and_min_follows_the_upstream_spelling():
+    assert "var r = ep_max(x, 1e-05)" in math("max(x, 1e-05)")
+    out = math("min(x, y)", source="Real64 f() { return std::min(a, b); }")
+    assert "ep_min(x, y)" in out and "from fp_strict import ep_min" in out
+    out = math("min(x, y)", source="Real64 f() { return min(a, b); }")
+    assert "objexx_min(x, y)" in out
+    r = postpass("def f(x: Float64, y: Float64) -> Float64:\n    var r = min(x, y)\n", fma=False)
+    assert "var r = min(x, y)" in r.code and any("min" in u for u in r.unresolved)
+
+
+def test_integer_max_min_and_pow_are_not_rewritten():
+    src = "def f(n: Int, i: Int) -> Int:\n    var k = max(0, i - 1)\n    var m = min(n, 4)\n    var q = i ** 2\n    return k\n"
+    assert postpass(src, fma=False).code == src
+
+
+def test_math_pass_skips_gpu_kernels_and_can_be_disabled():
+    gpu = "from std.gpu.host import DeviceContext\n\n\ndef f(x: Float64) -> Float64:\n    return exp(x)\n"
+    assert postpass(gpu, fma=False).code == gpu
+    assert "libm_exp" not in math("exp(x)", libm=False)
+
+
+def test_real_adapter_drafts_for_math_heavy_routines():
+    src = (
+        "from std.math import exp\n\ndef CalcSat(Temp: Float64) -> Float64:\n"
+        "    return exp(18.6686 - 4030.183 / (Temp + 235.0))\n"
+    )
+    out = postpass(src).code
+    assert "return libm_exp(18.6686 - 4030.183 / (Temp + 235.0))" in out
+    src = "from std.math import pow\n\ndef Ra(Ts: Float64, Ta: Float64) -> Float64:\n    return (pow(Ts, 2) + pow(Ta, 2)) * (Ts + Ta)\n"
+    assert "return (nc_mul(Ts, Ts) + nc_mul(Ta, Ta)) * (Ts + Ta)" in postpass(src).code
+
+
+# --- products bound to variables, and ObjexxFCL pow_N --------------------------------------------
+
+
+def test_product_bound_to_a_variable_and_later_added_is_guarded_at_its_definition():
+    src = (
+        "def f(a: Float64, b: Float64, c: Float64) -> Float64:\n"
+        "    var hr: Float64 = a * b * (a + b)\n"
+        "    return 1.0 / (c + hr)\n"
+    )
+    out = code(src, syntax=False, mut=False, libm=False)
+    assert "var hr: Float64 = nc_mul(a * b, a + b)" in out
+    assert "return 1.0 / (c + hr)" in out
+
+
+def test_variable_products_that_are_never_added_or_are_integers_are_left_alone():
+    src = (
+        "def f(a: Float64, b: Float64, n: Int) -> Float64:\n"
+        "    var p = a * b\n    var k = n * 4\n    var q = a * b\n    return p / q + Float64(k) + a\n"
+    )
+    assert code(src, syntax=False, mut=False, libm=False) == src
+
+
+def test_reassigned_product_variable_is_guarded_too():
+    src = "def f(a: Float64, b: Float64, c: Float64) -> Float64:\n    var t = 0.0\n    t = a * b\n    return t - c\n"
+    assert "t = nc_mul(a, b)" in code(src, syntax=False, mut=False, libm=False)
+
+
+POW_SRC = "return pow_6(1.4 * x) + 1.63 * pow_2(d) + pow_3(y) + std::pow(z, 0.25);"
+
+
+@pytest.mark.parametrize(
+    "expr, rewritten",
+    [("(1.4 * y) ** 6", "pow_6(1.4 * y)"), ("pow(y, 2)", "pow_2(y)"), ("y ** 3", "pow_3(y)")],
+)
+def test_pow_n_follows_objexxfcl_when_the_source_uses_it(expr, rewritten):
+    out = math(expr, source=POW_SRC)
+    assert f"var r = {rewritten}" in out
+    n = rewritten[4]
+    assert f"def pow_{n}(x: Float64) -> Float64:" in out
+
+
+def test_pow_n_helpers_match_the_oracle_definitions():
+    out = math("y ** 6 + y ** 5 + y ** 4 + y ** 7", source="pow_4(a) pow_5(a) pow_6(a) pow_7(a)")
+    assert "var t = x * x * x\n    return nc_mul(t, t)" in out  # pow_6: t = x*x*x; t*t
+    assert "var t = x * x\n    return nc_mul(t * t, x)" in out  # pow_5: t = x*x; t*t*x
+    assert "var t = x * x\n    return nc_mul(t, t)" in out  # pow_4
+    assert "var t = x * x * x\n    return nc_mul(t * t, x)" in out  # pow_7
+
+
+def test_without_pow_n_in_the_source_powers_use_libm():
+    assert "libm_pow(y, 6)" in math("y ** 6", source="return std::pow(x, 6);")
+
+
+def test_direct_pow_n_calls_get_their_definition():
+    out = math("pow_3(x) + 1.0")
+    assert "def pow_3(x: Float64) -> Float64:" in out and "from fp_strict import nc_mul" in out
+    already = "def pow_3(x: Float64) -> Float64:\n    return x * x * x\n\n\ndef f(x: Float64) -> Float64:\n    var r = pow_3(x)\n"
+    assert postpass(already, fma=False).code.count("def pow_3(") == 1

@@ -212,7 +212,7 @@ def transpile_one(
             return result
 
         if postpass:
-            fixed = mojo_postpass(code)
+            fixed = mojo_postpass(code, source=cc_source)
             code = fixed.code
             result["postpass_changes"] = len(fixed.changes)
             if fixed.unresolved:
