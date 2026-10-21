@@ -109,3 +109,40 @@ def test_main_end_to_end_against_a_local_server(tmp_path, monkeypatch, server):
     assert seen[0]["body"]["model"] == "local-model"
     assert "ENERGYPLUSMOJO KERNEL RULES" in seen[0]["body"]["messages"][0]["content"]
     assert json.loads(cfg.read_text())[0]["decision"] == "done"
+
+
+# --- single fenced block fallback (fine-tuned adapter answers with ```mojo ... ```) ---------
+
+
+FENCED = "```mojo\ndef f(x: Float64) -> Float64:\n    return x\n```"
+
+
+def test_extract_accepts_one_fenced_mojo_block_without_file_markers():
+    assert t.extract_file_block(FENCED) == "def f(x: Float64) -> Float64:\n    return x"
+    assert t.extract_file_block("Here you go:\n" + FENCED + "\nDone.") == (
+        "def f(x: Float64) -> Float64:\n    return x"
+    )
+
+
+def test_extract_prefers_file_markers_over_a_fence():
+    text = "<<<FILE out.mojo>>>\nfn a():\n    pass\n<<<END>>>\n" + FENCED
+    assert t.extract_file_block(text) == "fn a():\n    pass"
+
+
+def test_extract_refuses_to_guess_between_several_or_wrong_fences():
+    assert t.extract_file_block(FENCED + "\n\n" + FENCED) is None
+    assert t.extract_file_block("```python\nx = 1\n```") is None
+    assert t.extract_file_block("```\nuntagged\n```") is None
+    assert t.extract_file_block("```mojo\ndef f():\n    pass\n") is None  # never closed
+    assert t.extract_file_block("no code here") is None
+
+
+def test_main_end_to_end_accepts_a_fenced_reply(tmp_path, monkeypatch, server):
+    base, seen, _ = server
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    cfg = _config(tmp_path)
+    # the fake server reads the module-level REPLY on every request
+    monkeypatch.setattr(sys.modules[__name__], "REPLY", FENCED)
+    monkeypatch.setattr(sys, "argv", ["transpile-llm", str(cfg), "--endpoint", base, "--model", "m"])
+    assert t.main() == 0
+    assert (tmp_path / "foo.mojo").read_text() == "def f(x: Float64) -> Float64:\n    return x"

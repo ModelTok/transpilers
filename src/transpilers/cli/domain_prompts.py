@@ -223,13 +223,22 @@ generic rules above, these win.
   explicit Float64/Int arguments and edit only those accesses; a `ShowWarning*` /
   `ShowFatal*` call becomes a returned sentinel value. List every such edit in a
   comment above the function. Write no Python or NumPy twin and no extra files.
-- Entry point: one `@export def <name>_batch(n: Int, <in>_ptr: Int, ...,
-  out_ptr: Int) -> None`. Each `_ptr` is the integer address of a contiguous
-  Float64[n] array (an array column of k values per row is ONE pointer to n*k
-  row-major doubles, element j of row i at `v[k*i + j]`). Open each with
-  `UnsafePointer[Float64, MutAnyOrigin](unsafe_from_address=ptr)`, loop `i` over
-  `range(n)`, call the translated function and write `out[i]`. Keep the maths in
-  ordinary helper functions that the batch entry calls.
+- Entry point: one `@export def <name>_batch(n: Int, in_ptr: Int, out_ptr: Int) -> None`
+  with PACKED ROWS. Declare `comptime PF = UnsafePointer[Float64, MutAnyOrigin]`
+  and open `var inp = PF(unsafe_from_address=in_ptr)` and
+  `var outp = PF(unsafe_from_address=out_ptr)`. Case `c` reads its `n_in` doubles
+  at `inp[n_in * c + k]`, one per by-value parameter in declaration order (a `bool`
+  is 0.0 or 1.0), and writes `n_out` doubles at `outp[n_out * c + j]`: the return
+  value first (if the function returns one), then every `Real64 &` output parameter
+  in declaration order. `out` is a Mojo keyword: never use it as a name. Mark lines
+  with integer index arithmetic such as `n_in * c + k` with
+  `# fma: ok (integer index arithmetic)`. Keep the maths in ordinary helper
+  functions that the batch entry calls; a helper with several results writes them
+  through a `res: PF` pointer (`res[0]` is the return value, then the outputs).
+- Output parameters: a `Real64 &` parameter that is only assigned is an output
+  that starts at 0.0 (the repository's oracle drivers do the same). One that is read
+  before it is assigned is in/out: take its initial value from an input column AND
+  write its final value to the output row. Never modify the input rows.
 - The kernel must match upstream compiled with g++ -ffp-contract=off BIT FOR BIT:
   * Mojo fuses `a*b + c` into a fused multiply-add; upstream does not. Wrap the
     product in `nc_mul` (`from fp_strict import nc_mul`) in every `a*b + c`,
@@ -251,29 +260,32 @@ generic rules above, these win.
 
 WORKED EXAMPLE
 C++ (upstream, verbatim):
-    Real64 CalcFoo(Real64 const dT, Real64 const L)
+    Real64 CalcFoo(Real64 const dT, Real64 const L, Real64 &q)
     {
         Real64 h = 1.23 * (dT * dT) + std::pow(L, 0.25);
+        q = 0.5 * h;
         return std::max(h, 0.1);
     }
-Mojo:
+Mojo (two inputs per case; two outputs per case: the return value, then q):
     from std.ffi import external_call
     from fp_strict import nc_mul, ep_max
 
+    comptime PF = UnsafePointer[Float64, MutAnyOrigin]
+
 
     @always_inline
-    def CalcFoo(dT: Float64, L: Float64) -> Float64:
+    def CalcFoo(dT: Float64, L: Float64, res: PF):
         var h = nc_mul(1.23, dT * dT) + external_call["pow", Float64, Float64, Float64](L, 0.25)
-        return ep_max(h, 0.1)
+        res[1] = 0.5 * h
+        res[0] = ep_max(h, 0.1)
 
 
     @export
-    def CalcFoo_batch(n: Int, dT_ptr: Int, L_ptr: Int, out_ptr: Int) -> None:
-        var dT = UnsafePointer[Float64, MutAnyOrigin](unsafe_from_address=dT_ptr)
-        var L = UnsafePointer[Float64, MutAnyOrigin](unsafe_from_address=L_ptr)
-        var out = UnsafePointer[Float64, MutAnyOrigin](unsafe_from_address=out_ptr)
-        for i in range(n):
-            out[i] = CalcFoo(dT[i], L[i])
+    def CalcFoo_batch(n: Int, in_ptr: Int, out_ptr: Int) -> None:
+        var inp = PF(unsafe_from_address=in_ptr)
+        var outp = PF(unsafe_from_address=out_ptr)
+        for c in range(n):
+            CalcFoo(inp[2 * c], inp[2 * c + 1], outp + 2 * c)  # fma: ok (integer index arithmetic)
 """
 
 GTEST_DUAL_GUIDANCE = """\
