@@ -244,6 +244,47 @@ def transpile_one(
     return result
 
 
+def run_verify(cmd: str, entry: dict, timeout: float) -> tuple[bool, str]:
+    """Run the user's verification command on a written draft; exit status 0 accepts it.
+
+    `{target}` and `{source}` in `cmd` are replaced by the draft and source paths."""
+    shell_cmd = cmd.replace("{target}", entry["target"]).replace("{source}", entry["source"])
+    try:
+        p = subprocess.run(shell_cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, "timed out"
+    tail = (p.stdout + p.stderr).strip().splitlines()
+    return p.returncode == 0, (tail[-1] if tail else "")[:160]
+
+
+def transpile_verified(
+    entry: dict,
+    samples: int,
+    verify_cmd: str | None,
+    verify_timeout: float,
+    **kwargs,
+) -> dict:
+    """`transpile_one` up to `samples` times, stopping at the first draft that `verify_cmd` accepts.
+
+    Each attempt overwrites the target; when none passes the last draft stays and the status says so."""
+    if not verify_cmd or samples <= 1:
+        return transpile_one(entry, **kwargs)
+    result: dict = {}
+    for attempt in range(1, samples + 1):
+        result = transpile_one(dict(entry), **kwargs)
+        result["attempts"] = attempt
+        if result["status"] != "ok":
+            continue
+        ok, detail = run_verify(verify_cmd, entry, verify_timeout)
+        result["verified"] = ok
+        if ok:
+            return result
+        result["verify"] = detail
+    if result.get("status") == "ok":
+        result["status"] = f"error: no verified draft in {samples} samples"
+    return result
+
+
 def make_client(endpoint: str | None, api_key: str, timeout: float):
     """OpenRouter SDK client, or a local OpenAI-compatible one when ``endpoint`` is set."""
     if endpoint:
@@ -337,6 +378,20 @@ def main() -> int:
         help="Sampling temperature (default 0.0); above 0 gives a different draft per run, for best-of-n selection",
     )
     ap.add_argument(
+        "--samples",
+        type=int,
+        default=1,
+        help="Best-of-n: draw up to N drafts per file and keep the first that --verify-cmd accepts "
+        "(needs --temperature above 0)",
+    )
+    ap.add_argument(
+        "--verify-cmd",
+        default=None,
+        help="Shell command that accepts a draft with exit status 0; {target} and {source} are replaced "
+        "by the draft and source paths (e.g. a compile-and-compare script)",
+    )
+    ap.add_argument("--verify-timeout", type=float, default=600.0, help="Seconds allowed per verification")
+    ap.add_argument(
         "--postpass",
         action="store_true",
         help=(
@@ -353,6 +408,10 @@ def main() -> int:
         ),
     )
     args = ap.parse_args()
+    if args.samples > 1 and not args.verify_cmd:
+        ap.error("--samples needs --verify-cmd (there is nothing to choose a draft by otherwise)")
+    if args.samples > 1 and args.temperature <= 0:
+        ap.error("--samples needs --temperature above 0 (every sample would be identical)")
 
     config_path = Path(args.config)
     if not config_path.exists():
@@ -441,15 +500,18 @@ def main() -> int:
     def work(entry: dict) -> dict:
         nonlocal ok_count, completed
         with make_client(args.endpoint, api_key, args.timeout) as client:
-            result = transpile_one(
+            result = transpile_verified(
                 entry,
-                args.model,
-                client,
-                args.repair,
-                args.max_retries,
-                args.domain_prompts,
-                args.postpass,
-                args.temperature,
+                args.samples,
+                args.verify_cmd,
+                args.verify_timeout,
+                model=args.model,
+                client=client,
+                repair=args.repair,
+                max_retries=args.max_retries,
+                domain_prompts=args.domain_prompts,
+                postpass=args.postpass,
+                temperature=args.temperature,
             )
         status = result["status"]
         with config_lock:
