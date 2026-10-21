@@ -146,3 +146,19 @@ def test_main_end_to_end_accepts_a_fenced_reply(tmp_path, monkeypatch, server):
     monkeypatch.setattr(sys, "argv", ["transpile-llm", str(cfg), "--endpoint", base, "--model", "m"])
     assert t.main() == 0
     assert (tmp_path / "foo.mojo").read_text() == "def f(x: Float64) -> Float64:\n    return x"
+
+
+def test_temperature_flag_reaches_the_model_call(tmp_path, monkeypatch, server):
+    base, seen, _ = server
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    cfg = _config(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["transpile-llm", str(cfg), "--endpoint", base, "--model", "m"])
+    assert t.main() == 0
+    assert seen[-1]["body"]["temperature"] == 0.0
+    data = json.loads(cfg.read_text())
+    data[0]["decision"] = "pending"
+    cfg.write_text(json.dumps(data))
+    monkeypatch.setattr(sys, "argv", ["transpile-llm", str(cfg), "--endpoint", base, "--model", "m",
+                                      "--temperature", "0.8"])
+    assert t.main() == 0
+    assert seen[-1]["body"]["temperature"] == 0.8

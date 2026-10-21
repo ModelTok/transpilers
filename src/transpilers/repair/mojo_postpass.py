@@ -4,6 +4,8 @@ Drafts from small or general models share mechanical defects that need no model 
 
 * C++ or pre-1.0 Mojo habits: ``//`` comments, ``fn``, ``let``, ``alias``, ``&&``/``||``/``!``,
   ``const``, ``Real64``, quoted-path imports, trailing semicolons;
+* a stateless routine wrapped in a field-less one-method ``struct`` (lifted to a function, named after
+  the C++ routine);
 * ``Array1D`` parameters walked element-wise (rewritten to ``List`` only where the 1-based
   versus 0-based index base cannot matter), and the old name ``DynamicVector``;
 * a parameter that the body index-assigns but that is not declared ``mut``;
@@ -193,6 +195,67 @@ def _normalise_syntax(src: str, changes: list[str]) -> str:
             line_out = re.sub(r"^(\s*)#(\S)", r"\1# \2", line_out) if not line_out.lstrip().startswith("# ") else line_out
         out.append(line_out)
     return "\n".join(out)
+
+
+# ---------------------------------------------------------------------------------------------
+# Pass 1c: a stateless routine wrapped in a field-less struct -> free function
+# ---------------------------------------------------------------------------------------------
+
+_CPP_FUNC = re.compile(
+    r"(?m)^[ \t]*(?:(?:inline|static|constexpr)\s+)*(?:Real64|double|int|bool|void)\s+(\w+)\s*\("
+)
+
+
+def _unwrap_struct(src: str, changes: list[str], unresolved: list[str], source: str | None) -> str:
+    """The adapter often answers a pure function with `struct X: def call(a, b) -> R: ...` (or a method
+    taking `self`). A struct with no fields and a single method is just a function: lift it, drop `self`,
+    and name it after the C++ routine when the source is known."""
+    lines = src.split("\n")
+    cpp = _CPP_FUNC.findall(source or "")
+    heads = [i for i, ln in enumerate(lines) if re.match(r"^struct\s+\w+", ln)]
+    if len(heads) != 1:
+        if len(heads) > 1:
+            unresolved.append("several structs in one draft; not unwrapped")
+        return src
+    h = heads[0]
+    end = h + 1
+    while end < len(lines) and (not lines[end].strip() or lines[end][:1] in " \t"):
+        end += 1
+    body = lines[h + 1 : end]
+    indent = next((len(b) - len(b.lstrip()) for b in body if b.strip()), 0)
+    top = [b for b in body if b.strip() and len(b) - len(b.lstrip()) == indent]
+    methods = [b for b in top if re.match(r"\s*def\s+\w+", b)]
+    others = [b for b in top if not re.match(r"\s*(def\s|@staticmethod\b)", b)]
+    if len(methods) != 1 or others or indent == 0:
+        if methods and (others or len(methods) > 1):
+            unresolved.append("struct with fields or several methods; not unwrapped into a function")
+        return src
+    m = re.match(r"(\s*)def\s+(\w+)\s*\(\s*(?:mut\s+|read\s+)?self\s*,?\s*", methods[0])
+    name = re.match(r"\s*def\s+(\w+)", methods[0]).group(1)
+    if len(cpp) == 1:
+        target_name = cpp[0]
+    elif name != "call" and name != "__call__":
+        target_name = name
+    else:
+        unresolved.append("struct method is named `call` and the C++ source gives no single routine name")
+        return src
+    lifted: list[str] = []
+    for b in body:
+        if re.match(rf"\s{{{indent}}}@staticmethod\b", b):
+            continue
+        lifted.append(b[indent:] if b.strip() else b)
+    text = "\n".join(lifted)
+    text = re.sub(
+        r"(?m)^def\s+\w+\s*\(\s*(?:(?:mut|read)\s+)?self\s*,?\s*",
+        f"def {target_name}(",
+        text,
+        count=1,
+    ) if m else re.sub(r"(?m)^def\s+\w+(\s*\()", rf"def {target_name}\1", text, count=1)
+    start = h
+    while start > 0 and lines[start - 1].strip().startswith("@"):
+        start -= 1
+    changes.append(f"line {h + 1}: field-less struct with one method -> free function `{target_name}`")
+    return "\n".join(lines[:start] + text.strip("\n").split("\n") + [""] + lines[end:]).rstrip("\n") + "\n"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1017,6 +1080,7 @@ def postpass(
     code: str,
     *,
     syntax: bool = True,
+    structs: bool = True,
     arrays: bool = True,
     mut: bool = True,
     libm: bool = True,
@@ -1029,6 +1093,8 @@ def postpass(
     text = code.replace("\r\n", "\n")
     if syntax:
         text = _normalise_syntax(text, changes)
+    if structs:
+        text = _unwrap_struct(text, changes, unresolved, source)
     if arrays:
         text = _fix_array1d(text, changes, unresolved)
     if mut:
@@ -1056,6 +1122,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("files", nargs="+", type=Path)
     ap.add_argument("--in-place", action="store_true", help="rewrite the files instead of printing")
     ap.add_argument("--no-syntax", action="store_true", help="skip C++/pre-1.0 syntax normalisation")
+    ap.add_argument("--no-structs", action="store_true", help="skip lifting field-less one-method structs")
     ap.add_argument("--no-arrays", action="store_true", help="skip the Array1D -> List rewrite")
     ap.add_argument("--no-mut", action="store_true", help="skip adding `mut` to index-assigned parameters")
     ap.add_argument("--no-libm", action="store_true", help="skip the glibc/ObjexxFCL-exact maths rewrite")
@@ -1068,6 +1135,7 @@ def main(argv: list[str] | None = None) -> int:
         res = postpass(
             path.read_text(encoding="utf-8"),
             syntax=not args.no_syntax,
+            structs=not args.no_structs,
             arrays=not args.no_arrays,
             mut=not args.no_mut,
             libm=not args.no_libm,

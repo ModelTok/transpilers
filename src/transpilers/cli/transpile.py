@@ -142,6 +142,7 @@ def transpile_one(
     max_retries: int,
     domain_prompts: bool = False,
     postpass: bool = False,
+    temperature: float = 0.0,
 ) -> dict:
     cc_path = Path(entry["source"])
     target_path = Path(entry["target"])
@@ -185,7 +186,7 @@ def transpile_one(
             response = client.chat.send(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
+                temperature=temperature,
                 max_tokens=16000,
             )
             raw = response.choices[0].message.content
@@ -330,6 +331,12 @@ def main() -> int:
         "--force", action="store_true", help="Re-transpile even if decision=done"
     )
     ap.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="Sampling temperature (default 0.0); above 0 gives a different draft per run, for best-of-n selection",
+    )
+    ap.add_argument(
         "--postpass",
         action="store_true",
         help=(
@@ -442,6 +449,7 @@ def main() -> int:
                 args.max_retries,
                 args.domain_prompts,
                 args.postpass,
+                args.temperature,
             )
         status = result["status"]
         with config_lock:

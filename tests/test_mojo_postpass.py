@@ -4,6 +4,7 @@ feed an add/subtract (the FMA-contraction guard EnergyPlusMojo needs for bit-exa
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -514,3 +515,54 @@ def test_direct_pow_n_calls_get_their_definition():
     assert "def pow_3(x: Float64) -> Float64:" in out and "from fp_strict import nc_mul" in out
     already = "def pow_3(x: Float64) -> Float64:\n    return x * x * x\n\n\ndef f(x: Float64) -> Float64:\n    var r = pow_3(x)\n"
     assert postpass(already, fma=False).code.count("def pow_3(") == 1
+
+
+# --- field-less one-method structs -> functions --------------------------------------------------
+
+CPP_ONE = "inline Real64 PsyFoo(Real64 const a, Real64 const b) { return a + b; }"
+STRUCT_CALL = (
+    "@fieldwise_init\nstruct PsyFoo(Copyable, Movable):\n"
+    "    def call(a: Float64, b: Float64) -> Float64:\n        return a + b\n"
+)
+STRUCT_SELF = (
+    "@fieldwise_init\nstruct Whatever(Copyable, Movable):\n"
+    "    def Le(self, T: Float64) -> Float64:\n        var x = T\n        return x\n"
+)
+
+
+def test_struct_with_a_call_method_becomes_a_function_named_after_the_cpp_routine():
+    out = postpass(STRUCT_CALL, source=CPP_ONE, fma=False).code
+    assert out.startswith("def PsyFoo(a: Float64, b: Float64) -> Float64:\n    return a + b")
+    assert "struct" not in out and "fieldwise_init" not in out
+
+
+def test_struct_method_with_self_loses_self_and_keeps_its_own_name_without_a_source():
+    out = postpass(STRUCT_SELF, fma=False).code
+    assert "def Le(T: Float64) -> Float64:\n    var x = T\n    return x" in out
+    assert "self" not in out and "struct" not in out
+
+
+def test_struct_with_a_self_only_method_and_a_staticmethod_marker():
+    src = "struct F:\n    @staticmethod\n    def go(self) -> Float64:\n        return 1.0\n"
+    assert "def go() -> Float64:\n    return 1.0" in postpass(src, fma=False).code
+
+
+@pytest.mark.parametrize(
+    "src, reason",
+    [
+        ("struct S:\n    var a: Float64\n\n    def f(self, x: Float64) -> Float64:\n        return x\n", "fields or several"),
+        ("struct S:\n    def f(self) -> Float64:\n        return 1.0\n    def g(self) -> Float64:\n        return 2.0\n", "fields or several"),
+        ("struct S:\n    def call(a: Float64) -> Float64:\n        return a\n", "names the routine|no single routine name"),
+    ],
+)
+def test_structs_that_are_not_just_a_function_are_left_alone(src, reason):
+    r = postpass(src, fma=False)
+    assert "struct S:" in r.code
+    assert any(re.search(reason, u) for u in r.unresolved), r.unresolved
+
+
+def test_struct_unwrap_can_be_disabled_and_runs_before_the_other_fixes():
+    assert "struct" in postpass(STRUCT_CALL, source=CPP_ONE, structs=False, fma=False).code
+    src = "struct F:\n    def go(self, a: Float64, b: Float64) -> Float64:\n        return a * b + 1.0\n"
+    out = postpass(src).code
+    assert "def go(a: Float64, b: Float64)" in out and "nc_mul(a, b) + 1.0" in out
