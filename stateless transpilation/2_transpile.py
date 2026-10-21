@@ -269,10 +269,10 @@ def call_claude(prompt: str, model: str, timeout: int, endpoint: str | None) -> 
 
 
 def call_openai(prompt: str, model: str, timeout: int, endpoint: str) -> tuple[str, dict]:
-    """One completion against an OpenAI-compatible endpoint (LM Studio, vLLM, RunPod)."""
+    """One completion against an OpenAI-compatible endpoint (LM Studio, vLLM)."""
     import os, urllib.request
 
-    # API key from env (RunPod etc.); falls back to LM Studio's dummy token.
+    # API key from env; falls back to LM Studio's dummy token.
     key = os.environ.get("LLM_API_KEY") or "lm-studio"
     # Cap output so prompt+completion stays within the served model's context
     # (Qwen2.5-Coder-32B = 32768). Overridable via LLM_MAX_TOKENS.
@@ -474,7 +474,7 @@ def main() -> int:
     # Pull-when-free scheduling: one "lane" per concurrent slot. For lmstudio a
     # lane is an endpoint (each can hold --per-endpoint concurrent jobs); for
     # claude a lane is just a worker. A task grabs a free lane on start and
-    # returns it on finish, so a faster endpoint (e.g. the 7700XT) is handed the
+    # returns it on finish, so a faster endpoint is handed the
     # next file as soon as it frees up — it naturally does MORE work than a
     # slower one, instead of a fixed 50/50 split.
     if args.backend == "lmstudio":

@@ -61,7 +61,7 @@ echo "Python: $(which python3)  $(python3 --version)"
 echo ""
 echo "--- Installing PyTorch (CUDA 12.4) + LLaMA-Factory + ML deps ---"
 # cu124 wheel: CUDA 12.4, works on all NVIDIA GPUs from Ampere onward.
-# Use cu121 if your instance only has CUDA 12.1 (RunPod PyTorch 2.4 template).
+# Use cu121 if your instance only has CUDA 12.1.
 # Detect installed torch first to make this idempotent.
 if ! python3 -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
     echo "Installing PyTorch cu124..."

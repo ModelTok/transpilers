@@ -50,7 +50,7 @@ def main():
     ap.add_argument("--adapter", default=None)
     ap.add_argument("--tag", default="diverse")
     args = ap.parse_args()
-    _gpu = torch.cuda.is_available()   # ROCm iGPU presents as cuda (run with HSA_OVERRIDE_GFX_VERSION=11.0.0)
+    _gpu = torch.cuda.is_available()   # CUDA device if present, else CPU
     _dev = "cuda" if _gpu else "cpu"
     tok = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForCausalLM.from_pretrained(args.model, dtype=(torch.bfloat16 if _gpu else torch.float32))

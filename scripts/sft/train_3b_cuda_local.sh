@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 # train_3b_cuda_local.sh — two-phase LoRA fine-tune of Qwen2.5-Coder-3B-Instruct
 # for C++/Python -> Mojo migration (issue #41/#57), running LOCALLY on an
-# NVIDIA GPU via CUDA (not the ROCm/WSL path the other train_3b*.sh assume).
+# NVIDIA GPU via CUDA.
 #
 # Targeted at this box: NVIDIA GeForce RTX 5060 Ti (16 GB, Blackwell
 # compute cap 12.0, driver 610.x, CUDA 12.8 runtime).
 #
-# Why a separate script from train_3b.sh / train_3b_rocm7.sh:
-#   * those assume ROCm torch (rocm6.4/7.0) in /root/venvs/lf and the
-#     RDNA3 roctracer deadlock workarounds (flash_attn: disabled,
-#     use_unsloth_gc: false, TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1).
+# Notes:
 #   * this box is NVIDIA + Blackwell sm_120. flash-attn has NO prebuilt
 #     wheel for sm_120, so we use PyTorch-native SDPA (flash_attn: sdpa)
 #     — no source compile, no deadlock. torch is installed from the cu128

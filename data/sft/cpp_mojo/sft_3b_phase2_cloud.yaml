@@ -1,5 +1,5 @@
 # LLaMA-Factory SFT config — 3B adapter, Phase 2: C++/Python→Mojo translation.
-# CLOUD / CUDA edition — portable paths, flash-attn enabled, ROCm workarounds removed.
+# CLOUD / CUDA edition — portable paths, flash-attn enabled.
 #
 # Warm-starts from ./out/adapter_3b_phase1 (produced by sft_3b_phase1_cloud.yaml).
 # Trains on cpp_mojo_translation_v2 (train_translation_v2.jsonl, 1065 pairs) at

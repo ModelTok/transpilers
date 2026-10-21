@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run Gemma 4 12B QLoRA fine-tune for C++/Python -> Mojo translation.
 #
-# Prerequisites: ROCm runtime + AMD GPU with amdgpu driver
+# Prerequisites: NVIDIA GPU + driver, CUDA build of PyTorch
 #
 # Usage:
 #   bash scripts/sft/run_gemma4_12b.sh
@@ -10,16 +10,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-# ROCm in PATH
-if [ -d /opt/rocm/bin ]; then
-    export PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH
-fi
-
 # Check deps
 echo "=== GPU check ==="
-python3 -c "import torch; p=torch.cuda.get_device_properties(0); print(f'GPU: {p.name}  VRAM: {p.total_memory/1e9:.1f}GB  ROCm: {torch.version.hip}')" 2>/dev/null || {
-    echo "ERROR: ROCm PyTorch not found or GPU not available."
-    echo "Install: pip install torch --index-url https://download.pytorch.org/whl/rocm6.3"
+python3 -c "import torch; p=torch.cuda.get_device_properties(0); print(f'GPU: {p.name}  VRAM: {p.total_memory/1e9:.1f}GB  CUDA: {torch.version.cuda}')" 2>/dev/null || {
+    echo "ERROR: CUDA PyTorch not found or no NVIDIA GPU available."
+    echo "Install: pip install torch --index-url https://download.pytorch.org/whl/cu128"
     exit 1
 }
 

@@ -6,8 +6,8 @@ Set MODEL env var for other models:
   MODEL=google/gemma-4-12b-it  python scripts/sft/train_gemma4_12b.py
   MODEL=Qwen/Qwen2.5-Coder-7B-Instruct  python scripts/sft/train_gemma4_12b.py
 
-Requires ROCm PyTorch:
-  pip install torch --index-url https://download.pytorch.org/whl/rocm6.3
+Requires CUDA PyTorch:
+  pip install torch --index-url https://download.pytorch.org/whl/cu128
 """
 from __future__ import annotations
 
@@ -47,9 +47,9 @@ PER_DEVICE_BS = 1; GRAD_ACCUM = 8; WARMUP_RATIO = 0.05
 LORA_R = 16; LORA_ALPHA = 32; LORA_DROPOUT = 0.05
 
 if not torch.cuda.is_available():
-    print("ERROR: CUDA/ROCm not available"); sys.exit(1)
+    print("ERROR: CUDA not available"); sys.exit(1)
 p = torch.cuda.get_device_properties(0)
-print(f"GPU: {p.name}  VRAM: {p.total_memory/1e9:.1f}GB  ROCm: {torch.version.hip}")
+print(f"GPU: {p.name}  VRAM: {p.total_memory/1e9:.1f}GB  CUDA: {torch.version.cuda}")
 
 # Load datasets
 def load_mojo_acquisition(path: Path) -> list[dict]:

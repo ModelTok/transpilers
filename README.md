@@ -92,7 +92,7 @@ data/              datasets · the shipped Mojo LoRA adapter · codebase RAG ind
 examples/          verified corpus (algorithms/ + per-language samples)
 tests/             engine test suite (684 tests; 45 Mojo-gated skips auto-skip, ML/torch cases auto-skip without GPU deps)
 benchmarks/        transpilation-bench (40-task C++/Python→Mojo)
-tools/             migraph (migration dashboard) · cloud (RunPod training bundle)
+tools/             migraph (migration dashboard) · cloud (portable NVIDIA training bundle)
 ```
 
 ## Tooling
@@ -104,11 +104,10 @@ The project leans on a small set of core tools:
   C++/Python→Mojo LoRA adapter (`data/sft/cpp_mojo/adapter_15b_v2`, base
   `Qwen/Qwen2.5-Coder-1.5B-Instruct`) are pulled/hosted here; the SFT stack runs
   on the HF ecosystem (Transformers / PEFT / LLaMA Factory).
-- **[ROCm / HIP SDK](https://rocm.docs.amd.com/)** — local AMD GPU compute for
-  fine-tuning on Radeon hardware (RDNA3+); provides the `hipcc` toolchain and the
-  ROCm PyTorch backend used by the local SFT runs (see `RUN.md`).
-- **[RunPod](https://runpod.io/)** — cloud GPU fine-tuning for runs too big for
-  local hardware (see `tools/cloud/` and `docs/runpod_guide.md`).
+- **[NVIDIA CUDA](https://developer.nvidia.com/cuda-toolkit)** — fine-tuning runs on
+  NVIDIA GPUs with a CUDA build of PyTorch: locally (`RUN.md`,
+  `scripts/sft/train_3b_cuda_local.sh`) or on a rented NVIDIA box
+  (`tools/cloud/`, `scripts/sft/cloud_bundle.md`).
 
 ## Try it
 
@@ -155,8 +154,8 @@ struct+impl split, Fortran methods as free functions). Added, dropped, merged
 or renamed functions and flattened control flow fail the gate. `idiomatic`
 skips the skeleton gate, permitting parent-level rewrites.
 
-Fine-tuning the Mojo translator adapter is documented in `RUN.md` (local
-ROCm/WSL) and `tools/cloud/` (RunPod).
+Fine-tuning the Mojo translator adapter (NVIDIA/CUDA) is documented in `RUN.md`
+(local) and `tools/cloud/` (portable bundle for a rented NVIDIA box).
 
 ## Roadmap
 

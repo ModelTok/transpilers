@@ -89,7 +89,7 @@ export OPENAI_API_KEY="..."
 export ANTHROPIC_API_KEY="..."
 export GOOGLE_API_KEY="..."
 
-# For self-hosted models, start vLLM server first (see docs/runpod_guide.md)
+# For self-hosted models, start a vLLM server first
 export VLLM_BASE_URL="http://localhost:8000/v1"
 ```
 

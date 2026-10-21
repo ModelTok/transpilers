@@ -1,5 +1,5 @@
 # LLaMA-Factory SFT config — Qwen2.5-Coder-7B, Phase 1: Mojo acquisition.
-# CLOUD / CUDA edition — portable relative paths, flash-attn 2, no ROCm hacks.
+# CLOUD / CUDA edition — portable relative paths, flash-attn 2.
 #
 # This is the 7B analog of sft_3b_phase1_cloud.yaml. The 7B model in bf16 LoRA
 # (not 4-bit) needs ~24-40 GB VRAM with gradient checkpointing — use an A100

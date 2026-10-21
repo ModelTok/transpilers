@@ -2,7 +2,7 @@
 # eval_3b_vs_15b.sh — compare 3B adapter vs 1.5B baseline on transpilation-bench.
 #
 # Runs eval_transbench.py for both adapters (pass@1, cpp_source) and prints a
-# side-by-side summary. Run this after train_3b.sh completes.
+# side-by-side summary. Run this after train_3b_cuda_local.sh completes.
 #
 # Usage (from WSL Ubuntu-24.04 as root):
 #   bash scripts/sft/eval_3b_vs_15b.sh 2>&1 | tee eval_3b_vs_15b.log

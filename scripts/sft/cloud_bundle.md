@@ -1,7 +1,6 @@
 # Cloud training bundle — 3B Mojo-transpiler LoRA
 
 Drop-and-run bundle for a fresh Ubuntu + NVIDIA GPU instance.
-Cross-reference: `docs/cloud_training.md` (full Option A/B runbook).
 
 ---
 
@@ -38,7 +37,7 @@ benchmarks/transpilation-bench/     # rsync only if you want eval_transbench.py 
 ```bash
 # On your LOCAL machine (Linux/macOS/WSL):
 BOX_IP=<your-box-ip>   # e.g. 123.45.67.89
-BOX_USER=root          # RunPod / Lambda default
+BOX_USER=root          # common default on cloud GPU images
 REMOTE=/workspace/transpilers
 
 rsync -avz --progress \
@@ -111,7 +110,7 @@ rsync -avz ${BOX_USER}@${BOX_IP}:${REMOTE}/out/adapter_3b/ \
   /c/Github/transpilers/data/sft/cpp_mojo/adapter_3b_v1/
 ```
 
-Then terminate the box immediately (billing stops on terminate, not stop, on RunPod/Vast).
+Then terminate the box immediately (on most providers billing stops on terminate, not stop).
 
 ---
 
@@ -131,7 +130,7 @@ Then terminate the box immediately (billing stops on terminate, not stop, on Run
 
 | GPU | VRAM | Est. time (2-phase) | Est. cost |
 |---|---|---|---|
-| A10 (24 GB) | 24 GB | ~1.5 hr | ~$0.75–1.20 (RunPod/Vast ~$0.5–0.8/hr) |
+| A10 (24 GB) | 24 GB | ~1.5 hr | ~$0.75–1.20 (~$0.5–0.8/hr on community GPU clouds) |
 | L4 (24 GB) | 24 GB | ~1.5 hr | ~$0.75–1.20 |
 | A100 40 GB | 40 GB | ~1 hr | ~$1.40–2.00 (~$1.4/hr) |
 | A100 80 GB | 80 GB | ~1 hr | ~$2.00–3.00 (~$2/hr) |
@@ -157,7 +156,7 @@ model_name_or_path: Qwen/Qwen2.5-Coder-7B-Instruct
 
 # For QLoRA on 24 GB (A10/L4):
 quantization_bit: 4
-quantization_type: bitsandbytes   # NF4 — works on CUDA; the AMD hang does NOT apply here
+quantization_type: bitsandbytes   # NF4 (bitsandbytes, CUDA)
 
 # Optionally reduce batch size if OOM:
 per_device_train_batch_size: 1
@@ -172,17 +171,10 @@ Full bf16 LoRA on A100 80 GB ≈ 1.5–2 hr per phase (~$6–8 total).
 
 ---
 
-## Drift check vs docs/cloud_training.md
+## Evaluating the adapter
 
-`docs/cloud_training.md` (Option B, §B.2) still references the old WSL paths
-(`/home/bart/Github/transpilers/...`) and recommends running `sed -i` to repoint them.
-The cloud yamls in this bundle make that manual step unnecessary — paths are already
-relative (`./data/sft/cpp_mojo`, `./out/adapter_3b`).
-
-The existing doc also suggests `cu121`; this bundle uses `cu124` (current stable, 2025).
-Both work; `cu124` is preferred for A100 80GB / H100 to get full BF16 throughput.
-
-`docs/cloud_training.md` mentions the held-out eval as
-`uv run python scripts/sft/run_heldout_eval.py --tag ft` — still valid after pulling
-the adapter back locally. `cloud_train.sh` runs `eval_transbench.py` in-box if the
-bench dir is present (more comprehensive than heldout_eval for a cloud run).
+After pulling the adapter back locally, `uv run python scripts/sft/run_heldout_eval.py --tag ft`
+runs the quick held-out eval. `cloud_train.sh` runs `eval_transbench.py` in-box if the
+bench dir is present (more comprehensive than heldout_eval for a cloud run). The yaml
+paths are relative (`./data/sft/cpp_mojo`, `./out/adapter_3b`), so no path editing is needed.
+`cu124` is preferred for A100 80GB / H100 to get full BF16 throughput.
