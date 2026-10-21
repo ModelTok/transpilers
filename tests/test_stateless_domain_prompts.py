@@ -121,3 +121,17 @@ def test_chunks_keep_guidance_and_respect_the_budget(env, monkeypatch):
     assert all("GOOGLETEST RULES" in p and len(p) <= limit for p in calls)
     # later chunks carry no #include, yet still get the guidance
     assert "#include <gtest" not in calls[-1].split("## Source")[1]
+
+
+def test_dual_port_eigen_guidance_maps_both_ports_and_writes_through_views():
+    g = domain_guidance([EIGEN], dual_port=True)
+    for token in ("np.zeros", "np.linalg.solve", "set_block", "set_col", "WRITABLE VIEWS",
+                  "WORKED EXAMPLE", "sscapi_t", "tcstype"):
+        assert token in g
+    assert g.count("WORKED EXAMPLE") == 1
+
+
+def test_mojo_only_eigen_guidance_no_longer_treats_block_writes_as_copies():
+    g = domain_guidance([EIGEN])
+    assert "set_block" in g and "WRITABLE VIEWS" in g and "np.zeros" not in g
+    assert "(copy)" not in g
