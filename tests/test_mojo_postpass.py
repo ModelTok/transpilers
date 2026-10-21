@@ -159,9 +159,9 @@ def test_unparseable_statements_are_skipped_not_mangled():
 
 
 def test_unresolved_items_are_reported_not_guessed():
-    r = postpass("def f(a: DynamicVector[Float64])\n{\n    a[0] = 1.0\n}\n")
+    r = postpass("def f(a: Array2D[Float64])\n{\n    a[0] = 1.0\n}\n")
     text = " ".join(r.unresolved)
-    assert "braces" in text and "DynamicVector" in text and "@export" in text
+    assert "braces" in text and "Array2D" in text and "@export" in text
     assert "@export" not in " ".join(postpass("@export\ndef k(n: Int):\n    pass\n").unresolved)
 
 
@@ -194,8 +194,9 @@ def test_real_drafts():
     assert "nc_mul(r, b[i]) + nc_mul(1.0 - r, a[i])" in out
     r = postpass(DIFFCODER_GUIDED)
     assert r.code.startswith("# upstream: HeatBalFiniteDiffManager.cc:1148\nfrom fp_strict import nc_mul")
-    assert "mut a:" not in r.code  # unknown type: left for the model or the compiler
-    assert any("Array1D" in u for u in r.unresolved)
+    assert "def relax_array(mut a: List[Float64]," in r.code
+    assert "for i in range(len(a)):" in r.code and "Array1D" not in r.code
+    assert not any("Array1D" in u for u in r.unresolved)
 
 
 # --- CLI and transpile-llm integration ---------------------------------------------------------
@@ -310,3 +311,77 @@ def test_gpu_kernels_are_not_given_nc_mul():
     src = "from std.gpu.host import DeviceContext\n\n\ndef f():\n    var y = a * b + c\n"
     r = postpass(src, syntax=False, mut=False)
     assert r.code == src and any("GPU" in u for u in r.unresolved)
+
+
+# --- Array1D -> List (ObjexxFCL arrays walked element-wise) ------------------------------------
+
+ARRAY_DEF = (
+    "def relax(a: Array1D[Float64],  # to relax\n"
+    "          b: Array1D[Float64],\n"
+    "          r: Float64) -> None:\n"
+    "    assert(equal_dimensions(a, b))\n"
+    "    for i in range(a.l(), a.u() + 1):\n"
+    "        a[i] = b[i] * r\n"
+)
+
+
+def test_canonical_array1d_loop_becomes_a_zero_based_list_loop():
+    out = code(ARRAY_DEF, fma=False)
+    assert "def relax(mut a: List[Float64],  # to relax" in out
+    assert "      b: List[Float64]," in out.replace("          b", "      b")
+    assert "assert(len(a) == len(b))" in out
+    assert "for i in range(len(a)):" in out and "a[i] = b[i] * r" in out
+    assert "Array1D" not in out and "equal_dimensions" not in out
+
+
+def test_literal_lower_bound_and_several_loops():
+    src = (
+        "def f(a: Array1D[Float64], b: Array1D[Float64]):\n"
+        "    for i in range(1, a.u() + 1):\n        b[i] = a[i]\n"
+        "    for j in range(b.l(), b.u() + 1):\n        a[j] = b[j]\n"
+    )
+    out = code(src, fma=False)
+    assert out.count("for i in range(len(a)):") == 1 and out.count("for j in range(len(b)):") == 1
+    assert "List[Float64]" in out and "Array1D" not in out
+
+
+@pytest.mark.parametrize(
+    "body, reason",
+    [
+        ("    for i in range(a.l(), a.u() + 1):\n        a[i] = a[i] * i\n", "other than as a direct subscript"),
+        ("    for i in range(a.l(), a.u() + 1):\n        a[i] = a[i + 1]\n", "other than as a direct subscript"),
+        ("    for i in range(a.l(), a.u() + 1):\n        a[i] = 0.0\n    a[1] = 2.0\n", "outside an element-wise loop"),
+        ("    var n = a.u()\n    for i in range(a.l(), a.u() + 1):\n        a[i] = 0.0\n", "outside an element-wise loop"),
+        ("    a[0] = 1.0\n", "element-wise loop"),
+        ("    for i in range(a.l(), a.u() + 1):\n        a[i] = a.u()\n", "inside the loop"),
+    ],
+)
+def test_array1d_rewrite_refuses_when_the_index_base_could_matter(body, reason):
+    src = f"def f(a: Array1D[Float64]):\n{body}"
+    r = postpass(src, fma=False, mut=False)
+    assert "Array1D[Float64]" in r.code and "List[" not in r.code
+    assert any(reason in u for u in r.unresolved), r.unresolved
+
+
+def test_array1d_rewrite_is_per_function_and_leaves_other_types_alone():
+    src = (
+        "def good(a: Array1D[Float64]):\n    for i in range(a.l(), a.u() + 1):\n        a[i] = 0.0\n\n"
+        "def bad(a: Array1D[Float64]):\n    a[1] = 0.0\n\n"
+        "def other(x: List[Float64]):\n    for i in range(len(x)):\n        x[i] = 0.0\n"
+    )
+    r = postpass(src, fma=False)
+    assert "def good(mut a: List[Float64])" in r.code
+    assert "def bad(a: Array1D[Float64])" in r.code
+    assert "def other(mut x: List[Float64])" in r.code
+    assert any("`bad`" in u for u in r.unresolved)
+
+
+def test_dynamicvector_is_renamed_to_list():
+    assert "a: List[Float64]" in code("fn f(a: DynamicVector[Float64]):\n    pass\n", fma=False, mut=False)
+
+
+def test_cli_no_arrays_flag(tmp_path: Path, capsys):
+    f = tmp_path / "k.mojo"
+    f.write_text(ARRAY_DEF)
+    assert main([str(f), "--no-arrays", "--no-fma"]) == 0
+    assert "Array1D" in capsys.readouterr().out

@@ -4,6 +4,8 @@ Drafts from small or general models share mechanical defects that need no model 
 
 * C++ or pre-1.0 Mojo habits: ``//`` comments, ``fn``, ``let``, ``alias``, ``&&``/``||``/``!``,
   ``const``, ``Real64``, quoted-path imports, trailing semicolons;
+* ``Array1D`` parameters walked element-wise (rewritten to ``List`` only where the 1-based
+  versus 0-based index base cannot matter), and the old name ``DynamicVector``;
 * a parameter that the body index-assigns but that is not declared ``mut``;
 * products that feed an add or subtract. Mojo contracts ``a*b + c`` into a fused multiply-add
   while the C++ oracle (``-ffp-contract=off``) does not, so such a product is wrapped in
@@ -30,7 +32,12 @@ _FOR_RANGE = re.compile(r"^\s*for\s+(\w+)\s+in\s+range\b")
 _VAR_INT = re.compile(r"^\s*var\s+(\w+)\s*=\s*(?:-?\d+\s*(?:#.*)?$|len\()")
 _CONVENTIONS = {"mut", "var", "out", "read", "owned", "ref", "borrowed", "inout", "deinit"}
 _MUT_CONTAINERS = {"List", "InlineArray", "Dict", "Set", "Deque"}
-_CPP_LEFTOVERS = re.compile(r"\b(Array1D|Array2D|Array3D|DynamicVector|ObjexxFCL)\b|std::")
+_CPP_LEFTOVERS = re.compile(r"\b(Array1D|Array2D|Array3D|ObjexxFCL)\b|std::")
+_ARRAY1D_PARAM = re.compile(r"\b(\w+)\s*:\s*Array1D\[")
+_ARRAY1D_LOOP = re.compile(
+    r"^(\s*)for\s+(\w+)\s+in\s+range\(\s*(?:(\w+)\.l\(\)|1)\s*,\s*(\w+)\.u\(\)\s*\+\s*1\s*\)\s*:(\s*#.*)?$"
+)
+_EQUAL_DIMS = re.compile(r"\bequal_dimensions\(\s*(\w+)\s*,\s*(\w+)\s*\)")
 
 
 @dataclass
@@ -133,6 +140,7 @@ def _code_rewrites(code: str, changes: list[str], lineno: int) -> str:
     code = re.sub(r"\bfalse\b", "False", code)
     code = re.sub(r"\s*\bconst\b", "", code)
     code = re.sub(r"\bReal64\b", "Float64", code)
+    code = re.sub(r"\bDynamicVector\b", "List", code)
     code = re.sub(r";\s*$", "", code)
     code = re.sub(r"[ \t]{2,}and[ \t]{2,}", " and ", code)
     code = re.sub(r"[ \t]{2,}or[ \t]{2,}", " or ", code)
@@ -182,6 +190,115 @@ def _normalise_syntax(src: str, changes: list[str]) -> str:
             line_out = re.sub(r"^(\s*)#(\S)", r"\1# \2", line_out) if not line_out.lstrip().startswith("# ") else line_out
         out.append(line_out)
     return "\n".join(out)
+
+
+# ---------------------------------------------------------------------------------------------
+# Pass 1b: ObjexxFCL `Array1D` parameters -> `List`, only where the index base cannot matter
+# ---------------------------------------------------------------------------------------------
+
+
+def _def_spans(lines: list[str]) -> list[tuple[int, int, int, str]]:
+    """(def line, last signature line, end of body, name) of every `def`."""
+    spans = []
+    i = 0
+    while i < len(lines):
+        m = re.match(r"^(\s*)def\s+(\w+)\s*(?:\[[^\]]*\])?\s*\(", lines[i])
+        if not m:
+            i += 1
+            continue
+        indent = len(m.group(1))
+        depth, sig_end = 0, i
+        for k in range(i, len(lines)):
+            code = _blank_non_code(lines[k])
+            depth += code.count("(") - code.count(")")
+            if depth <= 0 and ")" in code:
+                sig_end = k
+                break
+        end = sig_end + 1
+        while end < len(lines) and (not lines[end].strip() or len(lines[end]) - len(lines[end].lstrip()) > indent):
+            end += 1
+        spans.append((i, sig_end, end, m.group(2)))
+        i = sig_end + 1
+    return spans
+
+
+def _fix_array1d(src: str, changes: list[str], unresolved: list[str]) -> str:
+    """Rewrite `Array1D[T]` parameters to `List[T]` when the draft only ever walks them element-wise.
+
+    An ObjexxFCL `Array1D` is indexed from `a.l()` to `a.u()` (1 by default) while a `List` starts
+    at 0. The rewrite is therefore limited to the canonical loop
+    `for i in range(a.l(), a.u() + 1)` whose variable is used only as a direct subscript `x[i]`
+    of the Array1D parameters (visiting every element in order is the same in either base), plus
+    `equal_dimensions(a, b)` -> `len(a) == len(b)`. Anything else that mentions the array (literal
+    subscripts, bounds used in arithmetic, calls) is left alone and reported.
+    """
+    lines = src.split("\n")
+    for start, sig_end, end, name in reversed(_def_spans(lines)):
+        sig = "\n".join(_blank_non_code(ln) for ln in lines[start : sig_end + 1])
+        arrays = set(_ARRAY1D_PARAM.findall(sig))
+        if not arrays:
+            continue
+        names = "|".join(sorted(arrays))
+        subscript = re.compile(rf"\b(?:{names})\s*\[\s*(\w+)\s*\]")
+        loops: list[tuple[int, int, str, str]] = []  # (header line, block end, variable, array)
+        reason = ""
+        k = sig_end + 1
+        while k < end:
+            m = _ARRAY1D_LOOP.match(lines[k])
+            if not m:
+                k += 1
+                continue
+            var, lower, upper = m.group(2), m.group(3), m.group(4)
+            if upper not in arrays or (lower is not None and lower != upper):
+                k += 1
+                continue
+            indent = len(m.group(1))
+            block_end = k + 1
+            while block_end < end and (
+                not lines[block_end].strip() or len(lines[block_end]) - len(lines[block_end].lstrip()) > indent
+            ):
+                block_end += 1
+            block = "\n".join(_blank_non_code(ln) for ln in lines[k + 1 : block_end])
+            rest = re.sub(rf"\b(?:{names})\s*\[\s*{re.escape(var)}\s*\]", " ", block)
+            if re.search(rf"\b{re.escape(var)}\b", rest):
+                reason = f"loop variable `{var}` is used other than as a direct subscript"
+                break
+            if re.search(rf"\b(?:{names})\b", rest):
+                reason = "an Array1D parameter is used inside the loop other than as `x[i]`"
+                break
+            for sub in subscript.finditer(block):
+                if sub.group(1) != var:
+                    reason = f"subscript `[{sub.group(1)}]` is not the loop variable"
+                    break
+            if reason:
+                break
+            loops.append((k, block_end, var, upper))
+            k = block_end
+        if not reason:
+            covered = {j for lo, hi, _, _ in loops for j in range(lo, hi)}
+            for j in range(sig_end + 1, end):
+                if j in covered:
+                    continue
+                code = _EQUAL_DIMS.sub(" ", _blank_non_code(lines[j]))
+                if re.search(rf"\b(?:{names})\b", code):
+                    reason = f"an Array1D parameter is used outside an element-wise loop (line {j + 1})"
+                    break
+        if not loops and not reason:
+            reason = "no element-wise loop over the Array1D parameters"
+        if reason:
+            unresolved.append(f"Array1D rewrite skipped in `{name}`: {reason}")
+            continue
+        for j in range(start, sig_end + 1):
+            lines[j] = re.sub(r"\bArray1D\[", "List[", lines[j])
+        for lo, _, var, arr in loops:
+            m = _ARRAY1D_LOOP.match(lines[lo])
+            lines[lo] = f"{m.group(1)}for {var} in range(len({arr})):{m.group(5) or ''}"
+        for j in range(sig_end + 1, end):
+            lines[j] = _EQUAL_DIMS.sub(r"len(\1) == len(\2)", lines[j])
+        changes.append(
+            f"line {start + 1}: `{name}`: Array1D -> List, {len(loops)} element-wise loop(s) now 0-based"
+        )
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -574,13 +691,17 @@ def _report_unresolved(src: str, unresolved: list[str]) -> None:
         unresolved.append("no `@export` batch entry (EnergyPlusMojo kernel convention)")
 
 
-def postpass(code: str, *, syntax: bool = True, mut: bool = True, fma: bool = True) -> PostpassResult:
+def postpass(
+    code: str, *, syntax: bool = True, arrays: bool = True, mut: bool = True, fma: bool = True
+) -> PostpassResult:
     """Apply the mechanical fixes to Mojo source; see the module docstring."""
     changes: list[str] = []
     unresolved: list[str] = []
     text = code.replace("\r\n", "\n")
     if syntax:
         text = _normalise_syntax(text, changes)
+    if arrays:
+        text = _fix_array1d(text, changes, unresolved)
     if mut:
         text = _fix_mut(text, changes)
     if fma:
@@ -604,6 +725,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("files", nargs="+", type=Path)
     ap.add_argument("--in-place", action="store_true", help="rewrite the files instead of printing")
     ap.add_argument("--no-syntax", action="store_true", help="skip C++/pre-1.0 syntax normalisation")
+    ap.add_argument("--no-arrays", action="store_true", help="skip the Array1D -> List rewrite")
     ap.add_argument("--no-mut", action="store_true", help="skip adding `mut` to index-assigned parameters")
     ap.add_argument("--no-fma", action="store_true", help="skip wrapping products in nc_mul")
     args = ap.parse_args(argv)
@@ -613,6 +735,7 @@ def main(argv: list[str] | None = None) -> int:
         res = postpass(
             path.read_text(encoding="utf-8"),
             syntax=not args.no_syntax,
+            arrays=not args.no_arrays,
             mut=not args.no_mut,
             fma=not args.no_fma,
         )
