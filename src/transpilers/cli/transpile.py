@@ -285,7 +285,10 @@ def main() -> int:
     ap.add_argument(
         "--domain-prompts",
         action="store_true",
-        help="Add gtest / Eigen-specific guidance when those sources are detected",
+        help=(
+            "Add gtest / Eigen-specific guidance when those sources are detected, and "
+            "EnergyPlusMojo kernel rules for sources named *.upstream.inc"
+        ),
     )
     args = ap.parse_args()
 
