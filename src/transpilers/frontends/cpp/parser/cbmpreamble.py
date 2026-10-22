@@ -31,7 +31,7 @@ enclose namespace 'Bitwise'"), the in-scope method signatures (so
 out-of-line ``Class::Method`` defs resolve), and ``#define``
 neutralizations for unseen export macros. ``parse_cpp`` already prepends
 ``$TRANSPILERS_CPP_PREAMBLE_FILE`` content *before* the user source (see
-``core._project_preamble``), so writing that file is a strict opt-in: the
+``preamble._project_preamble``), so writing that file is a strict opt-in: the
 existing parse path is untouched unless the caller points us at an indexed
 graph.
 
@@ -382,7 +382,7 @@ def payload_to_cpp(payload: dict) -> str:
 
     Pure function — no filesystem, no binary. The result is suitable for
     writing to ``$TRANSPILERS_CPP_PREAMBLE_FILE`` (consumed by
-    ``core._project_preamble``) or for prepending directly.
+    ``preamble._project_preamble``) or for prepending directly.
     """
     decls = _decls_from_payload(payload)
     macro_lines: list[str] = []

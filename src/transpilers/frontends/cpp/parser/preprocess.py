@@ -135,7 +135,7 @@ namespace std {
     // Math intrinsics -- the existing strict engine (cmath
     // detection) routes these to `from math import <name>` in
     // Mojo / Rust. The original frontend declared them at TU
-    // scope (see `_PREAMBLE` in core.py); when the C++ source
+    // scope (see `_PREAMBLE` in preamble.py); when the C++ source
     // already wraps them in `std::`, we need a `std::`-qualified
     // declaration too, otherwise libclang errors out.
     double sqrt(double); double exp(double); double log(double);
@@ -205,7 +205,7 @@ void operator delete(void*);
 // TU-scope `using` declarations so user code that writes bare
 // `vector<int>` (instead of `std::vector<int>`) still resolves
 // against the parser preamble. Mirrors the older `using` block in
-// the original core._PREAMBLE.
+// the original _PREAMBLE (now in preamble.py).
 using std::vector;
 using std::list;
 using std::pair;

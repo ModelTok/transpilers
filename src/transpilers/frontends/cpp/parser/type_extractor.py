@@ -52,6 +52,7 @@ from transpilers.ir.types import (
 if TYPE_CHECKING:
     from clang.cindex import Cursor
 
+from .preamble import _compute_user_first_line
 from .types import (
     CPP_TYPE_ALIASES,
     SIMD_TYPE_ALIASES,
@@ -261,8 +262,6 @@ class TypeGroundTruth:
             try:
                 first = self._user_first_line
             except AttributeError:
-                from .core import _compute_user_first_line
-
                 first = _compute_user_first_line()
                 self._user_first_line = first
             return c.location.line > first
