@@ -75,7 +75,7 @@ def main():
             out = tok.decode(g[0][ids["input_ids"].shape[1]:], skip_special_tokens=True)
             code = rh.extract_code(out, "mojo")
             if not code: continue
-            for variant in (code, mr.repair_mojo(code)):   # raw then repaired
+            for variant in (code, mr.repair_mojo(code)):
                 mo = run_mojo(variant, rec["mojo_driver"])
                 if matches(ref, mo):
                     any_ok = True

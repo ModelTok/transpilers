@@ -35,9 +35,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 
-# ---------------------------------------------------------------------------
-# LOC counter
-# ---------------------------------------------------------------------------
 
 def count_loc(source: str) -> int:
     """Count non-blank, non-comment lines."""
@@ -46,7 +43,6 @@ def count_loc(source: str) -> int:
     in_block_comment = False
     for line in lines:
         stripped = line.strip()
-        # C/C++ block comment tracking
         if "/*" in stripped:
             in_block_comment = True
         if "*/" in stripped:
@@ -54,20 +50,16 @@ def count_loc(source: str) -> int:
             continue
         if in_block_comment:
             continue
-        # Skip blank lines and line comments
         if not stripped or stripped.startswith("//") or stripped.startswith("#"):
             continue
         loc += 1
     return loc
 
 
-# ---------------------------------------------------------------------------
-# C++ analysis
-# ---------------------------------------------------------------------------
 
 _CPP_INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
 _CPP_TEMPLATE = re.compile(r'\btemplate\s*<')
-_CPP_RAWPTR = re.compile(r'\b\w+\s*\*\s+\w+')           # type* var
+_CPP_RAWPTR = re.compile(r'\b\w+\s*\*\s+\w+')
 _CPP_CLASS = re.compile(r'\b(class|struct)\s+\w+')
 _CPP_VIRTUAL = re.compile(r'\bvirtual\b')
 _CPP_MACRO = re.compile(r'^\s*#\s*define\b', re.MULTILINE)
@@ -102,9 +94,6 @@ def _analyse_cpp(source: str) -> tuple[str, list[str]]:
     return difficulty, deps
 
 
-# ---------------------------------------------------------------------------
-# Python analysis
-# ---------------------------------------------------------------------------
 
 _PY_IMPORT = re.compile(r'^\s*(?:import|from)\s+([\w.]+)', re.MULTILINE)
 _PY_PRIMITIVE_ANNOTATIONS = re.compile(r':\s*(int|float|str|bool|bytes|None)\b')
@@ -166,9 +155,6 @@ def _analyse_python(source: str) -> tuple[str, list[str]]:
     return difficulty, deps
 
 
-# ---------------------------------------------------------------------------
-# Circular dependency detection
-# ---------------------------------------------------------------------------
 
 def _detect_circular_deps(
     file_deps: dict[str, list[str]],
@@ -181,7 +167,6 @@ def _detect_circular_deps(
 
     Returns a list of cycles (each cycle is a list of stems).
     """
-    # Build adjacency restricted to in-project deps
     graph: dict[str, list[str]] = {stem: [] for stem in file_stems}
     for stem, deps in file_deps.items():
         for dep in deps:
@@ -189,7 +174,6 @@ def _detect_circular_deps(
             if dep_stem in file_stems and dep_stem != stem:
                 graph[stem].append(dep_stem)
 
-    # Tarjan-style DFS for cycle detection
     visited: set[str] = set()
     in_stack: set[str] = set()
     stack: list[str] = []
@@ -203,7 +187,6 @@ def _detect_circular_deps(
             if neighbour not in visited:
                 _dfs(neighbour)
             elif neighbour in in_stack:
-                # Found a cycle — extract it from the stack
                 idx = stack.index(neighbour)
                 cycle = stack[idx:]
                 cycles.append(cycle[:])
@@ -217,9 +200,6 @@ def _detect_circular_deps(
     return cycles
 
 
-# ---------------------------------------------------------------------------
-# Main analysis entry point
-# ---------------------------------------------------------------------------
 
 class _FileStats(NamedTuple):
     path: str
@@ -287,9 +267,6 @@ def analyse_repo(repo: Path, lang: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -324,7 +301,6 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(json_str)
 
-    # Print a brief summary to stderr
     print(
         f"\nSummary: {report['total_files']} files, "
         f"{report['total_loc']} LOC  "

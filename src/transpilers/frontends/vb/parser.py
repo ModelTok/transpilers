@@ -72,7 +72,7 @@ KEYWORDS = {
 
 @dataclass
 class Token:
-    kind: str  # "kw" | "id" | "num" | "str" | "op" | "newline" | "eof"
+    kind: str
     value: str
     line: int
 
@@ -95,7 +95,6 @@ def _tokenize(source: str) -> list[Token]:
             i += 1
             continue
         if ch == "'":
-            # Comment to end of line.
             while i < len(source) and source[i] != "\n":
                 i += 1
             continue
@@ -104,7 +103,6 @@ def _tokenize(source: str) -> list[Token]:
             while j < len(source) and source[j].isdigit():
                 j += 1
             kind = "num"
-            # Float: `1.5` (decimal point followed by more digits).
             if (
                 j < len(source)
                 and source[j] == "."
@@ -134,7 +132,6 @@ def _tokenize(source: str) -> list[Token]:
             tokens.append(Token("kw" if lower in KEYWORDS else "id", word, line))
             i = j
             continue
-        # Operators (longest-match-first).
         for op in (
             "<=",
             ">=",
@@ -200,7 +197,6 @@ class _Parser:
             )
         return tok
 
-    # ---------- module ----------
 
     def parse_module(self) -> list[hir.HirNode]:
         body: list[hir.HirNode] = []
@@ -211,7 +207,6 @@ class _Parser:
             body.append(self.parse_function())
         return body
 
-    # ---------- function ----------
 
     def parse_function(self) -> hir.HirFunction:
         self.expect_kw("function")
@@ -228,7 +223,6 @@ class _Parser:
                 self.eat()
                 params.append(self.parse_param())
         self.expect_op(")")
-        # Optional `As <type>` for return type.
         return_annotation: str | None = None
         if self.peek().kind == "kw" and self.peek().value.lower() == "as":
             self.eat()
@@ -258,7 +252,6 @@ class _Parser:
             raise UnsupportedConstruct(f"vb: expected type, got {tok.value!r}")
         return VB_TYPE_ALIASES.get(tok.value.lower(), tok.value)
 
-    # ---------- statements ----------
 
     def parse_block(self, end_keywords: set[str]) -> list[hir.HirNode]:
         out: list[hir.HirNode] = []
@@ -316,7 +309,6 @@ class _Parser:
 
     def parse_assignment_or_call(self) -> hir.HirNode:
         target = self.eat()
-        # Augmented assigns: VB has `+=` etc. in modern VB.NET.
         op = self.peek()
         if op.kind == "op" and op.value in ("=", "+=", "-=", "*=", "/="):
             self.eat()
@@ -341,15 +333,9 @@ class _Parser:
             self.skip_newlines()
             elif_body = self.parse_block(end_keywords={"end"})
             orelse = [hir.HirIf(test=elif_cond, body=elif_body, orelse=orelse)]
-            # tail: continue as if `else` already opened? We rebuild by
-            # walking forward, but simpler: convert below.
-            # Actually we want this elseif to *be* the orelse of the if we're
-            # processing. We'll structure it after the full chain reads.
-            break  # handled non-trivially: see below
-        # Simpler one-pass: re-parse the entire elseif chain via recursive
-        # call, since our `break` above is structurally awkward.
+            break
         if self.peek().kind == "kw" and self.peek().value.lower() == "elseif":
-            self.eat()  # consume `elseif` token already advanced? — fixed
+            self.eat()
         if self.peek().kind == "kw" and self.peek().value.lower() == "else":
             self.eat()
             self.skip_newlines()
@@ -390,10 +376,8 @@ class _Parser:
         self.skip_newlines()
         body = self.parse_block(end_keywords={"next"})
         self.expect_kw("next")
-        # Optional name after Next.
         if self.peek().kind == "id":
             self.eat()
-        # Inclusive endpoint → exclusive by +1.
         exclusive_stop = hir.HirBinOp(
             op="+", left=stop, right=hir.HirIntLiteral(value=1)
         )
@@ -406,7 +390,6 @@ class _Parser:
             body=body,
         )
 
-    # ---------- expressions (precedence climber) ----------
 
     def parse_expr(self) -> hir.HirNode:
         return self.parse_or()
@@ -491,7 +474,6 @@ class _Parser:
             return inner
         if tok.kind == "id":
             self.eat()
-            # Maybe a call.
             if self.peek().kind == "op" and self.peek().value == "(":
                 self.eat()
                 args: list[hir.HirNode] = []

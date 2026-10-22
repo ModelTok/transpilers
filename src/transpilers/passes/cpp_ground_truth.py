@@ -115,8 +115,6 @@ def _visit(
     if isinstance(node, mir.MirCall):
         for a in node.args:
             _visit(a, truth, env)
-        # If the call's source location has a recorded return type,
-        # fill the call's ``ty`` in place.
         loc = getattr(node, "source_loc", None)
         if loc and loc in truth.call_returns and isinstance(node.ty, UnknownT):
             rep = truth.call_returns[loc]
@@ -152,7 +150,6 @@ def _visit(
         for _, v in node.field_values:
             _visit(v, truth, env)
         return
-    # MirName / literals: nothing to recurse into.
     if isinstance(node, mir.MirName):
         loc = getattr(node, "source_loc", None)
         if loc and loc in truth.var_types and isinstance(node.ty, UnknownT):
@@ -171,8 +168,6 @@ def _set_ty(node: mir.MirNode, ty: Type) -> None:
     try:
         object.__setattr__(node, "ty", ty)
     except Exception:
-        # Some MIR nodes might be frozen; skip rather than break the
-        # whole pass. (None of the current ones are.)
         pass
 
 
@@ -211,7 +206,6 @@ def _fill_function_signature(
             else:
                 new_params.append(p)
         fn.params = new_params
-        # First qualified match wins.
         break
 
 
@@ -248,11 +242,8 @@ def apply_ground_truth(
     """
     if truth is None or truth.is_empty():
         return mir_mod
-    # Phase 1: function signatures. These don't need a per-node
-    # source_loc -- the function name is enough.
     for fn in mir_mod.functions:
         _fill_function_signature(fn, truth)
-    # Phase 2: walk every body and fill per-node UnknownT.
     for fn in mir_mod.functions:
         env: dict[str, Type] = {
             p.name: p.ty for p in fn.params if not isinstance(p.ty, UnknownT)

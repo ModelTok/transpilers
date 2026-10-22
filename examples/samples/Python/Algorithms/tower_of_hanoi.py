@@ -12,8 +12,6 @@ limitations under the License.
 '''
 
 
-# recursive solution of the Tower of Hanoi
-# https://en.wikipedia.org/wiki/Tower_of_Hanoi
 
 def tower_of_hanoi(number_of_disks):
 

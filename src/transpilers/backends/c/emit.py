@@ -98,8 +98,6 @@ def _emit_struct(s: lir.CStruct) -> str:
 
 def _emit_fn(fn: lir.CFn, *, self_type: str | None = None) -> str:
     params = ", ".join(_emit_param(n, t, self_type) for n, t in fn.params) or "void"
-    # C requires `main` to return `int` (and a hosted environment expects
-    # `int main(...)`). Coerce void return → int and append `return 0;`.
     ret_type = fn.return_type
     body_text = _emit_block(fn.body, 1)
     if fn.name == "main" and ret_type == "void":
@@ -110,8 +108,6 @@ def _emit_fn(fn: lir.CFn, *, self_type: str | None = None) -> str:
 
 
 def _emit_param(name: str, ty: str, self_type: str | None) -> str:
-    # Methods take `Struct *self`; the LIR carries `(self, "Struct")` so we
-    # rewrite to pointer form here. Other params unchanged.
     if name == "self" and self_type is not None:
         return f"{self_type} *self"
     return f"{ty} {name}"
@@ -141,9 +137,6 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
     if isinstance(node, lir.CDecl):
         return f"{pad}{node.ty} {node.name} = {_emit_expr(node.value)};"
     if isinstance(node, lir.CReassign):
-        # Python `xs = xs + [e0, e1, ...]` is list growth, not arithmetic.
-        # Lower it to element-wise push() onto the realloc-backed slice — a
-        # struct `+=` is invalid C and the old emission produced exactly that.
         from transpilers.passes.mir_to_c_lir import _CSliceLiteral
 
         val = node.value
@@ -172,8 +165,6 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
             f"{pad}{_emit_expr(node.obj)}{sep}{node.field} = {_emit_expr(node.value)};"
         )
     if isinstance(node, lir.CSubscriptAssign):
-        # Slice element write — every CSubscriptAssign in this pipeline
-        # targets a `slice_*_t` carrier, so the index lands on `.data[i]`.
         return f"{pad}{_emit_expr(node.obj)}.data[{_emit_expr(node.index)}] = {_emit_expr(node.value)};"
     if isinstance(node, lir.CIf):
         head = f"{pad}if ({_emit_expr(node.test)}) {{"
@@ -190,12 +181,9 @@ def _emit_stmt(node: lir.LirNode, depth: int) -> str:
         body = _emit_block(node.body, depth + 1)
         return f"{head}\n{body}\n{pad}}}"
     if isinstance(node, lir.CForRange):
-        # Native C for-loop. Step expressed as either `i++` (None or +1) or
-        # explicit `i += <step>`.
         step_expr = (
             "i++" if node.step is None else f"{node.target} += {_emit_expr(node.step)}"
         )
-        # Rebuild with the real target name when step is None:
         if node.step is None:
             step_expr = f"{node.target}++"
         head = (
@@ -247,25 +235,18 @@ def _emit_expr(node: lir.LirNode | None) -> str:
         escaped = _c_string_escape(node.value)
         return f'"{escaped}"'
     if isinstance(node, lir.CIndex):
-        # Same routing rule as CSubscriptAssign: every C index lands on a
-        # slice value, so step through `.data` to reach the element.
         return f"{_emit_expr(node.value)}.data[{_emit_expr(node.index)}]"
     from transpilers.passes.mir_to_c_lir import _CSliceLiteral, _CPyFloat
 
     if isinstance(node, _CSliceLiteral):
-        # Empty list → zeroed growable slice (data=NULL, len=cap=0) so a
-        # later push() reallocs from scratch. Non-empty literals keep their
-        # inline backing array (read-only / fixed use).
         if not node.elements:
             return f"({node.slice_ty}){{0}}"
         elems = ", ".join(_emit_expr(e) for e in node.elements)
         return f"(({node.slice_ty}){{({node.elem_ty}[]){{{elems}}}, {len(node.elements)}}})"
     if isinstance(node, _CPyFloat):
-        # Call the preamble helper with a stack buffer.
         return f"_py_float_buf({_emit_expr(node.value)}, (char[32]){{}})"
     if isinstance(node, lir.CCall):
         args = ", ".join(_emit_expr(a) for a in node.args)
-        # Cast-style "calls" (`(int64_t)`, `(double)`) emit as cast prefix.
         if node.func.startswith("(") and node.func.endswith(")"):
             return f"{node.func}{args}"
         return f"{node.func}({args})"

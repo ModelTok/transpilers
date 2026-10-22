@@ -1,4 +1,3 @@
-#python 2.7
 i = 10
 while(i):
 	t = int(input())

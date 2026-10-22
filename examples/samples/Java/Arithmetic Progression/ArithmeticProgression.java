@@ -14,7 +14,6 @@ public class ArithmeticProgression {
         System.out.println("number of terms: " + numberOfTerms);
         System.out.println();
 
-        //Arithmetic Progression
         System.out.println("Arithmetic Progression: ");
         for (int i = 0; i < numberOfTerms; i++) {
             double ithTerm = firstTerm + i * commonDifference;

@@ -87,30 +87,12 @@ import subprocess
 from pathlib import Path
 from typing import Final
 
-# Default location of the codebase-memory-mcp binary. Mirrors the path
-# scripts/sft/cbm_graph.py already expects, so a user who has the CLI
-# bridge working for the SFT pipeline gets this helper for free.
 _CBM_BIN_DEFAULT = Path.home() / ".local" / "bin" / "codebase-memory-mcp"
 if os.name == "nt":
     _CBM_BIN_DEFAULT = _CBM_BIN_DEFAULT.with_suffix(".exe")
 CBM_BIN: Final[str] = os.environ.get("CBM_BIN", str(_CBM_BIN_DEFAULT))
-# cbm normalizes a repo at C:/Github/foo into the project name
-# "C-Github-foo" (case-preserving). We reproduce that so callers can pass a
-# repo root and we resolve the right graph without them memorizing the slug.
 _CBM_PROJECT_SEP: Final[str] = "-"
 
-# --------------------------------------------------------------------------
-# OCCT (OpenCASCADE) type-shim layer — issue #79's "OCCT wall"
-# --------------------------------------------------------------------------
-# Topologic (and other OCCT-based C++) projects define their export macro in
-# the same header that also drags in an OCCT type (see docs/occt_preamble.hpp
-# and docs/topologic_migration.md). When --cbm resolves that header's class,
-# every file that only wanted the macro inherits a `TopoDS_Shape` / `TopAbs_*`
-# type it doesn't use, and libclang fails on the OCCT name. Rather than ask
-# the user to hand-point TRANSPILERS_CPP_PREAMBLE_FILE at docs/occt_preamble.hpp,
-# we auto-detect OCCT-typed references from the graph payload and append the
-# opaque shim below. It is NOT a real binding — just enough for libclang to
-# parse past the type (matching the scope documented in docs/occt_preamble.hpp).
 OCCT_PREFIXES: Final[tuple[str, ...]] = (
     "TopoDS_",
     "TopAbs_",
@@ -130,8 +112,6 @@ OCCT_PREFIXES: Final[tuple[str, ...]] = (
     "ShapeAnalysis_",
     "STEPControl_",
 )
-# Opaque shim mirroring docs/occt_preamble.hpp — broad enough for libclang to
-# parse, never semantically accurate.
 OCCT_SHIM: Final[str] = """\
 class TopoDS_TShape_Handle { public: void* operator->() const; };
 class TopoDS_Shape { public: TopoDS_TShape_Handle TShape() const; };
@@ -156,7 +136,6 @@ def _collect_occt_types(payload: dict) -> list[str]:
     def consider(name: str | None) -> None:
         if not name:
             return
-        # Strip pointer/ref qualifiers and template brackets for prefix test.
         bare = name.replace("*", "").replace("&", "").strip()
         if any(bare.startswith(p) for p in OCCT_PREFIXES) and bare not in seen:
             seen.add(bare)
@@ -183,7 +162,6 @@ def _project_slug(repo_root: str) -> str:
     the whole slug; the modern binary does not, so we must not either.
     """
     p = os.path.normpath(repo_root)
-    # Drop a trailing separator so it doesn't become a trailing '-'.
     p = p.rstrip("/\\")
     slug = (
         p.replace(":", "")
@@ -232,8 +210,6 @@ def _namespace_of(qualified_name: str | None, file_path: str | None) -> str:
     marker = path_dots + "."
     idx = qualified_name.find(marker)
     if idx == -1:
-        # Path stem not present verbatim (odd project name): fall back to the
-        # second-to-last dot segment, but only if it isn't the bare stem.
         parts = qualified_name.split(".")
         if len(parts) >= 3:
             stem = os.path.splitext(os.path.basename(file_path))[0]
@@ -247,9 +223,6 @@ def _namespace_of(qualified_name: str | None, file_path: str | None) -> str:
     return ""
 
 
-# --------------------------------------------------------------------------
-# Pure payload -> C++ preamble mapping (no binary, fully unit-testable)
-# --------------------------------------------------------------------------
 
 
 def _normalize_param_type(text: str | None) -> str:
@@ -338,7 +311,6 @@ def _decls_from_payload(payload: dict) -> list[str]:
 
     classes = payload.get("classes", []) or []
     methods = payload.get("methods", []) or []
-    # stable order: by (parent, name, param_types)
     methods = sorted(
         methods,
         key=lambda m: (
@@ -373,7 +345,6 @@ def _decls_from_payload(payload: dict) -> list[str]:
             return f"class {cname} {{\n{inner}\n}};"
         return f"class {cname};"
 
-    # Group classes by their namespace; "" = global scope.
     global_classes: list[str] = []
     ns_blocks: dict[str, list[str]] = {}
     for cls in classes:
@@ -384,24 +355,18 @@ def _decls_from_payload(payload: dict) -> list[str]:
         else:
             global_classes.append(decl)
 
-    # Explicit namespaces with no class content still get a bare fwd-decl.
     explicit_ns = {_escape_ident(n) for n in payload.get("namespaces", []) or []}
     for ns in explicit_ns:
         if ns not in ns_blocks:
             lines.append(f"namespace {ns} {{}}")
 
-    # Namespace-wrapped class declarations (correct scoping for out-of-line
-    # defs that live inside a real namespace block).
     for ns, decls in ns_blocks.items():
         lines.append(f"namespace {ns} {{")
         lines.extend(decls)
         lines.append("}")
 
-    # Global-scope classes.
     lines.extend(global_classes)
 
-    # Free (non-member) functions recovered from the graph — declared at
-    # namespace/TU scope so a definition in this file resolves.
     for m in methods:
         parent = m.get("parent_class") or ""
         if parent:
@@ -420,12 +385,6 @@ def payload_to_cpp(payload: dict) -> str:
     ``core._project_preamble``) or for prepending directly.
     """
     decls = _decls_from_payload(payload)
-    # Macro neutralization: cbm's Macro nodes are export / calling-convention
-    # macros defined in a header we never see. Emit a ``#define X `` so the
-    # preprocessor deletes them before libclang parses (mirrors the
-    # ``-DNAME=`` retry loop in core.parse_cpp). We only neutralize names
-    # that are SCREAMING_CASE or carry a known macro suffix — never real
-    # type names.
     macro_lines: list[str] = []
     for mac in payload.get("macros", []) or []:
         mname = (mac.get("name") or "").strip()
@@ -440,8 +399,6 @@ def payload_to_cpp(payload: dict) -> str:
     if not decls and not macro_lines and not occt_types:
         return ""
 
-    # Stub part (parsed *before* PARSER_PREAMBLE, and excluded from output):
-    # macro neutralizations and the OCCT opaque shim — neither references std.
     stub: list[str] = ["// --- codebase-memory-mcp recovered preamble ---"]
     stub.extend(macro_lines)
     if occt_types:
@@ -449,12 +406,6 @@ def payload_to_cpp(payload: dict) -> str:
         stub.append(OCCT_SHIM.rstrip("\n"))
         stub.append(f"// referenced OCCT types: {', '.join(sorted(occt_types))}")
 
-    # Real part (emitted via core._PREAMBLE_REAL_MARKER, so it lands *after*
-    # PARSER_PREAMBLE where ``namespace std`` is declared): the recovered
-    # namespace/class/free-function declarations. Their signatures may
-    # reference std:: types (e.g. ``const std::list<int>&``), which are only
-    # declared in PARSER_PREAMBLE — placing them in the stub would fail with
-    # "use of undeclared identifier 'std'".
     out = list(stub)
     if decls:
         out.append("// === TRANSPILERS: REAL PREAMBLE BELOW ===")
@@ -463,9 +414,6 @@ def payload_to_cpp(payload: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-# --------------------------------------------------------------------------
-# Shell-out layer: query the codebase-memory-mcp graph
-# --------------------------------------------------------------------------
 
 
 def _resolve_binary(binary: str) -> str:
@@ -514,7 +462,6 @@ def _parse_query_table(text: str) -> list[dict]:
         if line.startswith("total:") or line.startswith("hint:"):
             continue
         if cols is None:
-            # data before a header — ignore (e.g. a log line)
             continue
         vals = shlex.split(line)
         rows.append(dict(zip(cols, vals)))
@@ -690,14 +637,8 @@ def build_preamble_payload(
     if not binary:
         return empty
     proj = project or _project_slug(repo_root)
-    # The graph stores file_path with forward slashes; the caller (main.py's
-    # Path.relative_to) hands us a Windows-style rel path with backslashes.
     rel_path = rel_path.replace("\\", "/")
 
-    # Methods defined in THIS file, with a parent class (out-of-line defs).
-    # `File-DEFINES->Method` is the modern graph's link; the method's
-    # `parent_class` is path-qualified (`.src.Bitwise.Bitwise`), so the bare
-    # class name is the final dot-segment.
     method_rows = cbm_query(
         proj,
         f"MATCH (m:Method)<-[:DEFINES]-(f:File) "
@@ -713,8 +654,6 @@ def build_preamble_payload(
         cname = pc.rsplit(".", 1)[-1]
         if cname and cname not in class_names:
             class_names.append(cname)
-    # If the file-defines-method link is missing, still recover any method
-    # whose parent_class names a class in this file (best-effort fallback).
     if not class_names:
         class_names = sorted(
             {r.get("parent_class", "").rsplit(".", 1)[-1] for r in method_rows}
@@ -724,7 +663,6 @@ def build_preamble_payload(
     classes: list[dict] = []
     all_methods: list[dict] = []
     for cname in class_names:
-        # Class node: bare name, base_classes, qualified_name (for namespace).
         crows = cbm_query(
             proj,
             f"MATCH (c:Class {{name: '{cname}'}}) "
@@ -741,9 +679,6 @@ def build_preamble_payload(
                 "namespace": ns,
             }
         )
-        # Full method set for this class (repo-wide, recover overloads the
-        # file itself may not contain). Tag each with the bare class name so
-        # _decls_from_payload groups them correctly.
         mrows = cbm_query(
             proj,
             f"MATCH (m:Method) WHERE m.parent_class ENDS WITH '.{cname}' "
@@ -756,7 +691,6 @@ def build_preamble_payload(
             r["param_types"] = _as_list(r.get("param_types"))
         all_methods.extend(mrows)
 
-    # SCREAMING_CASE export / calling-convention macros this file defines.
     macro_rows = cbm_query(
         proj,
         f"MATCH (mac:Macro)<-[:DEFINES]-(f:File) "

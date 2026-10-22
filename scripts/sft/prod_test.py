@@ -19,7 +19,6 @@ PRELUDE = (SFT/"ep_prelude.mojo").read_text()
 SYS = (SFT/"system.txt").read_text()
 
 def compiles(code):
-    # try standalone first, then with the EP prelude prepended
     for variant, src in (("standalone", code), ("with_prelude", PRELUDE + "\n" + code)):
         with tempfile.TemporaryDirectory() as td:
             t = Path(td); (t/"m.mojo").write_text(src + "\n\ndef main():\n    pass\n")

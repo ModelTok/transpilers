@@ -18,12 +18,10 @@ for L in leaves:
     try:
         ns = {"math": math, "__builtins__": __builtins__}
         exec(unit, ns)
-        # run driver, capture stdout
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             exec(driver, ns)
         out_lines = [x for x in buf.getvalue().splitlines() if x.strip() != ""]
-        # every line must parse as a python float/int/bool literal
         for ln in out_lines:
             v = ast.literal_eval(ln)
             if not isinstance(v, (int, float, bool)):
@@ -32,10 +30,9 @@ for L in leaves:
                 raise ValueError(f"non-finite driver line: {ln!r}")
         if not out_lines:
             raise ValueError("driver produced no output")
-        # cross: re-eval fn on each sample tuple, compare to driver where scalar
         fn = ns[name]
         for t in L["sample_args"]:
-            r = fn(*t)  # must not raise
+            r = fn(*t)
         ok += 1
     except Exception as e:
         bad.append((name, L.get("category"), type(e).__name__, str(e)[:120]))

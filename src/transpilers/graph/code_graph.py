@@ -27,18 +27,12 @@ from pathlib import Path
 
 try:
     import networkx as nx
-except ImportError as exc:  # pragma: no cover
+except ImportError as exc:
     raise ImportError("networkx is required: pip install networkx") from exc
 
-# ---------------------------------------------------------------------------
-# tree-sitter is optional — gracefully degrade to regex-based extraction.
-# ---------------------------------------------------------------------------
 _TREESITTER_AVAILABLE = False
 _TREESITTER_CPP_PARSER = None
 try:
-    # Prefer `tree_sitter_languages` when available (covers multiple langs
-    # from one package). It currently caps at Python 3.12, so on 3.13+ we
-    # fall back to the per-language `tree-sitter-cpp` package.
     import tree_sitter_languages  # type: ignore
     from tree_sitter import Language, Parser  # type: ignore
 
@@ -53,9 +47,6 @@ except Exception:
     except Exception:
         pass
 
-# ---------------------------------------------------------------------------
-# C++ patterns (regex fallback)
-# ---------------------------------------------------------------------------
 _CPP_FUNC_DEF = re.compile(
     r"""
     (?:(?:inline|static|virtual|explicit|constexpr|[[nodiscard]]\s*)*)?
@@ -90,14 +81,11 @@ def _extract_cpp_regex(source: str) -> tuple[list[str], dict[str, list[str]]]:
     definitions: list[str] = []
     call_map: dict[str, list[str]] = {}
 
-    # Collect function names first
     for m in _CPP_FUNC_DEF.finditer(source):
         name = m.group(1)
         if name and name not in _CPP_KEYWORDS:
             definitions.append(name)
 
-    # For each definition, try to extract its body and find calls inside it.
-    # Simple heuristic: split on the definition matches.
     matches = list(_CPP_FUNC_DEF.finditer(source))
     for i, m in enumerate(matches):
         name = m.group(1)
@@ -144,7 +132,6 @@ def _extract_cpp_treesitter(source: str) -> tuple[list[str], dict[str, list[str]
         if node.type == "function_definition":
             decl = node.child_by_field_name("declarator")
             if decl is not None:
-                # drill down to find the function declarator
                 while decl and decl.type not in ("function_declarator", "identifier"):
                     decl = decl.child_by_field_name("declarator") or (
                         decl.children[0] if decl.children else None
@@ -172,9 +159,6 @@ def _extract_cpp(source: str) -> tuple[list[str], dict[str, list[str]]]:
     return _extract_cpp_regex(source)
 
 
-# ---------------------------------------------------------------------------
-# Python extraction via stdlib ast
-# ---------------------------------------------------------------------------
 
 
 def _extract_python(source: str) -> tuple[list[str], dict[str, list[str]]]:
@@ -219,9 +203,6 @@ def _extract_python(source: str) -> tuple[list[str], dict[str, list[str]]]:
     return definitions, call_map
 
 
-# ---------------------------------------------------------------------------
-# Core graph builder
-# ---------------------------------------------------------------------------
 
 
 def build_graph(path: str | Path, lang: str = "cpp") -> "nx.DiGraph":
@@ -279,9 +260,6 @@ def build_graph(path: str | Path, lang: str = "cpp") -> "nx.DiGraph":
     return G
 
 
-# ---------------------------------------------------------------------------
-# Topological order with SCC collapsing for cycles
-# ---------------------------------------------------------------------------
 
 
 def topological_order(G: "nx.DiGraph") -> list[str]:
@@ -296,8 +274,7 @@ def topological_order(G: "nx.DiGraph") -> list[str]:
     G:
         The directed call graph returned by :func:`build_graph`.
     """
-    # Condense SCCs to a DAG
-    condensed = nx.condensation(G)  # nodes are SCC indices
+    condensed = nx.condensation(G)
     scc_map: dict[int, list[str]] = {}
     for node, data in condensed.nodes(data=True):
         members: list[str] = sorted(data["members"])
@@ -309,15 +286,11 @@ def topological_order(G: "nx.DiGraph") -> list[str]:
         if len(members) == 1:
             order.append(members[0])
         else:
-            order.append(",".join(members))  # cycle group
+            order.append(",".join(members))
 
-    # Reverse so callees come first
     return list(reversed(order))
 
 
-# ---------------------------------------------------------------------------
-# Migration report
-# ---------------------------------------------------------------------------
 
 
 def migration_report(G: "nx.DiGraph", translated: set[str]) -> dict:
@@ -342,7 +315,7 @@ def migration_report(G: "nx.DiGraph", translated: set[str]) -> dict:
     blocked: set[str] = set()
     for func in pending:
         callees = set(G.successors(func))
-        if callees & pending:  # at least one callee is also pending
+        if callees & pending:
             blocked.add(func)
 
     return {
@@ -354,9 +327,6 @@ def migration_report(G: "nx.DiGraph", translated: set[str]) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Persistence helpers
-# ---------------------------------------------------------------------------
 
 
 def save_graph(G: "nx.DiGraph", path: str | Path) -> None:
@@ -386,9 +356,6 @@ def load_graph(path: str | Path) -> "nx.DiGraph":
     return nx.node_link_graph(data, directed=True, multigraph=False)
 
 
-# ---------------------------------------------------------------------------
-# File-level topological ordering
-# ---------------------------------------------------------------------------
 
 
 def file_topological_order(path: str | Path, lang: str = "cpp") -> list[Path]:
@@ -416,7 +383,6 @@ def file_topological_order(path: str | Path, lang: str = "cpp") -> list[Path]:
     path = Path(path)
     G = build_graph(path, lang=lang)
 
-    # Build file-level directed graph: caller-file → callee-file.
     file_graph: "nx.DiGraph" = nx.DiGraph()
     for node, data in G.nodes(data=True):
         fp = data.get("file", "")
@@ -429,7 +395,6 @@ def file_topological_order(path: str | Path, lang: str = "cpp") -> list[Path]:
         if cf and df and cf != df:
             file_graph.add_edge(cf, df)
 
-    # Topological sort with SCC condensation for cycles.
     condensed = nx.condensation(file_graph)
     ordered_files: list[Path] = []
     seen: set[str] = set()
@@ -439,7 +404,6 @@ def file_topological_order(path: str | Path, lang: str = "cpp") -> list[Path]:
                 ordered_files.append(Path(fp))
                 seen.add(fp)
 
-    # Append files with no parsed functions (not in graph) last.
     if path.is_dir():
         extensions = {
             "cpp": {".cpp", ".cc", ".cxx", ".hpp", ".hh", ".h"},

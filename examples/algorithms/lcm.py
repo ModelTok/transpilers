@@ -1,6 +1,3 @@
-# LCM via Euclidean GCD. Exercises *two* user-defined functions in one
-# module, with the second one calling the first — a small test that
-# function-to-function references survive lowering across all targets.
 
 
 def gcd(a: int, b: int) -> int:

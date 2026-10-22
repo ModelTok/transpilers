@@ -31,12 +31,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_cpp_mojo_dataset as bld
 from build_cpp_mojo_dataset import CppFn, mojo_params, verify
-import night_verify_outparam as nv  # applies EPMOJO/_CPP_HELPERS/_TRIVIAL_RETURN patches
+import night_verify_outparam as nv
 
 PRELUDE = {"pow", "abs", "min", "max", "round", "divmod"}
 IMPORT = re.compile(r"^from\s+(math|collections|memory|sys|os|pathlib|random|bit|utils)\s+import\s+(.+)$")
 
-# Domain-restricted sampling mappers (C++ UB / unreachable enum outside domain)
 MAPPERS = {
     "calculateDayOfYear": lambda r: [int(abs(r[0])) % 12 + 1,
                                      int(abs(r[1])) % 31 + 1, r[2]],
@@ -73,7 +72,6 @@ def migrate_mojo(src: str) -> str:
                 out.append(f"from std.{mod} import {', '.join(keep)}")
             continue
         out.append(line)
-    # drop a leading blank left by a removed import
     while out and not out[0].strip():
         out.pop(0)
     return "\n".join(out)

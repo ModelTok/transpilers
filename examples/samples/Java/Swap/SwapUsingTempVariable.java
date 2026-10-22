@@ -14,7 +14,6 @@ public class SwapUsingTempVariable {
         System.out.println("Second Number = " + secondNumber);
         System.out.println();
 
-        //Swapping
         temporary = firstNumber;
         firstNumber = secondNumber;
         secondNumber = temporary;

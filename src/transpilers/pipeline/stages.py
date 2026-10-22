@@ -114,8 +114,6 @@ TARGETS = {
     "fortran": (mir_to_fortran_lir, emit_fortran, fortran_compiles),
 }
 
-# Pipeline stage names, in execution order. The taxonomy records which stage
-# a failure came from; keep these strings stable — they are reporting keys.
 STAGES = ("parse", "hir-to-mir", "infer-types", "lower", "emit", "compile", "run")
 
 
@@ -124,7 +122,6 @@ def _walk_provenance_nodes(node: object, out: list[object]) -> None:
     ``_hir_node_id`` by DFS walk."""
     if hasattr(node, "_hir_provenance_id") or hasattr(node, "_hir_node_id"):
         out.append(node)
-    # Recurse into child collections or attributes.
     if isinstance(node, (list, tuple)):
         for child in node:
             _walk_provenance_nodes(child, out)
@@ -147,7 +144,6 @@ def _build_provenance_map(
     """
     pm = ProvenanceMap()
 
-    # Record all HIR nodes.
     hir_nodes: list[object] = []
     _walk_provenance_nodes(hir_mod, hir_nodes)
     by_hir_id: dict[int, object] = {}
@@ -163,13 +159,6 @@ def _build_provenance_map(
             )
             by_hir_id[hid] = prov
 
-    # Record MIR nodes pointing back to their HIR provenance. Looked up via
-    # by_hir_id (built once above) rather than a linear re-scan of every
-    # already-recorded provenance per node -- the latter is O(mir_nodes *
-    # hir_nodes), which is fine for a hand-written algorithm slice but
-    # becomes minutes-long on a real-world amalgamated translation unit
-    # (thousands of nodes on each side, e.g. transpiling a whole C++
-    # package with --include-impls) for no benefit over a dict lookup.
     mir_nodes: list[object] = []
     _walk_provenance_nodes(mir_mod, mir_nodes)
     for mir_node in mir_nodes:
@@ -178,7 +167,6 @@ def _build_provenance_map(
         if prov is not None:
             pm.record(mir_node, prov)
 
-    # Record LIR nodes pointing back to their HIR provenance (via MIR).
     lir_nodes: list[object] = []
     _walk_provenance_nodes(lir_mod, lir_nodes)
     for lir_node in lir_nodes:
@@ -241,39 +229,23 @@ def run_stages(
 
     parse = FRONTENDS[source_lang]
     lower, emit, _ = TARGETS[target]
-    # The C++ frontend returns (HirModule, TypeGroundTruth). The
-    # other frontends still return a bare HirModule; normalise to a
-    # (HirModule, truth-or-None) pair here so the rest of the
-    # pipeline doesn't need to know about the C++ quirk.
     parsed = parse(source)
     if isinstance(parsed, tuple) and len(parsed) == 2:
         hir_mod, cpp_truth = parsed
     else:
         hir_mod, cpp_truth = parsed, None
     mir_mod = hir_to_mir(hir_mod)
-    # Merge ir_hints (LLVM IR derived) with trace_types_hints (runtime derived).
     merged_hints = dict(ir_hints or {})
     if trace_types_hints:
         merged_hints.update(trace_types_hints)
-    # Apply C++ ground truth *before* the inference pass: the
-    # inference pass benefits from the resolved types and uses them
-    # to anchor its own propagation, so filling holes first means
-    # fewer UnknownT holes reach the algorithmic dataflow. For other
-    # source languages this is a no-op (cpp_truth is None).
     if cpp_truth is not None:
         apply_ground_truth(mir_mod, cpp_truth, hir_mod)
     infer_types(
         mir_mod, llm_fill=llm_fill, ir_hints=merged_hints if merged_hints else None
     )
-    # Semantic-contract inference: runs after type resolution so it can
-    # map resolved types to contracts (arbitrary-precision int → overflow
-    # guard, Python ref → borrow annotation, etc.).
     infer_contracts(mir_mod)
     if llm_rename_fill is not None:
         llm_rename(mir_mod, llm_fill=llm_rename_fill)
-    # Must run after type inference (needs resolved param/return types to
-    # detect a collision) and before lowering (every backend assumes unique
-    # names within a struct/module).
     dedupe_overloads(mir_mod)
     lir_mod = lower(mir_mod)
     provenance = _build_provenance_map(hir_mod, mir_mod, lir_mod)

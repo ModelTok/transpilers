@@ -43,18 +43,15 @@ class TimingResult:
     skip_reason: str = ""
     error: str = ""
 
-    # Reference (python_reference from task JSON)
     ref_median_ms: float = 0.0
     ref_mean_ms: float = 0.0
     ref_stdev_ms: float = 0.0
 
-    # Translated implementation
     trans_median_ms: float = 0.0
     trans_mean_ms: float = 0.0
     trans_stdev_ms: float = 0.0
 
-    # Derived metric
-    efficiency_ratio: float = 0.0  # ref / trans — higher is better for translated
+    efficiency_ratio: float = 0.0
     n_samples: int = 0
     warmup_runs: int = 0
 
@@ -122,7 +119,6 @@ def time_function(
 
     args_list = [t["args"] for t in tests]
 
-    # Warmup
     for _ in range(warmup):
         for args in args_list:
             try:
@@ -131,7 +127,6 @@ def time_function(
             except Exception:
                 pass
 
-    # Time reference
     gc.disable()
     ref_times = _time_fn(ref_fn, args_list, n_runs)
     trans_times = _time_fn(trans_fn, args_list, n_runs)
@@ -209,7 +204,6 @@ def run_all_timing(
     results = []
     for f in sorted(Path(tasks_dir).glob("*.json")):
         task = json.loads(f.read_text())
-        # Self-check: translated == reference (ratio should be ~1.0)
         result = time_function(task, task["python_reference"], n_runs=n_runs)
         results.append(result)
     return results

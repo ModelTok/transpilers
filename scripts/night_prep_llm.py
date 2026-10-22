@@ -20,7 +20,6 @@ import json
 import re
 from pathlib import Path
 
-# names defined by the verify-harness preamble or C++/builtins — not callees
 KNOWN = {
     "pow_2", "pow_3", "pow_4", "pow_5", "pow_6", "pow_7", "root_4", "root_8",
     "mod", "sign", "max", "min", "abs", "fabs", "sqrt", "exp", "log", "log10",
@@ -42,7 +41,6 @@ def strip_comments(s: str) -> str:
 
 def unknown_callees(body: str, self_name: str) -> set[str]:
     clean = strip_comments(body)
-    # drop the signature line's own name + std:: qualified calls
     clean = re.sub(r"std\s*::\s*\w+", " ", clean)
     out = set()
     for m in CALL.finditer(clean):
@@ -71,14 +69,14 @@ def main() -> int:
     out, skipped = [], []
     for rec in fails:
         name = rec["function_name"]
-        if name in vmap:        # rescued by another stage already
+        if name in vmap:
             continue
         calls = unknown_callees(rec["cpp_source"], name)
         unresolved = {c for c in calls if c not in vmap}
         if unresolved:
             skipped.append({**rec, "unresolved_callees": sorted(unresolved)})
             continue
-        if calls:               # bundle: callees first in C++, verified Mojo carried
+        if calls:
             callees = sorted(calls)
             cpp_bundle = "\n\n".join(vmap[c]["cpp_source"] for c in callees)
             rec = dict(rec)

@@ -90,7 +90,6 @@ def rollup_markdown(records: list[tuple[str, TaxonomyRecord]]) -> str:
         row = [src, tgt, str(total)] + [str(counts[b]) for b in used_buckets]
         lines.append("| " + " | ".join(row) + " |")
 
-    # Top constructs per failure bucket — the actionable part.
     constructs: dict[str, Counter] = defaultdict(Counter)
     for _, rec in records:
         if rec.bucket not in ("ok",) and (rec.construct or rec.detail):

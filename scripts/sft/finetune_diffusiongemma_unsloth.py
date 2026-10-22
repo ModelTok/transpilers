@@ -106,7 +106,6 @@ def format_sft_example(ex: dict, system_prompt: str) -> dict:
 def main() -> None:
     args = parse_args()
 
-    # Load system prompt
     system_prompt = ""
     if args.system_prompt:
         sp = Path(args.system_prompt)
@@ -117,7 +116,6 @@ def main() -> None:
         if default_sp.exists():
             system_prompt = default_sp.read_text().strip()
 
-    # Load datasets
     print("Loading datasets...")
     raw_examples = load_datasets(args.dataset)
     print(f"  Loaded {len(raw_examples)} raw examples")
@@ -128,7 +126,6 @@ def main() -> None:
         print("Dry-run: --no-train set, exiting.")
         return
 
-    # Imports
     try:
         import torch
         from unsloth import FastLanguageModel, is_bfloat16_supported
@@ -139,7 +136,6 @@ def main() -> None:
         print(f"ERROR: {e}\\nInstall:\n  pip install unsloth huggingface_hub datasets trl transformers")
         sys.exit(1)
 
-    # Load model
     print(f"\\nLoading DiffusionGemma model: {args.model}")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model,

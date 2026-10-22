@@ -1,32 +1,7 @@
-#!/usr/bin/env bash
-# train_3b_rocm61.sh — two-phase LoRA training using the lf61 venv
-# (torch 2.6.0+rocm6.1).
-#
-# Hypothesis: ROCm 6.1 ships an older libroctracer64.so that does NOT trigger
-# the async HIP completion callback deadlock seen in 6.4 on gfx1101 RDNA3.
-# (rocm7.0 was already ruled out: its wheel cannot detect the GPU on a 6.4
-# driver system.)
-#
-# YAMLs are UNCHANGED from previous attempts — already hardened:
-#   sft_3b_phase1.yaml / sft_3b_phase2.yaml set:
-#     flash_attn: disabled
-#     use_unsloth_gc: false   ← prevents non_blocking async HIP copy in backward
-#     use_reentrant_gc: false
-#     No quantization_bit / quantization_type (plain bf16 — bnb broken on rocm)
-#
-# VERDICT criterion (DO NOT call success until verified):
-#   SUCCESS = step counter advances PAST 10 at <20s/step, GPU busy.
-#   FAILURE = hung at step <=3, CPU at 2000-4000%, no step progress.
-#
-# Usage (from WSL Ubuntu-24.04 as root, lf61 venv already set up):
-#   bash /mnt/c/Github/transpilers/scripts/sft/train_3b_rocm61.sh \
-#       2>&1 | tee /mnt/c/Github/transpilers/train_3b_rocm61.log
 set -euo pipefail
 
-# ROCm experimental kernels + reduce VRAM fragmentation
 export TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
 export PYTORCH_ALLOC_CONF=expandable_segments:True
-# Keep roctracer quiet during backward — belt-and-suspenders
 export HSA_ENABLE_INTERRUPT=0
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -41,7 +16,6 @@ source "$VENV/bin/activate"
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
-# ─── Sanity: confirm rocm6.1 torch ───────────────────────────────────────────
 log "Venv: $VENV"
 TORCH_VER=$(python3 -c 'import torch; print(torch.__version__)')
 log "torch: $TORCH_VER"
@@ -51,7 +25,6 @@ if ! echo "$TORCH_VER" | grep -q "rocm6.1"; then
 fi
 log "  [OK] rocm6.1 confirmed"
 
-# ─── 1. GPU probe ─────────────────────────────────────────────────────────────
 log "--- GPU probe ---"
 GPU_CHECK=$(timeout 15 python3 -c "
 import torch, sys
@@ -79,7 +52,6 @@ if ! echo "$GPU_CHECK" | grep -q "cuda available: True"; then
 fi
 log "  [OK] GPU detected"
 
-# ─── 2. Forward-only matmul sanity (no backward, just tests GPU is alive) ────
 log "--- 2048x2048 matmul (forward) ---"
 timeout 30 python3 -c "
 import torch, time
@@ -93,7 +65,6 @@ print(f'matmul done in {time.time()-t0:.3f}s, result sum={c.sum().item():.2f}')
 " 2>&1
 log "  [OK] matmul passed"
 
-# ─── 3. Phase 1: mojo_acquisition (2 epochs) ─────────────────────────────────
 log "=== PHASE 1: mojo_acquisition (2 epochs, LR=1.5e-4) ==="
 log "VERDICT: watching for step counter to advance past 10 at <20s/step ..."
 T1_START=$(date +%s)
@@ -102,7 +73,6 @@ T1_END=$(date +%s)
 T1_WALL=$(( T1_END - T1_START ))
 log "Phase 1 done in ${T1_WALL}s ($(( T1_WALL/60 ))m $(( T1_WALL%60 ))s). Adapter: $ADAPTER_P1"
 
-# ─── 4. Phase 2: cpp_mojo_translation (4 epochs, lower LR) ──────────────────
 log "=== PHASE 2: cpp_mojo_translation (4 epochs, LR=5e-5) ==="
 T2_START=$(date +%s)
 "$LF" train "$CFG_P2"
@@ -113,7 +83,6 @@ log "Phase 2 done in ${T2_WALL}s ($(( T2_WALL/60 ))m $(( T2_WALL%60 ))s). Adapte
 TOTAL_WALL=$(( T1_WALL + T2_WALL ))
 log "Total training wall-clock: ${TOTAL_WALL}s ($(( TOTAL_WALL/60 ))m)"
 
-# ─── 5. Loss summary ─────────────────────────────────────────────────────────
 log "=== LOSS SUMMARY ==="
 for dir in "$ADAPTER_P1" "$ADAPTER_P2"; do
     logfile="$dir/trainer_log.jsonl"

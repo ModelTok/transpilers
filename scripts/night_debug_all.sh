@@ -1,5 +1,3 @@
-#!/bin/bash
-# Debug each remaining reject; print compact failure signatures.
 cd /mnt/c/Github/transpilers
 export TRANSPILERS_EPMOJO=/home/amd/energyplus-mojo/.pixi/envs/default
 for n in "$@"; do

@@ -23,7 +23,7 @@ _FROM_RE = re.compile(r"^(?P<indent>\s*)from\s+(?P<mod>[A-Za-z_][\w.]*)\s+import
 @dataclass(frozen=True)
 class ImportRewrite:
     file: str
-    line: int  # 1-based
+    line: int
     old: str
     new: str
 

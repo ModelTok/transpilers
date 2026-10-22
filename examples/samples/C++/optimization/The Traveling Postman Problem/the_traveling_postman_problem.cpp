@@ -1,4 +1,3 @@
-//This dynamic programming solves the TSP (traveling postman problem) in O(n²2^n). The points are modeled in a 2D plane
 #include <algorithm>
 #include <vector>
 #include <cstdio>
@@ -9,11 +8,11 @@ using namespace std;
 const int N = 15, inf = (int) 1e9 + 7;
 int dp[N][1 << N], used[N][1 << N], test;
 
-int dis(Point a, Point b){//The distance between two points is the manhattan distance
+int dis(Point a, Point b){
  return abs(a.x - b.x) + abs(a.y - b.y);
 }
 
-int TheTravelingPostmanProblem::solve(int i, int s){//*i* is the current point and *s* the mask of visited points
+int TheTravelingPostmanProblem::solve(int i, int s){
  int &ans = dp[i][s];
 	
  if(used[i][s]){
@@ -27,7 +26,7 @@ int TheTravelingPostmanProblem::solve(int i, int s){//*i* is the current point a
  for(int k = 0 ; k < points.size() ; k++){
   int chk = 1 << k;
 		
-  if((s & chk) == 0){//If point *k* is not visited then go to *k* from *i*
+  if((s & chk) == 0){
    find = true;
    ans = min(ans, solve(k, s | chk) + dis(points[i], points[k]));
   }	
@@ -40,7 +39,7 @@ int TheTravelingPostmanProblem::solve(int i, int s){//*i* is the current point a
  return ans;
 }
 
-void TheTravelingPostmanProblem::get_path(int i, int s, vector< Point > &path){//*i* is the current point and *s* the mask of visited points
+void TheTravelingPostmanProblem::get_path(int i, int s, vector< Point > &path){
   int &ans = dp[i][s];
   path.push_back(points[i]);
   bool find = false;
@@ -48,7 +47,7 @@ void TheTravelingPostmanProblem::get_path(int i, int s, vector< Point > &path){/
   for(int k = 0 ; k < points.size() ; k++){
    int chk = 1 << k;
 		
-  if((s & chk) == 0 && ans == solve(k, s | chk) + dis(points[i], points[k])){//If point *k* is not visited then go to *k* from *i*
+  if((s & chk) == 0 && ans == solve(k, s | chk) + dis(points[i], points[k])){
    find = true;
    get_path(k, s | chk, path);
    break;
@@ -56,11 +55,10 @@ void TheTravelingPostmanProblem::get_path(int i, int s, vector< Point > &path){/
  }
 }
 
-//returns the minimum distance and a path that have this total distance
 pair< int, vector< Point > > TheTravelingPostmanProblem::minimum_distance(){
  int ans = inf;
 
- for(int i = 0 ; i < points.size() ; i++){//try starting from each of the points.
+ for(int i = 0 ; i < points.size() ; i++){
   ans = min(ans, solve(i, 1 << i) + dis(start, points[i]));
  }
 

@@ -5,10 +5,9 @@ import os
 DATASET_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data", "sft", "cpp_mojo",
-)  # scripts/sft/<this file> -> repo root
+)
 
 for ds_name in ["mojo_acquisition", "cpp_mojo_translation"]:
-    # Find the dataset file
     info_file = os.path.join(DATASET_DIR, "dataset_info.json")
     with open(info_file) as f:
         info = json.load(f)
@@ -28,11 +27,9 @@ for ds_name in ["mojo_acquisition", "cpp_mojo_translation"]:
     with open(file_path) as f:
         data = json.load(f)
 
-    # Count total characters as proxy for token count (~4 chars/token)
     lengths = []
     for sample in data:
         total_chars = 0
-        # Handle different formats
         if isinstance(sample, dict):
             for v in sample.values():
                 if isinstance(v, str):

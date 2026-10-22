@@ -1,4 +1,3 @@
-# your code goes here
 def Z(n):
 	summ = 0
 	while(n//5>=1):
@@ -11,5 +10,3 @@ while t:
 	p = int(input())
 	print(Z(p))
 	t-=1
-#source :http://www.purplemath.com/modules/factzero.htm
-#source :https://en.wikipedia.org/wiki/Trailing_zero

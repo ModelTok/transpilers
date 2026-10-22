@@ -49,9 +49,6 @@ def parse_javascript(source: str) -> hir.HirModule:
                     if inner.type == "function_declaration":
                         body.append(_convert_function(inner))
             continue
-        # Top-level non-function statements (script entry, `"use strict"`,
-        # bare `let` declarations, expression statements) — skip silently
-        # rather than refusing the whole file.
         if c.type in (
             "expression_statement",
             "lexical_declaration",
@@ -82,7 +79,6 @@ def _convert_function(node: Node) -> hir.HirFunction:
 
 
 def _convert_param(node: Node) -> hir.HirParam:
-    # JS param is bare identifier; no annotation.
     return hir.HirParam(name=text(node), annotation=None)
 
 
@@ -233,7 +229,6 @@ def _convert_update(node: Node) -> hir.HirNode:
     )
 
 
-# ---------- expressions ----------
 
 
 def _convert_expr(node: Node) -> hir.HirNode:

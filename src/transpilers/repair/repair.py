@@ -25,7 +25,6 @@ from transpilers.verify import (
     rust_compiles,
 )
 
-# Map target name → verify function (same as cli/main.py TARGETS)
 _VERIFIERS = {
     "rust": rust_compiles,
     "c": c_compiles,
@@ -39,9 +38,6 @@ _PROMPT_TEMPLATE = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Data classes
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -66,15 +62,11 @@ class RepairResult:
     history: list[RepairPass] = field(default_factory=list)
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _load_template() -> str:
     if _PROMPT_TEMPLATE.exists():
         return _PROMPT_TEMPLATE.read_text()
-    # Embedded fallback so the module works even if the file is missing.
     return (
         "You are a transpiler repair assistant.\n"
         "Original ({{source_lang}}):\n```\n{{source_code}}\n```\n\n"
@@ -130,7 +122,6 @@ def _ask_llm(prompt: str, llm_client: Any) -> str:
 def _strip_fences(code: str) -> str:
     """Remove leading/trailing markdown code fences if present."""
     code = code.strip()
-    # Remove ```lang ... ``` wrappers
     fenced = re.sub(r"^```[a-zA-Z]*\n?", "", code)
     fenced = re.sub(r"\n?```$", "", fenced)
     return fenced.strip()
@@ -165,8 +156,6 @@ def _run_tests(
     if not result.ok:
         return False, result.stderr
 
-    # If test_inputs provided but no runner available, say so honestly
-    # rather than claiming a functional pass we never checked.
     if test_inputs:
         return (
             None,
@@ -175,9 +164,6 @@ def _run_tests(
     return True, ""
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 def repair(
@@ -221,17 +207,13 @@ def repair(
     current_code: str = ""
 
     for attempt in range(1, max_passes + 1):
-        # --- Stage 1: translate (or re-translate with LLM fix from prev pass) ---
         if attempt == 1:
             current_code = transpile(source, source_lang=source_lang, target=target)
-        # (on subsequent passes current_code has already been updated by LLM fix)
 
-        # --- Stage 2: compile ---
         compile_result = verify(current_code)
         compile_ok = compile_result.ok
         error_msg = compile_result.stderr if not compile_ok else ""
 
-        # --- Stage 3: optional test run ---
         test_ok: bool | None = None
         if compile_ok and test_inputs is not None:
             test_ok, test_err = _run_tests(
@@ -250,11 +232,6 @@ def repair(
         )
         history.append(pass_record)
 
-        # --- Done if everything passed ---
-        # test_ok is False only for a *confirmed* test failure; None means
-        # "compiled but not actually run" (no execution runner exists yet),
-        # which we still accept rather than burn an LLM "fix" pass on code
-        # that already compiles and was never shown to be wrong.
         if compile_ok and (test_inputs is None or test_ok is not False):
             return RepairResult(
                 code=current_code,
@@ -263,7 +240,6 @@ def repair(
                 history=history,
             )
 
-        # --- Stage 4: ask LLM for a fix (if we have passes left) ---
         if attempt < max_passes:
             prompt = _render_prompt(
                 source_lang=source_lang,
@@ -279,7 +255,6 @@ def repair(
             pass_record.fix_applied = fixed_code
             current_code = fixed_code
 
-    # Exhausted all passes
     return RepairResult(
         code=current_code,
         passed=False,

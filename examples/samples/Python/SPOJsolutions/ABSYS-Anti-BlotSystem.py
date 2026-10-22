@@ -1,5 +1,3 @@
-#http://stackoverflow.com/questions/16908186/python-check-if-list-items-are-number
-#http://stackoverflow.com/questions/1549801/differences-between-isinstance-and-type-in-python
 t = int(input())
 while t:
 	a = input()

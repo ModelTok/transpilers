@@ -46,7 +46,6 @@ def call_model(messages, max_tokens=1536, temperature=0.0):
 
 
 def extract_code(text, lang):
-    # prefer the <answer>...</answer> block, then a ```lang fence, then any fence
     ans = re.search(r"<answer>(.*?)</answer>", text, re.S)
     scope = ans.group(1) if ans else text
     for pat in (rf"```{lang}\s*\n(.*?)```", r"```[a-zA-Z]*\s*\n(.*?)```"):
@@ -103,7 +102,7 @@ def eval_mojo(code, fn, inputs, outputs, arg_types):
             return ("compile_error", "timeout")
         if cp.returncode != 0:
             tail = [l for l in cp.stderr.splitlines() if ": error:" in l and "failed to parse" not in l]
-            return ("compile_error", (tail[0][:80] if tail else "link/parse"))   # first SPECIFIC error
+            return ("compile_error", (tail[0][:80] if tail else "link/parse"))
         r = subprocess.run([str(tdp / "k")], capture_output=True, text=True, timeout=30)
         if r.returncode != 0:
             return ("runtime_error", "rc!=0")
@@ -112,7 +111,7 @@ def eval_mojo(code, fn, inputs, outputs, arg_types):
         return ("wrong_output", "count")
     for g, exp in zip(got, outputs):
         gl = g.strip()
-        if gl in ("True", "False"):          # Mojo prints bools as True/False; C++/ground-truth use 1/0
+        if gl in ("True", "False"):
             gl = "1" if gl == "True" else "0"
         try:
             gv = float(gl)
@@ -133,7 +132,7 @@ def main():
     results = []
     for i, rec in enumerate(recs, 1):
         ei = rec["extra_info"]
-        lang = ei["language_full"]          # Mojo | Python
+        lang = ei["language_full"]
         ltag = "mojo" if lang == "Mojo" else "python"
         gt = rec["reward_model"]["ground_truth"]
         try:

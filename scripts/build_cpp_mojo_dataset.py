@@ -50,35 +50,21 @@ sys.path.insert(0, str(REPO / "src"))
 
 PREAMBLE_FILE = REPO / "scripts" / "ep_preamble.h"
 
-# Mojo toolchain from the energyplus-mojo pixi env — invoked directly with
-# MODULAR_HOME set so we never run `pixi run` (which rewrites that repo's lock).
-# Override with TRANSPILERS_EPMOJO when the repo lives elsewhere.
 EPMOJO = Path(os.environ.get("TRANSPILERS_EPMOJO",
                              "/home/bart/github/EnergyPlusMojo/.pixi/envs/default"))
 MOJO_BIN = EPMOJO / "bin" / "mojo"
 MODULAR_HOME = EPMOJO / "share" / "max"
 
 
-# ---------------------------------------------------------------------------
-# 1. Extract candidate pure-scalar C++ functions
-# ---------------------------------------------------------------------------
 
-# Scalar types we know how to sample + bake as literals. EnergyPlus uses several
-# typedef aliases for double (Real64, Nandle) and int (Int, Int64); the ep_preamble
-# resolves them for libclang, and the transpiled Mojo comes out as Float64/Int so
-# sampling keys off the *Mojo* type regardless.
 _SCALAR_TYPE = re.compile(
     r"^(?:Real64|Real32|Nandle|double|float|int|Int|Int64|long|unsigned|bool|"
     r"std::size_t|size_t)$"
 )
 
-# Candidate signature START: a scalar return type + identifier + `(`. The full
-# (possibly multi-line, comment-laden) parameter list and the `) ... {` tail are
-# resolved by paren/brace matching in extract_fns, not by this regex.
 _RET = r"Real64|Real32|Nandle|double|float|int|Int|Int64|long|bool"
 _SIG_START = re.compile(rf"(?<![\w:])(?P<ret>{_RET})\s+(?P<name>[A-Za-z_]\w*)\s*\(")
 
-# Qualifiers/trivia allowed between `)` and the body `{` of a definition.
 _POST_PAREN = re.compile(r"^(?:\s|const|noexcept|override|final|/\*.*?\*/|//[^\n]*)*\{", re.S)
 
 
@@ -86,8 +72,8 @@ _POST_PAREN = re.compile(r"^(?:\s|const|noexcept|override|final|/\*.*?\*/|//[^\n
 class CppFn:
     name: str
     ret: str
-    params: list[tuple[str, str]]  # (type, name)
-    body: str                      # full text incl. signature and braces
+    params: list[tuple[str, str]]
+    body: str
     source_file: str
 
 
@@ -201,7 +187,6 @@ def extract_fns(ep_src: Path, recursive: bool = False) -> list[CppFn]:
     multi-line / comment-laden signatures by paren+brace matching."""
     fns: list[CppFn] = []
     seen: set[str] = set()
-    # .cc translation units + .hh headers (the headers carry many inline scalar fns)
     pat_cc, pat_hh = ("**/*.cc", "**/*.hh") if recursive else ("*.cc", "*.hh")
     for cc in sorted(list(ep_src.glob(pat_cc)) + list(ep_src.glob(pat_hh))):
         text = cc.read_text(errors="ignore")
@@ -209,16 +194,11 @@ def extract_fns(ep_src: Path, recursive: bool = False) -> list[CppFn]:
             name = m.group("name")
             if name in seen:
                 continue
-            # The matched `(` is the last char of the match; paren-match it to
-            # find the full (possibly multi-line) parameter list.
             paren_open = m.end() - 1
             paren_end = _match_delims(text, paren_open, "(", ")")
             if paren_end < 0:
                 continue
             args_raw = text[paren_open + 1:paren_end - 1]
-            # The tail between `)` and `{` may carry const/noexcept/comments. If
-            # the next real token isn't `{`, this is a declaration / ctor-init /
-            # something else, not a plain definition — skip.
             tail = text[paren_end:paren_end + 400]
             mt = _POST_PAREN.match(tail)
             if not mt:
@@ -226,12 +206,11 @@ def extract_fns(ep_src: Path, recursive: bool = False) -> list[CppFn]:
             params = _parse_params(args_raw)
             if params is None:
                 continue
-            brace_open = paren_end + mt.end() - 1   # index of the `{`
+            brace_open = paren_end + mt.end() - 1
             end = _match_braces(text, brace_open)
             if end < 0:
                 continue
             body = text[m.start("ret"):end]
-            # Reject bodies that obviously reach outside the translation unit.
             if re.search(r"\bstate\b|->|\.dataptr|ShowSevereError|ShowWarningError"
                          r"|ShowFatalError|GetCurrentScheduleValue", body):
                 continue
@@ -241,9 +220,6 @@ def extract_fns(ep_src: Path, recursive: bool = False) -> list[CppFn]:
     return fns
 
 
-# ---------------------------------------------------------------------------
-# 2. Transpile C++ -> Mojo
-# ---------------------------------------------------------------------------
 
 def transpile(fn: CppFn) -> str | None:
     os.environ["TRANSPILERS_CPP_PREAMBLE_FILE"] = str(PREAMBLE_FILE)
@@ -255,7 +231,6 @@ def transpile(fn: CppFn) -> str | None:
     return mojo.strip() or None
 
 
-# Map transpiled Mojo param types to a sampling strategy.
 _MOJO_SIG = re.compile(r"def\s+\w+\(([^)]*)\)\s*->\s*(\w+)")
 
 
@@ -275,12 +250,7 @@ def mojo_params(mojo: str) -> list[tuple[str, str]] | None:
     return out
 
 
-# ---------------------------------------------------------------------------
-# 3. Behavioral verification (compile both, run on sampled inputs, compare)
-# ---------------------------------------------------------------------------
 
-# Definitions (not just declarations) for the ObjexxFCL helpers the C++ bodies
-# may call, so the standalone oracle links.
 _CPP_HELPERS = r"""
 #include <cstdio>
 #include <cmath>
@@ -351,8 +321,6 @@ def _sample_inputs(params: list[tuple[str, str]], cpp_body: str,
     Combinations are drawn independently per column (seeded LCG) so different
     branches co-occur; the coverage gate downstream is the real arbiter, so we
     draw generously (rows are nearly free — one baked binary run)."""
-    # Bounded-domain spread: covers cosines/fractions in [-1,1] AND larger
-    # physical quantities (temps, pressures), incl. boundary-ish small values.
     domain = [-1.0, -0.95, -0.5, -0.3827, -0.1, 0.0, 0.05, 0.1, 0.3, 0.3827,
               0.5, 0.7, 0.9239, 0.99, 1.0, 1.5, 5.0, 12.0, 23.5, 37.0, 50.0,
               100.0, 250.0, -2.0, -15.0]
@@ -364,7 +332,6 @@ def _sample_inputs(params: list[tuple[str, str]], cpp_body: str,
         for t in thr:
             scale = max(abs(t), 1.0)
             pool += [t, t - eps * scale, t + eps * scale]
-        # de-dup, keep order-ish
         seen, uniq = set(), []
         for v in pool:
             k = round(v, 12)
@@ -387,8 +354,6 @@ def _sample_inputs(params: list[tuple[str, str]], cpp_body: str,
                 v = float(state & 1)
             row.append(v)
         rows.append(row)
-    # All-args-equal rows: hit `(a - b) == 0` style zero-difference branches that
-    # independent column sampling almost never reaches.
     for val in (0.0, 1.0, 23.5, 50.0, -2.0):
         rows.append([0.0 if ty in ("Int", "int", "Bool", "bool") else val
                      for (nm, ty) in params])
@@ -414,12 +379,6 @@ def _body_line_span(fn: CppFn) -> int:
     return fn.body.count("\n") + 1
 
 
-# A line whose only effect is `return <numeric-literal>;` (or break/continue).
-# An uncovered line of this shape is a zero-measure float-equality fallback
-# (e.g. ASHRAE's `return 3.076;` reached only when DeltaTempCosTilt == 0.0
-# exactly) and carries negligible transpile risk — the transpiler renders every
-# constant return identically. Uncovered lines with *computation* or *calls* do
-# carry risk and are rejected.
 _TRIVIAL_RETURN = re.compile(r"^\s*(?:return\s+-?[0-9.][0-9.eE+\-]*\s*;|break\s*;|continue\s*;|\}?\s*)$")
 
 
@@ -446,7 +405,7 @@ def _coverage_ok(tdp: Path, cpp_file: str, fn_first_line: int, n_body_lines: int
         ln = int(lineno)
         if ln < lo or ln > hi:
             continue
-        if count == "-":              # non-executable (decl, brace, comment)
+        if count == "-":
             continue
         if count.startswith("#") or count == "=====":
             uncovered += 1
@@ -468,13 +427,7 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
     samples = _sample_inputs([(n, t) for n, t in mparams], fn.body)
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
-        # --- C++ oracle (instrumented for coverage) ---
-        # The function body begins at line 1 of fn.body; in oracle.cpp it is
-        # offset by the helper preamble. Track that offset for gcov mapping.
-        preamble_lines = _CPP_HELPERS.count("\n") + 1  # leading "\n" handled below
-        # Emit an index with each value so C++ and Mojo outputs can be aligned by
-        # index, not by position — robust to `inf`/`nan` lines that would otherwise
-        # be dropped asymmetrically and misalign the two streams (false reject).
+        preamble_lines = _CPP_HELPERS.count("\n") + 1
         cpp_calls = "\n".join(
             f'  printf("%d %.15g\\n", {i}, (double){fn.name}('
             + ", ".join(_fmt_lit(v, t)[0] for v, (n, t) in zip(row, mparams))
@@ -485,14 +438,10 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
         fn_first_line = header.count("\n") + 1
         cpp_src = f"{header}{fn.body}\nint main(){{\n{cpp_calls}\n  return 0;\n}}\n"
         (tdp / "oracle.cpp").write_text(cpp_src)
-        # -DNDEBUG compiles out `assert(...)` (EnergyPlus uses it only as a
-        # debug precondition check) so out-of-domain samples don't abort the
-        # oracle; it can only remove aborts, never change numeric results. This
-        # matches the Mojo backend, which drops `assert` calls entirely.
         r = _run(["g++", "-O0", "-std=c++17", "-DNDEBUG", "--coverage",
                   "-o", str(tdp / "oracle"), str(tdp / "oracle.cpp")], cwd=str(tdp))
         if r.returncode != 0:
-            return None  # depends on stuff outside the TU — not self-contained
+            return None
         r = _run([str(tdp / "oracle")], cwd=str(tdp))
         if r.returncode != 0:
             return None
@@ -501,9 +450,8 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
         cov_ok, cov_hit, cov_miss, cov_risky = _coverage_ok(
             tdp, "oracle.cpp", fn_first_line, _body_line_span(fn))
         if not cov_ok:
-            return None  # a computational branch went unexercised — can't certify
+            return None
 
-        # --- Mojo ---
         mojo_calls = "\n".join(
             f'    print({i}, {fn.name}('
             + ", ".join(_fmt_lit(v, t)[1] for v, (n, t) in zip(row, mparams))
@@ -517,8 +465,6 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
         r = _run([str(MOJO_BIN), "run", str(tdp / "k.mojo")], env=env)
         if r.returncode != 0:
             return None
-        # Parse "<index> <value>" per line into {index: value}; normalize Mojo's
-        # Bool True/False to 1/0 (C++ oracle prints (double)bool).
         mojo_out = {}
         for ln in r.stdout.splitlines():
             p = ln.split()
@@ -530,7 +476,7 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
 
     finite = 0
     max_rel = 0.0
-    for idx, a in cpp_out.items():          # align by index, robust to inf/nan drops
+    for idx, a in cpp_out.items():
         b = mojo_out.get(idx)
         if b is None:
             continue
@@ -539,24 +485,21 @@ def verify(fn: CppFn, mojo: str, mparams: list[tuple[str, str]]) -> dict | None:
         except ValueError:
             return None
         if fa != fa or fb != fb or abs(fa) == float("inf") or abs(fb) == float("inf"):
-            continue  # skip NaN/inf points (domain edges)
+            continue
         denom = max(abs(fa), abs(fb), 1e-9)
         rel = abs(fa - fb) / denom
         max_rel = max(max_rel, rel)
         if rel > 1e-9:
-            return None  # genuine numeric divergence
+            return None
         finite += 1
     if finite < 4:
-        return None  # too few finite agreements to trust
+        return None
     return {"samples_total": len(cpp_out), "samples_finite": finite,
             "max_rel_err": max_rel,
             "cpp_lines_covered": cov_hit, "cpp_lines_uncovered": cov_miss,
             "branch_coverage": "full" if cov_miss == 0 else "computation-full"}
 
 
-# ---------------------------------------------------------------------------
-# main
-# ---------------------------------------------------------------------------
 
 def main() -> int:
     ap = argparse.ArgumentParser()

@@ -1,5 +1,3 @@
-# Ackermann function — recursion stress test. Even small inputs blow up
-# fast; we keep arguments modest.
 
 
 def ackermann(m: int, n: int) -> int:

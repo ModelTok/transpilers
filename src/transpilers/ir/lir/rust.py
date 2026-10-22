@@ -14,7 +14,7 @@ class RustModule(LirNode):
 @dataclass
 class RustFn(LirNode):
     name: str
-    params: list[tuple[str, str]]  # (name, rust_type)
+    params: list[tuple[str, str]]
     return_type: str
     body: list[LirNode]
 
@@ -39,10 +39,6 @@ class RustName(LirNode):
 @dataclass
 class RustIntLiteral(LirNode):
     value: int
-    # Suffix is optional now — emitter elides it when the surrounding context
-    # makes the type unambiguous (a typed `let mut x: i64 = 1;`, a binop
-    # with a typed operand, an arg to a typed fn, etc.). Lowering sets this
-    # when it can't prove the suffix is redundant.
     suffix: str | None = None
 
 
@@ -71,14 +67,14 @@ class RustCompare(LirNode):
 
 @dataclass
 class RustBoolOp(LirNode):
-    op: str  # "&&" or "||"
+    op: str
     left: LirNode
     right: LirNode
 
 
 @dataclass
 class RustUnary(LirNode):
-    op: str  # "!" or "-"
+    op: str
     operand: LirNode
 
 
@@ -141,7 +137,7 @@ class RustMethodCall(LirNode):
     receiver: LirNode
     method: str
     args: list[LirNode]
-    cast_to: str | None = None  # e.g., `.len() as i64`
+    cast_to: str | None = None
 
 
 @dataclass
@@ -153,7 +149,7 @@ class RustCall(LirNode):
 @dataclass
 class RustStruct(LirNode):
     name: str
-    fields: list[tuple[str, str]]  # (field_name, rust_type)
+    fields: list[tuple[str, str]]
 
 
 @dataclass
@@ -206,8 +202,8 @@ class RustMacro(LirNode):
     builtins that map to macros (`println!`, `print!`, `format!`,
     `vec!`, ...). The args are rendered as-is between the parens."""
 
-    name: str  # without the trailing `!`
-    template: str  # format spec, e.g. "{} {}" — empty when no template
+    name: str
+    template: str
     args: list[LirNode]
 
 

@@ -85,18 +85,15 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-# GitHub API
 _GH_API = "https://api.github.com"
 _PERMISSIVE_LICENSES = {"mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "unlicense", "0bsd"}
 
-# Languages to crawl and their file extensions
 _LANG_EXT: dict[str, list[str]] = {
     "cpp": [".cpp", ".cc", ".cxx", ".h", ".hpp"],
     "python": [".py"],
     "c": [".c", ".h"],
 }
 
-# Primitive C++ types accepted in self-contained function signatures
 _CPP_PRIMITIVE_TYPES = {
     "int", "long", "short", "char", "bool", "float", "double",
     "int8_t", "int16_t", "int32_t", "int64_t",
@@ -105,13 +102,9 @@ _CPP_PRIMITIVE_TYPES = {
     "unsigned", "signed", "void",
 }
 
-# Python primitive annotations accepted in self-contained functions
 _PY_PRIMITIVE_TYPES = {"int", "float", "bool", "str", "bytes", "None"}
 
 
-# ---------------------------------------------------------------------------
-# GitHub API helpers
-# ---------------------------------------------------------------------------
 
 def _gh_headers() -> dict:
     token = os.getenv("GITHUB_TOKEN")
@@ -164,9 +157,6 @@ def search_repos(
     return results[:max_repos]
 
 
-# ---------------------------------------------------------------------------
-# Function extraction
-# ---------------------------------------------------------------------------
 
 @dataclass
 class FnCandidate:
@@ -193,8 +183,6 @@ def extract_cpp_functions(source: str, repo_name: str, file_path: str) -> list[F
     This avoids pulling in class methods, templates, and EnergyPlus-data args.
     """
     import re
-    # Match: ReturnType FunctionName(args) { body }
-    # Simple heuristic: single-line signature, braces balanced, no templates
     pattern = re.compile(
         r'\b((?:inline\s+|static\s+|constexpr\s+)*'
         r'(?:Real64|Real32|double|float|int|long|bool|char|void|unsigned|int\d+_t|uint\d+_t)\s*\*?)\s+'
@@ -207,19 +195,15 @@ def extract_cpp_functions(source: str, repo_name: str, file_path: str) -> list[F
         fn_name = m.group(2)
         params_str = m.group(3)
 
-        # Skip constructors, operators, main
         if fn_name in ("main", "operator"):
             continue
 
-        # Check all param types are primitive
         ok = True
         for param in params_str.split(","):
             param = param.strip()
             if not param:
                 continue
-            # Remove default value
             param = param.split("=")[0].strip()
-            # Remove param name (last word)
             parts = param.split()
             type_parts = parts[:-1] if len(parts) > 1 else parts
             type_str = " ".join(type_parts)
@@ -229,7 +213,6 @@ def extract_cpp_functions(source: str, repo_name: str, file_path: str) -> list[F
         if not ok:
             continue
 
-        # Extract function body via brace matching
         start = m.start()
         brace_start = source.index("{", m.start())
         depth = 0
@@ -244,7 +227,6 @@ def extract_cpp_functions(source: str, repo_name: str, file_path: str) -> list[F
                     break
         fn_source = source[start:end]
 
-        # Skip trivially short or very long functions
         lines = fn_source.count("\n")
         if lines < 3 or lines > 150:
             continue
@@ -273,7 +255,6 @@ def extract_python_functions(source: str, repo_name: str, file_path: str) -> lis
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef):
             continue
-        # Require all args to have primitive annotations
         all_primitive = True
         for arg in node.args.args:
             if arg.annotation is None:
@@ -286,7 +267,6 @@ def extract_python_functions(source: str, repo_name: str, file_path: str) -> lis
         if not all_primitive:
             continue
 
-        # Skip methods (inside class)
         fn_lines = node.end_lineno - node.lineno + 1
         if fn_lines < 3 or fn_lines > 100:
             continue
@@ -320,9 +300,6 @@ def iter_repo_functions(clone_dir: Path, source_lang: str, repo_name: str) -> It
         yield from extractor(source, repo_name, rel)
 
 
-# ---------------------------------------------------------------------------
-# Clone helpers
-# ---------------------------------------------------------------------------
 
 def clone_repo(clone_url: str, dest: Path, depth: int = 1) -> bool:
     """Shallow-clone *clone_url* into *dest*. Returns True on success."""
@@ -334,9 +311,6 @@ def clone_repo(clone_url: str, dest: Path, depth: int = 1) -> bool:
     return result.returncode == 0
 
 
-# ---------------------------------------------------------------------------
-# Transpile + verify
-# ---------------------------------------------------------------------------
 
 @dataclass
 class PairResult:
@@ -366,22 +340,12 @@ def transpile_and_verify(candidate: FnCandidate, target: str, llm_fill=None) -> 
     return PairResult(candidate=candidate, target=target, output=output, compile_ok=cr.ok, compile_stderr=cr.stderr)
 
 
-# ---------------------------------------------------------------------------
-# Behavioral verification gate
-#
-# Run-and-compare, mirroring scripts/build_cpp_mojo_dataset.py: compile BOTH
-# the source function and the target translation as standalone executables
-# with a generated main() harness, run them on ~125 deterministically-sampled
-# inputs, and compare outputs to 1e-9. Only pairs that agree numerically earn
-# metadata.verification = "behavioral".
-# ---------------------------------------------------------------------------
 
-_RUN_TIMEOUT = 5         # seconds per executable run
-_COMPILE_TIMEOUT = 120   # seconds per compile (mojo is slow; `mojo run` compiles too)
-_FLOAT_TOL = 1e-9        # absolute for |x|<=1, relative above (matches dataset bar)
-_MIN_COMPARABLE = 4      # need at least this many finite agreeing points
+_RUN_TIMEOUT = 5
+_COMPILE_TIMEOUT = 120
+_FLOAT_TOL = 1e-9
+_MIN_COMPARABLE = 4
 
-# Scalar "kinds" drive sampling, literal formatting, and output comparison.
 _CPP_KIND = {
     "float": "float", "double": "float", "Real64": "float", "Real32": "float",
     "int": "int", "long": "int", "short": "int", "signed": "int", "unsigned": "int",
@@ -411,8 +375,6 @@ _GO_KIND = {
     "bool": "bool",
 }
 
-# Toolchain binary required to *execute* each side. None = always available
-# (Python runs via sys.executable).
 _SOURCE_TOOL: dict[str, str | None] = {"cpp": "g++", "c": "gcc", "python": None}
 _TARGET_TOOL: dict[str, str | None] = {"mojo": "mojo", "rust": "rustc", "c": "gcc", "go": "go", "python": None}
 
@@ -436,8 +398,8 @@ def _toolchain_missing(tool: str | None) -> bool:
 @dataclass
 class FnSig:
     name: str
-    param_kinds: list[str]      # each in {"float","int","bool"}
-    ret_kind: str | None        # None = unknown -> generic compare
+    param_kinds: list[str]
+    ret_kind: str | None
 
 
 def _parse_source_sig(candidate: FnCandidate) -> tuple[FnSig | None, str]:
@@ -466,8 +428,6 @@ def _parse_source_sig(candidate: FnCandidate) -> tuple[FnSig | None, str]:
                 return None, "return-kind-unsupported"
         return FnSig(name=fn.name, param_kinds=kinds, ret_kind=ret), ""
 
-    # cpp / c — the crawler's extraction regex guarantees a single-line
-    # primitive-typed signature at the start of source_code.
     m = re.match(
         r"\s*(?:inline\s+|static\s+|constexpr\s+)*([A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*?)\s+"
         r"([A-Za-z_]\w*)\s*\(([^)]*)\)",
@@ -507,7 +467,7 @@ def _parse_target_sig(target: str, output: str, fn_name: str) -> tuple[FnSig | N
                 if ":" not in p:
                     return None
                 ty = p.split(":", 1)[1].strip()
-            else:  # go: `name type`
+            else:
                 toks = p.split()
                 if len(toks) != 2:
                     return None
@@ -583,7 +543,6 @@ def _parse_target_sig(target: str, output: str, fn_name: str) -> tuple[FnSig | N
     return None, "harness-unsupported"
 
 
-# --- input sampling (adapted from build_cpp_mojo_dataset._sample_inputs) ----
 
 _NUM_LITERAL = re.compile(r"(?<![A-Za-z_0-9.])(-?\d+\.\d+(?:[eE][-+]?\d+)?|-?\d+(?:[eE][-+]?\d+)?)")
 
@@ -638,7 +597,6 @@ def _behavioral_inputs(param_kinds: list[str], source_code: str, fingerprint: st
                 v = float(state & 1)
             row.append(v)
         rows.append(row)
-    # All-args-equal rows hit `(a - b) == 0` style branches.
     for val in (0.0, 1.0, 23.5, 50.0, -2.0):
         rows.append([0.0 if k in ("int", "bool") else val for k in param_kinds])
     return rows
@@ -652,16 +610,10 @@ def _fmt_arg(v: float, kind: str, lang: str) -> str:
         if lang in ("python", "mojo"):
             return "True" if v else "False"
         return "true" if v else "false"
-    return repr(v)  # repr(float) always round-trips and always has '.'/'e'
+    return repr(v)
 
 
-# --- harness generation + execution ----------------------------------------
 
-# Helper preamble for standalone C++ source compilation (trimmed copy of
-# build_cpp_mojo_dataset._CPP_HELPERS — keep in sync). Lets EnergyPlus-style
-# bodies (pow_2, sign, unqualified min/max, Constant::Pi) link standalone;
-# generic GitHub code that redefines these simply fails source-compile and
-# falls back to compile-only.
 _CPP_BEHAVIORAL_HELPERS = r"""
 #include <cstdio>
 #include <cmath>
@@ -793,7 +745,6 @@ def _exec_target(target: str, output: str, sig: FnSig, rows: list[list[float]],
         calls = "\n".join(f"    print({i}, {sig.name}({args_for(row)}))" for i, row in enumerate(rows))
         f = td / "tgt_harness.mojo"
         f.write_text(f"{output}\n\ndef main():\n{calls}\n", encoding="utf-8")
-        # `mojo run` compiles + executes in one step; use the compile timeout.
         r = _run_proc(["mojo", "run", str(f)], _COMPILE_TIMEOUT, cwd=td)
         if r is None:
             return None, "run-timeout"
@@ -865,7 +816,6 @@ def _exec_target(target: str, output: str, sig: FnSig, rows: list[list[float]],
     return None, "harness-unsupported"
 
 
-# --- output comparison -------------------------------------------------------
 
 _BOOL_NORM = {"True": "1", "true": "1", "False": "0", "false": "0"}
 
@@ -893,7 +843,6 @@ def _compare_outputs(src_out: dict[str, str], tgt_out: dict[str, str],
                 return False, f"mismatch@{idx}: {a_raw} vs {b_raw}"
             comparable += 1
             continue
-        # float or unknown return kind
         try:
             fa, fb = float(a), float(b)
         except ValueError:
@@ -907,7 +856,7 @@ def _compare_outputs(src_out: dict[str, str], tgt_out: dict[str, str],
                 comparable += 1
             continue
         if abs(fa) == float("inf") or abs(fb) == float("inf"):
-            continue  # domain edge — skip, like the dataset builder
+            continue
         if abs(fa - fb) > _FLOAT_TOL * max(1.0, abs(fa), abs(fb)):
             return False, f"mismatch@{idx}: {a_raw} vs {b_raw}"
         comparable += 1
@@ -951,9 +900,6 @@ def behavioral_verify(candidate: FnCandidate, target: str, output: str) -> tuple
     return _compare_outputs(src_out, tgt_out, ssig.ret_kind)
 
 
-# ---------------------------------------------------------------------------
-# SFT output helpers
-# ---------------------------------------------------------------------------
 
 def _pair_to_alpaca(pair: PairResult, verification: str = "compile-only",
                     verify_reason: str | None = None) -> dict:
@@ -996,9 +942,6 @@ def _load_seen_fingerprints(out_path: Path) -> set:
     return seen
 
 
-# ---------------------------------------------------------------------------
-# Main crawl loop
-# ---------------------------------------------------------------------------
 
 def crawl(
     source_lang: str,
@@ -1076,7 +1019,6 @@ def crawl(
                         if ok:
                             verification = "behavioral"
                         elif verify_reason.startswith("mismatch"):
-                            # Provably divergent translation — never write it.
                             log.info(
                                 "  ✗ %s::%s -> %s  behaviorally divergent (%s) — dropped",
                                 repo_name, candidate.fn_name, target, verify_reason[:100],

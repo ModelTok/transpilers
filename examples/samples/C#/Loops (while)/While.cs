@@ -6,7 +6,6 @@ namespace Programming
     {
         static void Main(string[] args)
         {
-            // Example 1
             int n = 1;
             Console.WriteLine("Example 1:");
             while (n < 6)
@@ -16,7 +15,6 @@ namespace Programming
             }
             Console.WriteLine();
 
-            // Example 2
             int p = 1;
             Console.WriteLine("Example 2:");
             while (p++ < 6)
@@ -25,7 +23,6 @@ namespace Programming
             }
             Console.WriteLine();
 
-            // Example 3
             int q = 5;
             Console.WriteLine("Example 3:");
             while (++q < 6)
@@ -34,7 +31,6 @@ namespace Programming
             }
             Console.WriteLine();
 
-            // Example 4
             int t = 5;
             Console.WriteLine("Example 4:");
             while (t <= 10)

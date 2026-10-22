@@ -1,5 +1,3 @@
-# Newton's method for sqrt. Exercises float-only math and a
-# convergence-bounded while loop.
 
 
 def sqrt_newton(x: float) -> float:

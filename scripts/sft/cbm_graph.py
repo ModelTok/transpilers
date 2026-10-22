@@ -35,8 +35,8 @@ from migration_plan import cyclic_components, fan_in, tarjan_scc
 
 CBM_BIN = os.environ.get("CBM_BIN", str(Path.home() / ".local/bin/codebase-memory-mcp"))
 DEFAULT_PROJECT = "home-bart-Github-EnergyPlus"
-DEFAULT_SCOPE = "src/EnergyPlus/"            # file_path substring (relative paths)
-DEFAULT_OWNER = "Data"                       # Field.parent_class substring (god-object family)
+DEFAULT_SCOPE = "src/EnergyPlus/"
+DEFAULT_OWNER = "Data"
 OUT = Path(__file__).resolve().parents[2] / "data/sft/cpp_mojo/dep_graph_cbm.json"
 
 

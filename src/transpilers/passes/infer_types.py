@@ -82,7 +82,6 @@ def _apply_ir_hints(module: mir.MirModule, hints: IrHints) -> None:
     for fn in module.functions:
         hit = hints.get(fn.name)
         if hit is None:
-            # Heuristic: mangled C++ name contains the unmangled base name.
             for mangled, pair in hints.items():
                 if len(fn.name) > 2 and fn.name in mangled:
                     hit = pair
@@ -112,7 +111,6 @@ def _module_snapshot(module: mir.MirModule) -> tuple:
     )
 
 
-# ---------- per-function inference ----------
 
 
 def _infer_function(fn: mir.MirFunction, *, fn_map: FnMap | None = None) -> None:
@@ -131,7 +129,6 @@ def _infer_function(fn: mir.MirFunction, *, fn_map: FnMap | None = None) -> None
         last = snap
 
 
-# ---------- interprocedural backward pass ----------
 
 
 def _backward_propagate(nodes: list[mir.MirNode], fn_map: FnMap) -> None:
@@ -202,7 +199,6 @@ def _backward_in(node: mir.MirNode, fn_map: FnMap) -> None:
         _backward_in(node.value, fn_map)
         _backward_in(node.index, fn_map)
         return
-    # MirName, literals, etc. — no calls to find.
 
 
 def _llm_fallback(fn: mir.MirFunction, llm_fill: LlmFill) -> None:
@@ -219,7 +215,6 @@ def _llm_fallback(fn: mir.MirFunction, llm_fill: LlmFill) -> None:
         )
 
 
-# ---------- propagation ----------
 
 
 def _visit_block(
@@ -260,9 +255,6 @@ def _visit_stmt(
         _visit_block(node.body, env, return_tys, fn_map)
         return
     if isinstance(node, mir.MirForRange):
-        # `for i in range(...)` constrains start/stop/step to int. If any bound
-        # is an unknown Name, anchor it here — same pattern as call-signature
-        # arg-type propagation, applied to the already-specialized for-range.
         for bound in (node.start, node.stop, node.step):
             if bound is None:
                 continue
@@ -273,7 +265,6 @@ def _visit_stmt(
         env[node.target] = IntT()
         _visit_block(node.body, env, return_tys, fn_map)
         return
-    # Bare expression statement.
     _visit_expr(node, env, fn_map)
 
 
@@ -331,7 +322,6 @@ def _visit_expr(
         _propagate_from_callee(node, env, fn_map)
         if node.func == "len":
             node.ty = IntT()
-        # range() result type already set in lowering; other calls stay UnknownT.
         return node.ty
     if isinstance(node, mir.MirList):
         elem_tys = [_visit_expr(e, env, fn_map) for e in node.elements]
@@ -373,7 +363,6 @@ def _propagate_from_callee(
         node.ty = callee.return_type
 
 
-# ---------- bidirectional unification on arith / compare ----------
 
 
 def _arith_unify(
@@ -393,8 +382,6 @@ def _arith_unify(
             env[node.left.name] = rt
             node.left.ty = rt
             lt = rt
-    # If either side is float and the other is int (Name or otherwise), the
-    # result must be float — promote the int-typed Name too.
     if (
         isinstance(lt, FloatT)
         and isinstance(rt, IntT)
@@ -456,7 +443,6 @@ def _binop_result(op: str, lt: Type, rt: Type) -> Type:
     return UnknownT(hint=f"binop {op}")
 
 
-# ---------- function-level helpers ----------
 
 
 def _pull_params_from_env(fn: mir.MirFunction, env: dict[str, Type]) -> None:
@@ -472,21 +458,10 @@ def _resolve_return(fn: mir.MirFunction, return_tys: list[Type]) -> None:
         return
     concrete = [t for t in return_tys if not isinstance(t, UnknownT)]
     if concrete:
-        # Multiple distinct concrete return types would be a real ambiguity;
-        # leave the hole in that case. Value equality, not just same-class
-        # (`type(t) is type(first)` would treat `StructT("Foo")` and
-        # `StructT("Bar")` -- or `ListT(elem=IntT())` and
-        # `ListT(elem=StrT())` -- as "the same type" and silently collapse
-        # to whichever was seen first, which is a miscompilation, not a
-        # left-open hole).
         first = concrete[0]
         if all(t == first for t in concrete):
             fn.return_type = first
             return
-    # No concrete return found. If the function has no explicit return at
-    # all (or every return is bare `return`), default to NoneT — implicit
-    # None is the universal Python convention and matches `void` in other
-    # languages.
     if not return_tys or all(isinstance(t, NoneT) for t in return_tys):
         fn.return_type = NoneT()
 

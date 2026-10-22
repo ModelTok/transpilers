@@ -16,11 +16,11 @@ def bubble_sort(array):
     >>> bubble_sort([3,2,1])
     [1, 2, 3]
     """
-    length = len(array) # length of array
+    length = len(array)
     for i in range(length - 1):
         for j in range(length - i - 1):
             if array[j] > array[j + 1]:
-                array[j], array[j + 1] = array[j + 1], array[j] # swap two numbers
+                array[j], array[j + 1] = array[j + 1], array[j]
     return array
 
 if __name__ == "__main__":

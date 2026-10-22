@@ -32,7 +32,6 @@ for f in files:
             continue
         total += 1
         snip = m.group(1).strip()
-        # bucket by leading token / shape
         head = re.match(r"[A-Za-z_][A-Za-z0-9_]*|\W+", snip)
         key = head.group(0)[:24] if head else snip[:24]
         cats[key] += 1

@@ -49,8 +49,6 @@ def diverse_reasoning():
     return rmap
 
 
-# Category-aware <think> for the ~280 diverse pairs that have no hand-written
-# reasoning trace — far better training signal than a single generic stub.
 _CAT_NOTE = {
     "class":    "a C++ `class` becomes a Mojo `struct` (`@fieldwise_init`, traits in parens); methods that mutate take `mut self`, the constructor takes `out self`",
     "struct":   "a C++ `struct` maps to a Mojo `struct` with `@fieldwise_init`; fields and free helper functions carry over directly",
@@ -92,7 +90,6 @@ def main():
     scal_reason = existing_reasoning()
     div_reason = diverse_reasoning()
 
-    # --- scalar pairs (98 + bundled), dedup by name ---
     scalar = {}
     for fn in ["data/cpp_mojo_pairs.jsonl", "data/cpp_mojo_pairs_bundled.jsonl"]:
         fp = REPO / fn
@@ -102,7 +99,7 @@ def main():
                     p = json.loads(l); scalar.setdefault(p['function_name'], p)
     scalar = sorted(scalar.values(), key=lambda x: x['function_name'])
     import os
-    FROZEN = os.environ.get("FROZEN") == "1"   # use the permanent leakage-free benchmark
+    FROZEN = os.environ.get("FROZEN") == "1"
     BM = SFT.parent / "benchmark"
     s_held = [p for i,p in enumerate(scalar) if i%4==0]; s_tr=[p for i,p in enumerate(scalar) if i%4!=0]
     if FROZEN and (BM/"frozen_diverse.jsonl").exists():
@@ -115,7 +112,6 @@ def main():
                          key=lambda x: x['name'])
         print(f"scalar={len(scalar)} diverse={len(diverse)} total={len(scalar)+len(diverse)}")
         d_held = [p for i,p in enumerate(diverse) if i%3==0]; d_tr=[p for i,p in enumerate(diverse) if i%3!=0]
-    # leakage guard: drop held-out scalar whose name is a bundled helper in any train cpp
     import re
     train_def=set()
     for p in s_tr:
@@ -123,7 +119,6 @@ def main():
             train_def.add(m.group(1))
     s_held=[p for p in s_held if p['function_name'] not in train_def]
 
-    # --- TRAIN records (CodePivot schema) ---
     rows = []
     for p in s_tr:
         rz = scal_reason.get(p['function_name']) or tcs.reasoning(p['cpp_source'], p['mojo_source'], "Mojo")
@@ -137,7 +132,6 @@ def main():
                      "output":f"<think>\n{rz}\n</think>\n<answer>\n```mojo\n{p['mojo_unit'].strip()}\n```\n</answer>"})
     (SFT/"train_translation.jsonl").write_text("\n".join(json.dumps(r,ensure_ascii=False) for r in rows))
 
-    # --- scalar held-out (verl) ---
     hrecs=[]
     for i,p in enumerate(s_held):
         pair={"cpp_source":p['cpp_source'],"function_name":p['function_name'],"source_file":p.get('source_file','?'),
@@ -146,7 +140,6 @@ def main():
         if r: hrecs.append(r)
     (SFT/"heldout_eval.jsonl").write_text("\n".join(json.dumps(r,ensure_ascii=False) for r in hrecs))
 
-    # --- diverse held-out (differential: cpp ref outputs + mojo driver) ---
     drecs=[]
     for p in d_held:
         ref=cpp_ref_outputs(p['cpp_unit'],p['cpp_driver'])

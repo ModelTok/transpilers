@@ -156,7 +156,7 @@ def evaluate(task: dict, target: str, tmp: Path) -> dict:
             record["pass_at_1"] = all(t["passed"] for t in tests)
         else:
             record["pass_at_1"] = False
-    else:  # mojo
+    else:
         tests = run_mojo_tests(code, task["tests"], task["name"], tmp)
         record["tests"] = tests
         record["syntax_ok"] = True

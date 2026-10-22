@@ -31,13 +31,13 @@ def main() -> None:
     manifest = []
     valid = total_loc = total_nodes = total_todo = 0
     for f in files:
-        name = os.path.basename(f)[:-3]  # strip .cc
+        name = os.path.basename(f)[:-3]
         src = open(f, errors="replace").read()
         loc = src.count("\n") + 1
         try:
             out, st = lift_source(src, name=f, inc=INC)
             nodes, todo = st["nodes"], st["todo"]
-        except Exception as e:  # never-refuse should not reach here
+        except Exception as e:
             out = f'"""LIFT FAILED: {type(e).__name__}: {e}"""\n'
             nodes = todo = 0
         try:

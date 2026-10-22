@@ -69,8 +69,6 @@ def _extract_methods(class_decl: Node) -> list[hir.HirFunction]:
         if c.type == "method_declaration":
             out.append(_convert_method(c))
         elif c.type in ("field_declaration", "constructor_declaration"):
-            # Fields and constructors are out of scope — refuse so the user
-            # knows.
             raise UnsupportedConstruct(f"class body {c.type}")
     return out
 
@@ -129,8 +127,6 @@ def _convert_stmt(node: Node) -> list[hir.HirNode]:
     if kind in ("line_comment", "block_comment"):
         return []
     if kind == "try_statement":
-        # `try { ... } catch (...) { ... }` — exception handling isn't in the
-        # IR. Lower as the try body only, dropping catch/finally clauses.
         body_node = node.child_by_field_name("body")
         if body_node is not None:
             return _convert_block(body_node)
@@ -258,7 +254,6 @@ def _convert_update(node: Node) -> hir.HirNode:
     )
 
 
-# ---------- expressions ----------
 
 
 def _convert_expr(node: Node) -> hir.HirNode:
@@ -291,14 +286,10 @@ def _convert_expr(node: Node) -> hir.HirNode:
     if kind == "unary_expression":
         return _convert_unary(node)
     if kind == "update_expression":
-        # Update at expression position (e.g., `i + i++`) — semantics differ
-        # from statement position; refuse.
         raise UnsupportedConstruct("java update at expression position")
     if kind == "method_invocation":
         return _convert_call(node)
     if kind == "object_creation_expression":
-        # `new T(args)` — lower as a HirCall. Lossy: T might be a class we
-        # haven't modeled, but the parse proceeds.
         type_node = node.child_by_field_name("type")
         args_node = node.child_by_field_name("arguments")
         name = text(type_node) if type_node is not None else "_"
@@ -307,22 +298,15 @@ def _convert_expr(node: Node) -> hir.HirNode:
             args = [_convert_expr(c) for c in named_children(args_node)]
         return hir.HirCall(func=name, args=args)
     if kind == "array_creation_expression":
-        # `new int[size]` / `new int[]{1, 2, 3}` — lower to a list literal.
-        # Dimension expressions or initializer literals both pass through;
-        # zero-init `new T[size]` produces an empty list (lossy — sizing is
-        # dropped).
         init_kid = next(
             (c for c in named_children(node) if c.type == "array_initializer"), None
         )
         if init_kid is not None:
             elements = [_convert_expr(c) for c in named_children(init_kid)]
             return hir.HirList(elements=elements)
-        # Dimension-based: emit empty list; the size is dropped (lossy).
         return hir.HirList(elements=[])
     if kind == "cast_expression":
-        # `(int) x` — drop the cast in the IR (the value passes through).
         kids = named_children(node)
-        # Children: type-node first (sometimes), value last.
         for c in kids[::-1]:
             if c.type not in (
                 "type_identifier",
@@ -337,7 +321,6 @@ def _convert_expr(node: Node) -> hir.HirNode:
         if kids:
             return _convert_expr(kids[-1])
     if kind == "field_access":
-        # `obj.field` access.
         obj = node.child_by_field_name("object")
         field = node.child_by_field_name("field")
         if obj is not None and field is not None:
@@ -357,8 +340,6 @@ def _convert_expr(node: Node) -> hir.HirNode:
     if kind == "null_literal":
         return hir.HirNullLiteral()
     if kind == "array_initializer":
-        # `{1, 2, 3}` — Java's array-literal short form. Lower the same way
-        # as a `new int[]{...}` would: HirList of converted elements.
         elements = [_convert_expr(c) for c in named_children(node)]
         return hir.HirList(elements=elements)
     raise UnsupportedConstruct(f"java expr {kind}")
@@ -374,9 +355,6 @@ def _convert_binary(node: Node) -> hir.HirNode:
         return hir.HirBoolOp(op="and" if op == "&&" else "or", left=left, right=right)
     if op in ARITH_OPS:
         return hir.HirBinOp(op=op, left=left, right=right)
-    # Bitwise operators — keep the operator symbol; downstream emitters
-    # render them verbatim in C-family targets. Bitwise on bools is
-    # uncommon but legal Java; we don't special-case it.
     if op in ("&", "|", "^", "<<", ">>", ">>>"):
         return hir.HirBinOp(op=op if op != ">>>" else ">>", left=left, right=right)
     raise UnsupportedConstruct(f"java binary op {op!r}")
@@ -411,7 +389,6 @@ ARITH_OPS = {"+", "-", "*", "/", "%"}
 LOGICAL_OPS = {"&&", "||"}
 
 
-# ---------- type text ----------
 
 
 def _type_text(node: Node) -> str:
@@ -438,9 +415,6 @@ def _type_text(node: Node) -> str:
         if kids:
             return f"list[{_type_text(kids[0])}]"
     if node.type == "generic_type":
-        # `List<Integer>`, `Map<String, Object>` — keep the base type and
-        # try to extract the first type argument. Multi-arg generics collapse
-        # onto the first; lossy but lets parsing proceed.
         kids = named_children(node)
         if not kids:
             raise UnsupportedConstruct("empty generic_type")

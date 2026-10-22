@@ -44,11 +44,6 @@ def _configure_libclang() -> None:
             )
         candidates.append(r"C:\Program Files\LLVM\bin\libclang.dll")
     else:
-        # System locations first: like the PyPI `libclang` wheel capping at
-        # 18.1.1 on Windows (see module docstring), it's also stale on Linux
-        # distros that ship a newer `clang` bindings package - an apt-installed
-        # libclang matching the current LLVM release is more likely correct
-        # than the bundled wheel, so it's tried first rather than last.
         candidates.extend(sorted(_glob.glob("/usr/lib/llvm-*/lib/libclang.so*")))
         candidates.extend(sorted(_glob.glob("/usr/lib/llvm-*/lib/libclang-*.so*")))
         candidates.extend(sorted(_glob.glob("/usr/lib/x86_64-linux-gnu/libclang*.so*")))
@@ -58,7 +53,7 @@ def _configure_libclang() -> None:
                 "/usr/local/opt/llvm/lib/libclang.dylib",
             ]
         )
-        try:  # bundled PyPI libclang wheel (last resort)
+        try:
             import clang as _clang
 
             _native = _os.path.join(_os.path.dirname(_clang.__file__), "native")
@@ -120,7 +115,6 @@ def _looks_like_path(s: str) -> bool:
         return False
     if s.startswith("/"):
         return True
-    # Windows drive letter, e.g. "C:\foo" or "C:/foo"
     return len(s) >= 3 and s[1] == ":" and s[2] in ("/", "\\")
 
 
@@ -144,7 +138,6 @@ def _find_clang() -> str | None:
     if os.name == "nt":
         local_app = os.environ.get("LOCALAPPDATA", "")
         if local_app:
-            # LLVM-MinGW (winget MartinStorsjo.LLVM-MinGW.{UCRT,MSVCRT})
             candidates.extend(
                 glob.glob(
                     os.path.join(
@@ -159,7 +152,6 @@ def _find_clang() -> str | None:
                     )
                 )
             )
-        # Official LLVM (winget LLVM.LLVM)
         candidates.append(r"C:\Program Files\LLVM\bin\clang++.exe")
 
     for p in candidates:
@@ -193,7 +185,6 @@ def _system_include_args() -> list[str]:
     except Exception:
         _SYSTEM_INCLUDE_CACHE = []
         return []
-    # Output between "#include <...> search starts here:" and "End of search list."
     lines = out.stderr.splitlines()
     paths: list[str] = []
     in_block = False
@@ -205,8 +196,6 @@ def _system_include_args() -> list[str]:
             break
         if in_block:
             p = line.strip()
-            # macOS prints framework dirs like `/path (framework directory)` —
-            # split on whitespace to pull out the leading path.
             head = p.split()[0] if p else ""
             if _looks_like_path(head):
                 paths.append(head)
@@ -217,7 +206,6 @@ def _system_include_args() -> list[str]:
     return args
 
 
-# Configure libclang at import time.
 _configure_libclang()
 
 __all__ = [

@@ -1,4 +1,3 @@
-// JavaScript — no annotations. The type-inference pass fills the holes.
 
 function addOne(x) {
     return x + 1;

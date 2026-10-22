@@ -67,10 +67,6 @@ def parse_csharp(source: str) -> hir.HirModule:
                         if inner.type == "class_declaration":
                             body.extend(_extract_methods(inner))
             continue
-        # C# top-level statements (the "minimal" program model): wrap in a
-        # synthetic main() so the rest of the pipeline sees a function.
-        # Skip silently for now if it doesn't fit our pattern; surfacing it
-        # would require lifting all top-level statements into a synthetic fn.
         if c.type in ("global_statement",):
             continue
         raise UnsupportedConstruct(f"top-level {c.type}")
@@ -93,7 +89,6 @@ def _extract_methods(class_decl: Node) -> list[hir.HirFunction]:
 
 
 def _convert_method(node: Node) -> hir.HirFunction:
-    # C# grammar uses `returns` for return type — different from Java's `type`.
     return_type_node = required_field(node, "returns")
     name_node = required_field(node, "name")
     params_node = required_field(node, "parameters")
@@ -136,7 +131,6 @@ def _convert_stmt(node: Node) -> list[hir.HirNode]:
     if kind == "local_declaration_statement":
         return _convert_variable_declaration(node.named_children[0])
     if kind == "variable_declaration":
-        # Appears directly in `for (init; ...)` position.
         return _convert_variable_declaration(node)
     if kind == "expression_statement":
         kids = named_children(node)
@@ -147,7 +141,6 @@ def _convert_stmt(node: Node) -> list[hir.HirNode]:
         "assignment_expression",
         "invocation_expression",
     ):
-        # Same shapes that appear in `for (...; ...; <update>)` position.
         return [_convert_expression_stmt(node)]
     if kind == "block":
         return _convert_block(node)
@@ -199,7 +192,6 @@ def _convert_variable_declaration(var_decl: Node) -> list[hir.HirNode]:
     for c in named_children(var_decl):
         if c.type == "variable_declarator":
             name_node = required_field(c, "name")
-            # Value is the last named child that isn't the name itself.
             init_node: Node | None = None
             for sub in named_children(c):
                 if sub.id != name_node.id:
@@ -258,7 +250,6 @@ def _convert_update(node: Node) -> hir.HirNode:
     )
 
 
-# ---------- expressions ----------
 
 
 def _convert_expr(node: Node) -> hir.HirNode:
@@ -275,7 +266,6 @@ def _convert_expr(node: Node) -> hir.HirNode:
         return hir.HirBoolLiteral(value=text(node) == "true")
     if kind == "string_literal":
         raw = text(node)
-        # tree-sitter-c-sharp wraps content with " — strip them.
         return hir.HirStringLiteral(value=raw[1:-1] if raw.startswith('"') else raw)
     if kind == "identifier":
         return hir.HirName(name=text(node))
@@ -344,7 +334,6 @@ ARITH_OPS = {"+", "-", "*", "/", "%"}
 LOGICAL_OPS = {"&&", "||"}
 
 
-# ---------- types ----------
 
 
 def _type_text(node: Node) -> str:
@@ -354,7 +343,5 @@ def _type_text(node: Node) -> str:
         return "None"
     if node.type == "identifier":
         return CS_TYPE_ALIASES.get(text(node), text(node))
-    # Fallback to text + alias lookup; this catches user-defined types we
-    # don't yet model, surfacing a recognizable identifier.
     spelling = text(node)
     return CS_TYPE_ALIASES.get(spelling, spelling)

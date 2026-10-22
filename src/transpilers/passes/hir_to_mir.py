@@ -26,9 +26,6 @@ from transpilers.ir.types import (
 )
 
 
-# -- provenance helper -------------------------------------------------------
-# Every MIR node built from a HIR node carries the HIR node's id in
-# ``_hir_provenance_id``.  This helper sets it at construction time.
 
 
 def _prov(mir_node: mir.MirNode, hir_node: hir.HirNode) -> mir.MirNode:
@@ -46,26 +43,10 @@ PYTHON_TYPE_MAP: dict[str, Type] = {
 }
 
 
-# Module-level registry of user-defined struct names. Populated during
-# hir_to_mir so type-annotation resolution can recognize `Point` as
-# StructT("Point") rather than UnknownT.
 _KNOWN_STRUCTS: set[str] = set()
 _STRUCT_FIELD_NAMES: dict[str, list[str]] = {}
 _STRUCT_FIELD_TYPES: dict[str, dict[str, Type]] = {}
-# A struct's explicit `__init__` param types (self excluded), keyed by struct
-# name -- only present when the struct declares a real constructor. Used by
-# the HirStructInit trailing-field padding below to pad to the
-# *constructor's* declared arity rather than the *field* count: a
-# constructor that computes some fields internally from fewer params than
-# the struct has fields (e.g. OCCT's `gp_EulerSequence_Parameters(int
-# theAx1, bool, bool, bool)` deriving 3 of its 6 fields from `theAx1`) must
-# not have its call sites padded with fabricated extra args just because
-# the field count is larger.
 _STRUCT_CTOR_PARAM_TYPES: dict[str, list[Type]] = {}
-# Module-level constants (`NAME: T = <literal>` at module scope). A free-name
-# reference inside a function inlines the constant's value, so self-contained
-# numeric modules transpile without a module-const declaration concept in the
-# IR. Keyed name -> the HIR value expression (re-lowered per reference).
 _MODULE_CONSTS: dict[str, "hir.HirNode"] = {}
 
 
@@ -79,15 +60,7 @@ def _default_init_for(ty: Type) -> mir.MirNode:
     if isinstance(ty, StrT):
         return mir.MirStringLiteral(value="", ty=StrT())
     if isinstance(ty, ListT):
-        # empty typed list (e.g. a std::stack/vector member's default ctor)
         return mir.MirList(elements=[], ty=ty)
-    # Unknown / struct / dict defaults aren't expressible as one literal, and
-    # this is an algorithmic pass -- it must not invent a value (a fabricated
-    # `IntT(0)` here would previously masquerade as a real default for a
-    # `dict[...]`/nested-struct field, so any later `self.field["key"]`-style
-    # use would silently index an integer). Emit a `MirRaw` hole instead: every
-    # backend already renders that as a `TODO[port]` stub rather than wrong
-    # code.
     return mir.MirRaw(
         snippet="<default-init>",
         ty=UnknownT(hint=f"default init for {type(ty).__name__}"),
@@ -101,15 +74,9 @@ def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
     _STRUCT_FIELD_NAMES.clear()
     _STRUCT_FIELD_TYPES.clear()
     _STRUCT_CTOR_PARAM_TYPES.clear()
-    # Reset per-module so synthesised foreach index names are deterministic:
-    # a given module always lowers to byte-identical output regardless of how
-    # many modules were processed earlier in the same process.
     global _FOREACH_INDEX_COUNTER
     _FOREACH_INDEX_COUNTER = 0
     _MODULE_CONSTS.clear()
-    # First pass: register struct names so methods and fields can reference
-    # them in their annotations, and collect module-level constants so function
-    # bodies can inline free-name references to them.
     for node in module.body:
         if isinstance(node, hir.HirStruct):
             _KNOWN_STRUCTS.add(node.name)
@@ -121,13 +88,6 @@ def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
         elif isinstance(node, hir.HirStruct):
             structs.append(_lower_struct(node))
         elif isinstance(node, hir.HirRaw):
-            # Top-level unsupported construct (issue #50: a C++
-            # template definition that the IR doesn't model). Emit a
-            # placeholder function carrying the snippet, so the
-            # downstream emit pass renders a TODO[port] stub. The
-            # function name is best-effort ("raw_<n>") and the ground
-            # truth still records the real signature under the
-            # template's qualified name.
             functions.append(
                 mir.MirFunction(
                     name=f"__raw_{len(functions)}",
@@ -139,11 +99,6 @@ def hir_to_mir(module: hir.HirModule) -> mir.MirModule:
     return mir.MirModule(functions=functions, structs=structs)
 
 
-# -- provenance-aware lowering helpers ---------------------------------------
-# Every ``_lower_*`` function receives a HIR node and assigns its id to the
-# returned MIR sub-tree.  This wrapper sets ``_hir_provenance_id`` on a
-# single MIR node; synthetic nodes that have no corresponding HIR node
-# (generated indices, default inits) remain at id 0.
 
 
 def _p(node: mir.MirNode, hir_node: hir.HirNode) -> mir.MirNode:
@@ -218,16 +173,11 @@ def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
     if isinstance(node, hir.HirAssign):
         value = _lower_expr(node.value, env)
         ann_ty = _resolve_annotation(node.annotation) if node.annotation else None
-        # Augmented ops desugar to `target = target <op> value`; we keep the
-        # original op symbol on MIR so emission can pick `+=` form for readability.
         ty = (
             ann_ty
             if ann_ty is not None and not isinstance(ann_ty, UnknownT)
             else _type_of(value)
         )
-        # Propagate the binding's list element type onto an empty list literal,
-        # so each backend's MIR→LIR pass can render the element type even when
-        # `[]` carries no inference signal of its own.
         from transpilers.ir.types import ListT
 
         if (
@@ -266,7 +216,6 @@ def _lower_stmt(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         return _lower_for(node, env)
     if isinstance(node, hir.HirForEach):
         return _lower_foreach(node, env)
-    # Bare expression statement (rare in our subset, but legal): wrap as no-op-ish.
     return _lower_expr(node, env)
 
 
@@ -287,7 +236,6 @@ def _lower_for(node: hir.HirFor, env: dict[str, Type]) -> mir.MirForRange:
         raise NotImplementedError(f"range arity {len(args)}")
     env[node.target] = IntT()
     body = [_lower_stmt(n, env) for n in node.body]
-    # The for-loop node itself carries provenance from the HirFor.
     return _p(
         mir.MirForRange(
             target=node.target, start=start, stop=stop, step=step, body=body
@@ -296,8 +244,6 @@ def _lower_for(node: hir.HirFor, env: dict[str, Type]) -> mir.MirForRange:
     )
 
 
-# Monotonic counter for synthesised plain-foreach index names. A plain index is
-# named uniquely so nested foreach loops can't shadow each other.
 _FOREACH_INDEX_COUNTER = 0
 
 
@@ -324,8 +270,6 @@ def _lower_foreach(node: hir.HirForEach, env: dict[str, Type]) -> mir.MirForRang
         _FOREACH_INDEX_COUNTER += 1
     env[index_name] = IntT()
 
-    # `value = seq[index]` — typed binding synthesised at the body head.
-    # Synthetic nodes carry the ForEach's provenance id.
     binding = _p(
         mir.MirAssign(
             target=node.value_name,
@@ -405,9 +349,6 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         ty = BoolT() if node.op == "not" else _type_of(operand)
         return _p(mir.MirUnaryOp(op=node.op, operand=operand, ty=ty), node)
     if isinstance(node, hir.HirName):
-        # A free name (not a local/param) that matches a module-level constant
-        # inlines that constant's value — re-lowered here so it carries its
-        # literal type. Locals/params shadow constants (checked via `env`).
         if node.name not in env and node.name in _MODULE_CONSTS:
             return _lower_expr(_MODULE_CONSTS[node.name], env)
         return _p(
@@ -446,10 +387,6 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
         )
         return _p(mir.MirSubscript(value=value, index=index, ty=ty), node)
     if isinstance(node, hir.HirFieldAccess):
-        # Type of a field access stays Unknown for now — a field-resolution
-        # pass would look up the struct's field types. Out of scope for the
-        # minimal struct slice; the LIR emitters handle Unknown by leaving
-        # the field bare and letting target inference work.
         return _p(
             mir.MirFieldAccess(value=_lower_expr(node.value, env), field=node.field),
             node,
@@ -464,20 +401,9 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
             node,
         )
     if isinstance(node, hir.HirStructInit):
-        # Pair positional ctor args with the struct's declared field names so
-        # every target's emitter can render named-field form when it wants.
         field_names = _STRUCT_FIELD_NAMES.get(node.name, [])
         field_types = _STRUCT_FIELD_TYPES.get(node.name, {})
         lowered_args = [_lower_expr(a, env) for a in node.args]
-        # A struct with a real user-defined constructor (member-init list
-        # computing some fields from fewer params than the struct has
-        # fields -- e.g. OCCT's `gp_EulerSequence_Parameters`, whose ctor
-        # derives 3 of its 6 fields from a single `theAx1` argument) must be
-        # padded to *its own declared arity*, not the field count: padding
-        # to field count fabricates extra args the constructor was never
-        # declared to take. Structs without an explicit ctor (the common
-        # per-field aggregate case, e.g. `gp_XYZ(x, y, z)`) fall back to the
-        # field-count expectation, unchanged from before.
         ctor_param_types = _STRUCT_CTOR_PARAM_TYPES.get(node.name)
         expected_types = (
             ctor_param_types
@@ -485,10 +411,6 @@ def _lower_expr(node: hir.HirNode, env: dict[str, Type]) -> mir.MirNode:
             else [field_types.get(n, UnknownT()) for n in field_names]
         )
         pairs: list[tuple[str, mir.MirNode]] = []
-        # Pair positionally; when field names aren't registered yet (e.g. a
-        # struct's own method constructs the struct before its fields are
-        # recorded), keep the args positionally (name "") rather than dropping
-        # them. Trailing fields with no arg get a default (C++ partial init).
         for i in range(max(len(expected_types), len(lowered_args))):
             fname = field_names[i] if i < len(field_names) else ""
             if i < len(lowered_args):
@@ -525,13 +447,7 @@ def _lower_call(node: hir.HirCall, env: dict[str, Type]) -> mir.MirNode:
         return _p(mir.MirCall(func="len", args=args, ty=IntT()), node)
     if node.func == "range":
         return _p(mir.MirCall(func="range", args=args, ty=RangeT()), node)
-    # Common builtins across source languages — assign a plausible return
-    # type so call results flow through inference rather than blocking on
-    # UnknownT. Heuristic, not exhaustive; the stdlib_maps/ tables are the
-    # long-term home for richer mappings.
     if node.func in ("abs", "min", "max"):
-        # Type-preserving: abs(float)->float, max(float, float)->float. A single
-        # list arg (min([...])/max([...])) yields its element type.
         tys = [_type_of(a) for a in args]
         if node.func in ("min", "max") and len(tys) == 1 and isinstance(tys[0], ListT):
             ty: Type = tys[0].elem
@@ -539,7 +455,6 @@ def _lower_call(node: hir.HirCall, env: dict[str, Type]) -> mir.MirNode:
             ty = _numeric_result_ty(tys)
         return _p(mir.MirCall(func=node.func, args=args, ty=ty), node)
     if node.func == "sum":
-        # sum of a list -> the list's element type (sum([floats]) is float).
         t0 = _type_of(args[0]) if args else IntT()
         ty = t0.elem if isinstance(t0, ListT) else IntT()
         return _p(mir.MirCall(func="sum", args=args, ty=ty), node)
@@ -583,7 +498,7 @@ def _resolve_annotation(ann: str | None) -> Type:
     if ann.startswith("dict[") and ann.endswith("]"):
         inner = ann[len("dict[") : -1]
         depth = 0
-        for i, ch in enumerate(inner):  # split K, V at the top-level comma
+        for i, ch in enumerate(inner):
             if ch in "[<":
                 depth += 1
             elif ch in "]>":
@@ -595,8 +510,6 @@ def _resolve_annotation(ann: str | None) -> Type:
                 )
         return UnknownT(hint=f"malformed dict annotation {ann!r}")
     if ann.startswith("simd[") and ann.endswith("]"):
-        # `simd[<elem>, <lanes>]` — a SIMD vector type. The C++ frontend
-        # produces these strings when it sees Intel/ARM vector typedefs.
         inner = ann[len("simd[") : -1]
         elem_text, _, lanes_text = inner.rpartition(",")
         elem = _resolve_annotation(elem_text.strip())
@@ -604,10 +517,6 @@ def _resolve_annotation(ann: str | None) -> Type:
         return SimdT(elem=elem, lanes=lanes)
     if ann in _KNOWN_STRUCTS:
         return StructT(name=ann)
-    # Unknown identifier-shaped annotation looking like a class name
-    # (e.g., third-party `Charset`, `Scanner`) — treat as opaque struct.
-    # Lossy: we don't know the actual layout, but downstream emission can
-    # render the name and let the target's typechecker decide.
     if ann.isidentifier() and ann[0].isupper():
         return StructT(name=ann)
     return UnknownT(hint=f"unknown annotation {ann!r}")

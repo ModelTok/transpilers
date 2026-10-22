@@ -17,8 +17,6 @@ class CompileResult:
 
 
 def _cc() -> str | None:
-    # resolve_tool returns the which() absolute path, or the bare name
-    # unchanged when nothing matched — the comparison detects "not found".
     for candidate in ("cc", "gcc", "clang"):
         if (path := resolve_tool(candidate)) != candidate:
             return path

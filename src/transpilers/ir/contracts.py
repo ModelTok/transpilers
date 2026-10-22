@@ -29,11 +29,11 @@ class OverflowBehavior(Enum):
     match or guard.
     """
 
-    UNSPECIFIED = auto()  # No contract yet — infer or refuse
-    WRAP = auto()  # Two's-complement wrapping (Rust wrapping_*, u32/i32)
-    CHECKED = auto()  # Panic / trap on overflow (Rust debug builds)
-    SATURATE = auto()  # Clamp to min/max (Rust saturating_*)
-    ARBITRARY = auto()  # Python-style arbitrary precision (never overflows)
+    UNSPECIFIED = auto()
+    WRAP = auto()
+    CHECKED = auto()
+    SATURATE = auto()
+    ARBITRARY = auto()
 
 
 class ValueCategory(Enum):
@@ -45,10 +45,10 @@ class ValueCategory(Enum):
     """
 
     UNKNOWN = auto()
-    VALUE = auto()  # Plain value — copy on move (int, float, bool, small struct)
-    REF_IMMUTABLE = auto()  # Shared read-only reference (&T in Rust, const& in C++)
-    REF_MUTABLE = auto()  # Exclusive mutable reference (&mut T in Rust)
-    OWNED = auto()  # Owned pointer — move on assign, drop on scope exit
+    VALUE = auto()
+    REF_IMMUTABLE = auto()
+    REF_MUTABLE = auto()
+    OWNED = auto()
 
 
 class Ownership(Enum):
@@ -58,10 +58,10 @@ class Ownership(Enum):
     """
 
     UNKNOWN = auto()
-    OWNED = auto()  # Binding owns the value (Rust let, C++ unique_ptr)
-    BORROWED = auto()  # Binding borrows (Rust &, C++ const&)
-    MUT_BORROW = auto()  # Binding mutably borrows (Rust &mut)
-    SHARED = auto()  # GC / reference-counted (Python, Java, Swift)
+    OWNED = auto()
+    BORROWED = auto()
+    MUT_BORROW = auto()
+    SHARED = auto()
 
 
 @dataclass(frozen=True)
@@ -77,27 +77,20 @@ class SemanticContract:
     ownership patterns, insert borrow annotations, etc.
     """
 
-    # ── Integer semantics ──────────────────────────────────────────────
-    int_width: int | None = None  # bits (32, 64, ...); None = unknown / arbitrary
+    int_width: int | None = None
     overflow: OverflowBehavior = OverflowBehavior.UNSPECIFIED
 
-    # ── Value vs reference ─────────────────────────────────────────────
     value_category: ValueCategory = ValueCategory.UNKNOWN
 
-    # ── Mutability ─────────────────────────────────────────────────────
     mutable: bool = False
 
-    # ── Ownership / lifetime ───────────────────────────────────────────
     ownership: Ownership = Ownership.UNKNOWN
-    lifetime: str | None = None  # e.g. ``"'a"``, ``"'static"``
+    lifetime: str | None = None
 
-    # ── Purity / side effects ──────────────────────────────────────────
     pure: bool = False
 
-    # ── List / container semantics ─────────────────────────────────────
     container_ownership: Ownership = Ownership.UNKNOWN
 
-    # ── Helpers ────────────────────────────────────────────────────────
 
     @staticmethod
     def arbitrary_precision_int() -> SemanticContract:
@@ -189,7 +182,6 @@ def _merge_first(a, b, skip=None):
     return a
 
 
-# -- Wildcard contract: no constraints known.  Every node starts here. ---
 WILDCARD = SemanticContract()
 
 

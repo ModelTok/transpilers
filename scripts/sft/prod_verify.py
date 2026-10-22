@@ -13,14 +13,12 @@ migration cares about (compiling != correct).
 import json, re, subprocess, tempfile, math
 from pathlib import Path
 import importlib.util, sys
-REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
+REPO = Path(__file__).resolve().parents[2]
 SFT = REPO / "data/sft/cpp_mojo"
 _d = importlib.util.spec_from_file_location("dv", REPO/"scripts/sft/diff_verify.py")
 dv = importlib.util.module_from_spec(_d); sys.modules["dv"] = dv; _d.loader.exec_module(dv)
 ORACLE = (SFT/"ep_oracle.h").read_text()
 PRELUDE = (SFT/"ep_prelude.mojo").read_text()
-# probe positives AND negatives/edges — negative inputs expose fmod-vs-`%` and
-# sign bugs that a positives-only sample misses (nan-on-both-sides is tolerated).
 SAMPLES = [-45.0, -1.0, 0.0, 0.5, 2.5, 30.0, 190.0, 273.15, 310.0, 400.0]
 
 def nargs(sig_or_def, kind):

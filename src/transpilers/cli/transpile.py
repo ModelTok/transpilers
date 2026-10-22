@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 
-from openrouter import OpenRouter  # noqa: E402  (after env bootstrap)
+from openrouter import OpenRouter  # noqa: E402
 
 from transpilers.cli.domain_prompts import apply_domain_guidance  # noqa: E402
 
@@ -78,14 +78,12 @@ def read_file(path: Path, max_chars: int = 0) -> str:
 
 
 def extract_file_block(text: str) -> str | None:
-    # Try with closing tag first
     m = re.search(
         r"<<<\s*FILE\s+(?P<path>[^\n]+?)\s*>>>\n(?P<body>.*?)\n<<<\s*END\s*>>>",
         text,
         re.DOTALL,
     )
     if not m:
-        # Fallback: missing closing tag — take everything after <<<FILE>>> to end
         m = re.search(
             r"<<<\s*FILE\s+(?P<path>[^\n]+?)\s*>>>\n(?P<body>.*)\Z",
             text,
@@ -169,7 +167,6 @@ def transpile_one(
             )
             raw = response.choices[0].message.content
 
-            # Save raw response for debugging
             if RAW_DIR:
                 raw_dir = Path(RAW_DIR)
                 raw_dir.mkdir(parents=True, exist_ok=True)
@@ -184,7 +181,6 @@ def transpile_one(
 
         code = extract_file_block(raw)
         if not code:
-            # Still save whatever the LLM produced as .mojo for inspection
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_text(raw)
             if attempt < max_retries:
@@ -295,7 +291,6 @@ def main() -> int:
         return 1
     config = json.loads(config_path.read_text())
 
-    # --- Status mode ---
     if args.status:
         by_decision = {}
         for e in config:
@@ -314,7 +309,6 @@ def main() -> int:
             print(f"  {p}: {c}")
         return 0
 
-    # --- Filter entries ---
     if args.ids:
         id_set = set(args.ids)
         entries = [e for e in config if e.get("id") in id_set]

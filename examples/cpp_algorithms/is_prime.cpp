@@ -1,4 +1,3 @@
-// Trial-division primality test.
 bool is_prime(int n) {
     if (n < 2) {
         return false;

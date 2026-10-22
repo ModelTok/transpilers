@@ -11,7 +11,7 @@ class CFieldAssign(LirNode):
     obj: LirNode
     field: str
     value: LirNode
-    via_pointer: bool = False  # `.` for value, `->` for pointer
+    via_pointer: bool = False
 
 
 @dataclass
@@ -63,7 +63,7 @@ class CCompare(LirNode):
 
 @dataclass
 class CBoolOp(LirNode):
-    op: str  # "&&" / "||"
+    op: str
     left: LirNode
     right: LirNode
 

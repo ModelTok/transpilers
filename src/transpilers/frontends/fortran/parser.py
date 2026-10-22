@@ -55,8 +55,6 @@ def parse_fortran(source: str) -> hir.HirModule:
             body.append(_convert_function(c))
             continue
         if c.type == "program":
-            # Skip the program wrapper — its body uses Fortran I/O that
-            # doesn't translate; surface only function defs nested inside.
             for inner in named_children(c):
                 if inner.type == "function":
                     body.append(_convert_function(inner))
@@ -76,7 +74,6 @@ def _convert_function(node: Node) -> hir.HirFunction:
     for c in named_children(node):
         if c.type == "function_statement":
             header = c
-            # function_result is a child of function_statement here.
             for sub in named_children(c):
                 if sub.type == "function_result":
                     inner = named_children(sub)
@@ -100,22 +97,12 @@ def _convert_function(node: Node) -> hir.HirFunction:
         text(p) for p in named_children(params_node) if p.type == "identifier"
     ]
 
-    # Result variable: either explicit via `result(r)` or implicit (same as fn).
     if result_name is None:
         result_name = name
     return_annotation = var_types.get(result_name)
 
     params = [hir.HirParam(name=p, annotation=var_types.get(p)) for p in param_names]
 
-    # The Fortran result variable is implicitly declared by appearing in
-    # `result(...)`. Other backends (Rust/C/Mojo) need an explicit
-    # declaration before the variable can be assigned in a branch — otherwise
-    # `if (cond) { r = a } else { r = b }` introduces `r` in branch scope
-    # only.
-    #
-    # Optimization: if the first user statement is an unconditional `r = ...`,
-    # let that assignment be the declaration — no synthesized init needed.
-    # This drops the double-init noise Ghidra-output Fortran used to show.
     first_user_stmt = body_statements[0] if body_statements else None
     first_assigns_result = (
         first_user_stmt is not None
@@ -130,7 +117,7 @@ def _convert_function(node: Node) -> hir.HirFunction:
         body = []
         locals_seen = set(
             param_names
-        )  # result_name picks up annotation on first user assign
+        )
     else:
         result_init = _default_value_for(return_annotation)
         body = [
@@ -140,13 +127,11 @@ def _convert_function(node: Node) -> hir.HirFunction:
         ]
         locals_seen = set(param_names) | {result_name}
 
-    # Stash return annotation in var_types so the first user assign carries it.
     if first_assigns_result and return_annotation is not None:
         var_types.setdefault(result_name, return_annotation)
     body.extend(
         _convert_block(body_statements, locals_seen=locals_seen, var_types=var_types)
     )
-    # Implicit return of the result variable.
     body.append(hir.HirReturn(value=hir.HirName(name=result_name)))
     return hir.HirFunction(
         name=name, params=params, return_annotation=return_annotation, body=body
@@ -157,9 +142,6 @@ def _default_value_for(annotation: str | None) -> hir.HirNode:
     if annotation in (None, "int"):
         return hir.HirIntLiteral(value=0)
     if annotation == "float":
-        # We don't have a float literal HIR node yet; 0 as an int will likely
-        # be widened by later passes when surrounding context is float, or
-        # raise a clear error.
         return hir.HirIntLiteral(value=0)
     if annotation == "bool":
         return hir.HirBoolLiteral(value=False)
@@ -262,7 +244,6 @@ def _convert_do_loop(
         raise UnsupportedConstruct("fortran do header empty")
     head = inner[0]
     if head.type == "while_statement":
-        # `do while (cond) ... end do` — cond is wrapped in parens.
         cond_kids = named_children(head)
         if not cond_kids:
             raise UnsupportedConstruct("fortran do-while missing condition")
@@ -276,8 +257,6 @@ def _convert_do_loop(
         target_node = kids[0]
         start_node = kids[1]
         stop_node = kids[2]
-        # Fortran's `a, b` is inclusive on both ends; our HirFor over range(...)
-        # treats stop as exclusive, matching Python. Adjust by +1.
         stop_expr = hir.HirBinOp(
             op="+", left=_convert_expr(stop_node), right=hir.HirIntLiteral(value=1)
         )
@@ -290,15 +269,12 @@ def _convert_do_loop(
     raise UnsupportedConstruct(f"fortran do header {head.type}")
 
 
-# ---------- expressions ----------
 
 
 def _convert_expr(node: Node) -> hir.HirNode:
     kind = node.type
     if kind == "number_literal":
         raw = text(node).replace("_", "")
-        # Fortran allows `1.5_dp` (kind suffix already stripped above) and
-        # exponent forms `1.5e0`, `1d-3`.
         if "." in raw or "e" in raw.lower() or "d" in raw.lower():
             normalized = raw.lower().replace("d", "e")
             return hir.HirFloatLiteral(value=float(normalized))
@@ -333,7 +309,6 @@ def _convert_binary(
     if op in COMPARE_OPS or is_relational:
         return hir.HirCompare(op=op, left=left, right=right)
     if op in ("and", "or") or logical:
-        # Fortran logical ops are .and. / .or. — already normalized via the map.
         return hir.HirBoolOp(op=op, left=left, right=right)
     if op in ARITH_OPS:
         return hir.HirBinOp(op=op, left=left, right=right)

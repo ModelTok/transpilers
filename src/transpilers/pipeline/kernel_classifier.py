@@ -44,16 +44,16 @@ from enum import Enum
 
 
 class FunctionKind(str, Enum):
-    KERNEL = "kernel"  # Pure numeric/tensor — route to Mojo direct lift
-    APPLICATION = "application"  # I/O / business logic — route to Python pivot
-    MIXED = "mixed"  # Contains both — recommend splitting
-    UNKNOWN = "unknown"  # Couldn't determine
+    KERNEL = "kernel"
+    APPLICATION = "application"
+    MIXED = "mixed"
+    UNKNOWN = "unknown"
 
 
 @dataclass
 class ClassificationResult:
     kind: FunctionKind
-    confidence: float  # 0.0 – 1.0
+    confidence: float
     reasons: list[str] = field(default_factory=list)
     kernel_score: float = 0.0
     app_score: float = 0.0
@@ -67,13 +67,8 @@ class ClassificationResult:
         return self.kind == FunctionKind.APPLICATION
 
 
-# ---------------------------------------------------------------------------
-# Heuristic signal patterns
-# ---------------------------------------------------------------------------
 
-# Kernel signals (numeric / SIMD-friendly)
 _KERNEL_PATTERNS: list[tuple[str, float, str]] = [
-    # (regex, weight, label)
     (r"\bfor\s*\(.*;\s*\w+\s*[<>]=?\s*\w+\s*;", 0.3, "bounded for-loop"),
     (r"\bwhile\s*\(", 0.15, "while-loop"),
     (r"\b(?:float|double|int32_t|int64_t|__m256|__m128)\b", 0.2, "numeric types"),
@@ -90,7 +85,6 @@ _KERNEL_PATTERNS: list[tuple[str, float, str]] = [
     (r"\bstd::vector<(?:float|double|int)", 0.2, "numeric vector"),
 ]
 
-# Application signals (I/O, exceptions, business logic)
 _APP_PATTERNS: list[tuple[str, float, str]] = [
     (r"\bstd::cout\b|\bprintf\b|\bfprintf\b|\bstd::cerr\b", 0.4, "console I/O"),
     (r"\bstd::cin\b|\bgetline\b|\bscanf\b", 0.3, "console input"),
@@ -151,7 +145,6 @@ class KernelClassifier:
                 app_score += weight
                 reasons.append(f"app: {label}")
 
-        # Normalize scores to [0, 1]
         total = kernel_score + app_score
         if total < 1e-9:
             return ClassificationResult(
@@ -163,7 +156,6 @@ class KernelClassifier:
         k_norm = kernel_score / total
         a_norm = app_score / total
 
-        # Classify
         THRESHOLD = 0.65
         if k_norm >= THRESHOLD:
             kind = FunctionKind.KERNEL
@@ -217,12 +209,11 @@ class KernelClassifier:
         elif result.kind == FunctionKind.MIXED:
             pipeline = "split_required"
         else:
-            pipeline = "python_pivot"  # safe default
+            pipeline = "python_pivot"
 
         return pipeline, result
 
 
-# Module-level convenience function
 _default_clf: KernelClassifier | None = None
 
 
@@ -234,9 +225,6 @@ def classify_function(cpp_source: str) -> ClassificationResult:
     return _default_clf.classify(cpp_source)
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import sys
@@ -251,7 +239,6 @@ if __name__ == "__main__":
         sys.exit(0)
 
     source = sys.argv[1]
-    # If it looks like a file path, read it
     import pathlib
 
     p = pathlib.Path(source)

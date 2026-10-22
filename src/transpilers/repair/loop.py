@@ -32,21 +32,13 @@ from transpilers.repair.signal import (
 )
 from transpilers.verify.score import graded_compile_score
 
-# Lines of context either side of the suspect line when the opt-in
-# "suspect region" repair hint is enabled.
 DEFAULT_SUSPECT_WINDOW = 3
 
-# Prompt template: extends the legacy repair.md with a per-signal framing
-# block. Rendered with ``string.Template`` after a tiny pre-processor
-# strips the irrelevant ``{% if %}`` blocks.
 _PROMPT_PATH = (
     Path(__file__).resolve().parent.parent / "llm" / "prompts" / "repair_with_signal.md"
 )
 
 
-# ---------------------------------------------------------------------------
-# Result types
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -62,9 +54,6 @@ class EscalatingRepairAttempt:
     fix_applied: str = ""
     cache_hit: bool = False
     elapsed_ms: int = 0
-    # Graded compile score of `code` (see verify.score): 2.0 when it verified,
-    # first_error_line / (n_lines + 1) for a compile error, None otherwise.
-    # Informational only; the loop does not rank or select on it.
     score: float | None = None
 
 
@@ -97,9 +86,6 @@ class EscalatingRepairResult:
         return f"[escalating-repair] failed after {self.attempts} attempts"
 
 
-# ---------------------------------------------------------------------------
-# Verifier protocol
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -108,7 +94,6 @@ class VerificationOutcome:
 
     ok: bool
     signal: RepairSignal | None = None
-    # For a compile-only verifier the expected/actual fields are blank.
     expected: str = ""
     actual: str = ""
 
@@ -146,13 +131,8 @@ def _wrap_legacy_verifier(target: str) -> Verifier:
     return verify
 
 
-# ---------------------------------------------------------------------------
-# Prompt rendering
-# ---------------------------------------------------------------------------
 
 
-# Trim the leading/trailing markdown fences the LLM sometimes wraps the
-# answer in.
 _FENCE_RE = re.compile(r"^```[a-zA-Z]*\n?|\n?```$", re.MULTILINE)
 
 
@@ -275,12 +255,9 @@ def _strip_irrelevant_blocks(
     for line in lines:
         stripped = line.strip()
         if stripped.startswith("{% if "):
-            # ``{% if signal_kind == "..." %}`` → condition body is between
-            # ``if`` and ``%``. ``stripped[3:]`` skips ``{% ``, then we look
-            # for the closing ``%``.
             body = stripped[3:]
             end = body.find("%")
-            cond = body[2:end].strip()  # skip "if"
+            cond = body[2:end].strip()
             keep = _eval_cond(cond, signal_kind, suspect_region)
             skip = not keep
             continue
@@ -319,7 +296,6 @@ def _to_dollar_placeholders(template: str) -> str:
     n = len(template)
     while i < n:
         c = template[i]
-        # ``{{name}}`` — double-brace placeholder
         if (
             c == "{"
             and i + 1 < n
@@ -334,22 +310,18 @@ def _to_dollar_placeholders(template: str) -> str:
                     out.append("$" + name)
                     i = j + 2
                     continue
-        # ``{{`` — literal opening brace
         if c == "{" and i + 1 < n and template[i + 1] == "{":
             out.append("{")
             i += 2
             continue
-        # ``}}`` — literal closing brace
         if c == "}" and i + 1 < n and template[i + 1] == "}":
             out.append("}")
             i += 2
             continue
-        # ``{}`` — empty brace pair
         if c == "{" and i + 1 < n and template[i + 1] == "}":
             out.append("{}")
             i += 2
             continue
-        # ``{name}`` — single-brace placeholder
         if (
             c == "{"
             and i + 1 < n
@@ -405,9 +377,6 @@ def _legacy_prompt(
     )
 
 
-# ---------------------------------------------------------------------------
-# The escalating loop
-# ---------------------------------------------------------------------------
 
 
 def _call_llm(
@@ -701,10 +670,7 @@ def _finalize(
     import hashlib
 
     history = result.history
-    # Count actual LLM round-trips: retries (attempt > 1) that were not served
-    # from cache. Cache hits replay a prior LLM answer without a fresh call.
     n_llm_calls = sum(1 for h in history if h.attempt > 1 and not h.cache_hit)
-    # Bucket / construct come from the last failing signal we saw.
     bucket = ""
     for h in reversed(history):
         if h.signal is not None and not h.verified:

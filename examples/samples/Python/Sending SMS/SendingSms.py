@@ -4,7 +4,6 @@ from sinchsms import SinchSMS
 number = 'your_phone_mobile_number'
 message = 'your_sms_message'
 
-#sign up https://www.sinch.com to get app_key & app secret
 client = SinchSMS(your_app_key, your_app_secret)
 
 print("Sending '%s' to %s" % (message, number))

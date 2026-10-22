@@ -15,21 +15,18 @@ from collections import Counter
 TOPO = os.environ.get("TOPOLOGIC_ROOT", r"C:/Users/amd/Documents/GitHub/Topologic")
 INC = os.path.join(TOPO, "TopologicCore", "include")
 
-# Representative subset: leaf utilities + simple value classes + one core
-# topology class per level of the cell-complex hierarchy, skipping the
-# god-class Topology.cpp/Graph.cpp (kept separate as a note).
 SUBSET = [
-    "Bitwise.cpp",          # leaf utility, std::list<int>, static methods
-    "DoubleAttribute.cpp",  # simple value wrapper
+    "Bitwise.cpp",
+    "DoubleAttribute.cpp",
     "IntAttribute.cpp",
     "StringAttribute.cpp",
     "ListAttribute.cpp",
-    "Dictionary.cpp",       # std::map-backed
-    "Context.cpp",          # small manager
-    "Geometry.cpp",         # abstract base, shared_ptr typedef
-    "Line.cpp",             # OCCT Handle(Geom_Line), inheritance
-    "Surface.cpp",          # OCCT Handle(Geom_Surface)
-    "Vertex.cpp",           # core topology leaf
+    "Dictionary.cpp",
+    "Context.cpp",
+    "Geometry.cpp",
+    "Line.cpp",
+    "Surface.cpp",
+    "Vertex.cpp",
     "Edge.cpp",
     "Wire.cpp",
     "Face.cpp",
@@ -40,7 +37,6 @@ SUBSET = [
 
 SRC_DIR = os.path.join(TOPO, "TopologicCore", "src")
 
-# allow "python scripts/sweep_topologic.py /path/to/Topologic" to override
 
 
 def classify_strict_err(msg: str) -> str:
@@ -102,7 +98,6 @@ def lift_sweep():
         out, stats = lift_source(src, name=name, inc=[INC])
         todo = stats.get("todo", 0)
         nodes = stats.get("nodes", 0)
-        # Categorize the TODO[lift] stubs from emitted comments
         stubs = re.findall(r"# TODO\[lift\]:?\s*([^:\n]*)", out)
         cat = Counter()
         for s in stubs:
@@ -173,7 +168,6 @@ def main() -> int:
     print(f"\n  LIFT: {tot_todo}/{tot_nodes} nodes stubbed "
           f"({100*(1-tot_todo/max(tot_nodes,1)):.1f}% mechanical)")
 
-    # Dump JSON for the report
     report = {"strict": strict, "lift": lift, "strict_buckets": dict(buckets.most_common())}
     out_path = os.path.join(os.path.dirname(__file__), "..", "docs", "topologic_sweep.json")
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)

@@ -21,15 +21,14 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SFTDIR = REPO / "data/sft/codepivot"
 
-# reuse helpers
 sys.path.insert(0, str(REPO / "src"))
 _b = importlib.util.spec_from_file_location("bcm", REPO / "scripts/build_cpp_mojo_dataset.py")
 bcm = importlib.util.module_from_spec(_b); sys.modules["bcm"] = bcm; _b.loader.exec_module(bcm)
 _t = importlib.util.spec_from_file_location("tcs", REPO / "scripts/sft/to_codepivot_schema.py")
 tcs = importlib.util.module_from_spec(_t); sys.modules["tcs"] = tcs; _t.loader.exec_module(tcs)
 
-HOLDOUT_EVERY = 4          # 1 in 4 -> ~10 of 40 / ~10 of 39
-SAMPLES = 20               # test cases per held-out function
+HOLDOUT_EVERY = 4
+SAMPLES = 20
 
 _TYPE_MAP = {"Real64": "Float64", "double": "Float64", "float": "Float64", "Nandle": "Float64",
              "Real32": "Float64", "int": "Int", "Int": "Int", "Int64": "Int", "long": "Int",
@@ -98,11 +97,9 @@ def main():
 
     cpp_mojo = [json.loads(l) for l in (REPO / "data/cpp_mojo_pairs.jsonl").read_text().splitlines() if l.strip()]
     cpp_py_raw = [json.loads(l) for l in (REPO / "data/sft/cpp_python_pairs.jsonl").read_text().splitlines() if l.strip()]
-    # normalize cpp_python to expose cpp_source/function_name/arg_types like cpp_mojo
     cpp_py = [{"cpp_source": p["input"], "mojo_source": p["output"],
                "function_name": p["function_name"], "source_file": p["source_file"],
                "arg_types": [], "ret_type": "Real64"} for p in cpp_py_raw]
-    # recover arg_types for python pairs from the matching cpp_mojo by name, else infer from sig
     byname = {p["function_name"]: p["arg_types"] for p in cpp_mojo}
     import re
     for p in cpp_py:
@@ -119,11 +116,11 @@ def main():
     for tag, tgt, ltag, pairs in [("mojo", "Mojo", "mojo", cpp_mojo), ("python", "Python", "python", cpp_py)]:
         ps = sorted(pairs, key=lambda x: x["function_name"])
         for i, p in enumerate(ps):
-            if i % HOLDOUT_EVERY == 0:                      # held-out
+            if i % HOLDOUT_EVERY == 0:
                 rec = verl_record(p, tgt, ltag, sysprompt, idx); idx += 1
                 if rec:
                     heldout_recs.append(rec); held_names.add((tgt, p["function_name"]))
-                    continue                                # excluded from train
+                    continue
             train[tag].append(tcs.record(p["cpp_source"], p["mojo_source"], tgt, ltag, sysprompt))
 
     (SFTDIR / "train_cpp_mojo_sft.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in train["mojo"]))

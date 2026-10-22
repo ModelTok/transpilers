@@ -15,7 +15,6 @@ import argparse
 import sys
 from pathlib import Path
 
-# Path munging so we can import the engine without an editable install.
 _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
@@ -65,7 +64,7 @@ def _run_escalating(
 ) -> tuple[bool, str | None, int]:
     """Run the escalating-repair loop. Returns (passed, fixing_tier, attempts)."""
     client = TieredLlmClient(
-        tiers={},  # CACHED only -> trivial-loop fallback
+        tiers={},
     )
     try:
         res = escalating_repair(
@@ -77,10 +76,6 @@ def _run_escalating(
             max_attempts=3,
         )
     except Exception:
-        # The benchmark should report a fail, not crash the run. The
-        # issue's "refuse-don't-guess" invariant means the loop itself
-        # should never raise on bad input; the try/except is a safety
-        # net for the benchmark, not the loop.
         return (False, None, 0)
     return (
         res.passed,

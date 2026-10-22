@@ -19,7 +19,6 @@ __all__ = [
     "mojo_compiles",
     "python_compiles",
     "rust_compiles",
-    # behavioral equivalence (#48)
     "check_behavioral_equivalence",
     "make_behavioral_verifier",
     "generate_inputs",

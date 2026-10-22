@@ -29,9 +29,6 @@ DEFAULT_MODEL = "claude-opus-4-7"
 DEFAULT_CACHE_DIR = Path(__file__).parent / "cache"
 
 
-# ---------------------------------------------------------------------------
-# Tier model (issue #47)
-# ---------------------------------------------------------------------------
 
 
 class ModelTier(Enum):
@@ -68,9 +65,9 @@ class TierConfig:
 
     tier: ModelTier
     model: str
-    backend: str = ""  # "openai" | "anthropic" | "" (use env-derived default)
-    base_url: str = ""  # openai-compatible endpoint (vLLM, TGI)
-    api_key: str = ""  # optional override
+    backend: str = ""
+    base_url: str = ""
+    api_key: str = ""
     extra: dict = field(default_factory=dict)
 
     def available(self) -> bool:
@@ -89,8 +86,6 @@ class TierConfig:
                 or self.base_url
                 or os.environ.get("OPENAI_BASE_URL")
             )
-        # Unknown backend — let the call site decide; treat as available if
-        # the model is set so test fakes can inject a callable.
         return bool(self.model)
 
 
@@ -120,13 +115,7 @@ class LlmClient:
     def __init__(
         self, model: str | None = None, cache_dir: Path = DEFAULT_CACHE_DIR
     ) -> None:
-        # Model resolves from (explicit arg) > TRANSPILER_LLM_MODEL env > default.
-        # For a self-hosted vLLM server this is the served name, e.g.
-        # "Qwen2.5-Coder-3B-Instruct".
         self.model = model or os.environ.get("TRANSPILER_LLM_MODEL", DEFAULT_MODEL)
-        # OPENAI_BASE_URL may be a single endpoint or a comma-separated POOL of
-        # OpenAI-compatible servers (e.g. NPU + iGPU + CPU). Holes round-robin
-        # across the pool so all available hardware shares the load.
         self._base_urls = [
             u.strip().rstrip("/")
             for u in os.environ.get("OPENAI_BASE_URL", "").split(",")
@@ -165,10 +154,6 @@ class LlmClient:
         (self.cache_dir / f"{key}.txt").write_text(value)
 
     def _call(self, prompt: str, temperature: float) -> str:
-        # Backend select: TRANSPILER_LLM_BACKEND=openai|anthropic, else inferred
-        # (openai when OPENAI_BASE_URL is set, otherwise anthropic). This lets a
-        # self-hosted model (e.g. Qwen2.5-Coder-3B via vLLM) serve the holes
-        # instead of a hosted API, at on-prem cost.
         backend = os.environ.get("TRANSPILER_LLM_BACKEND", "").lower()
         if not backend:
             backend = "openai" if os.environ.get("OPENAI_BASE_URL") else "anthropic"
@@ -186,13 +171,8 @@ class LlmClient:
                 "OpenAI-compatible LLM backend selected but OPENAI_BASE_URL is not set "
                 "(e.g. http://<host>:8000/v1 for a vLLM server; comma-separate for a pool)."
             )
-        # Round-robin across the endpoint pool — successive holes hit different
-        # devices (NPU / iGPU / CPU), spreading load across the hardware.
         base_url = self._base_urls[self._rr % len(self._base_urls)]
         self._rr += 1
-        # Stdlib-only POST to /chat/completions — no `openai` SDK dependency, so
-        # any OpenAI-compatible server (vLLM, FastFlowLM/Lemonade, TGI, OpenAI)
-        # works out of the box.
         import urllib.request
 
         body = json.dumps(
@@ -234,9 +214,6 @@ class LlmClient:
         return resp.content[0].text
 
 
-# ---------------------------------------------------------------------------
-# Tiered client (issue #47)
-# ---------------------------------------------------------------------------
 
 
 class _NoCacheHit(Exception):
@@ -264,10 +241,6 @@ def _hole_prompt(hole: "TypedHole | str") -> str:
 
 def _client_from_config(cfg: TierConfig, cache_dir: Path) -> LlmClient:
     """Materialise a single-tier ``LlmClient`` from a ``TierConfig``."""
-    # We override the env-derived default backend by pre-setting the env
-    # vars that ``LlmClient._call`` consults. This is intentional: the
-    # TieredLlmClient treats each tier as fully independent, and the LlmClient
-    # singleton reads its backend from env on every call.
     prior_backend = os.environ.get("TRANSPILER_LLM_BACKEND")
     prior_base_url = os.environ.get("OPENAI_BASE_URL")
     prior_api_key = os.environ.get("OPENAI_API_KEY")
@@ -280,8 +253,6 @@ def _client_from_config(cfg: TierConfig, cache_dir: Path) -> LlmClient:
             os.environ["OPENAI_API_KEY"] = cfg.api_key
         return LlmClient(model=cfg.model, cache_dir=cache_dir)
     finally:
-        # Restore (or unset) so we don't leak tier-local state into the
-        # surrounding process.
         for var, prior in (
             ("TRANSPILER_LLM_BACKEND", prior_backend),
             ("OPENAI_BASE_URL", prior_base_url),
@@ -335,11 +306,6 @@ class TieredLlmClient:
         self.tiers: dict[ModelTier, object] = {}
         for tier in ModelTier.ordered():
             cfg = (tiers or {}).get(tier)
-            # CACHED is special: when not configured, materialise a default
-            # disk-backed LlmClient so the loop's pin-to-CACHED path has
-            # somewhere to land. This is the issue's "verified answer
-            # replay" mechanism: every successful repair writes to CACHED
-            # and the next run reuses it for free.
             if cfg is None and tier == ModelTier.CACHED:
                 cfg = LlmClient(
                     model=f"__tiered_cached__{DEFAULT_MODEL}",
@@ -347,7 +313,6 @@ class TieredLlmClient:
                 )
             self.tiers[tier] = _materialise_tier(cfg, default_cache_dir)
 
-    # ---- public API ----
 
     def available_tiers(self) -> list[ModelTier]:
         """Tiers that are configured, in escalation order."""
@@ -375,7 +340,6 @@ class TieredLlmClient:
             try:
                 return hole.validate(raw), tier
             except Exception:
-                # Malformed cached value — drop and escalate.
                 continue
         raise _NoCacheHit()
 
@@ -412,7 +376,6 @@ class TieredLlmClient:
             return raw
         return target.fill(hole, temperature=temperature)  # type: ignore[arg-type]
 
-    # ---- cache helpers (for the repair loop) ----
 
     def cache_lookup(
         self,
@@ -449,7 +412,6 @@ class TieredLlmClient:
         assert isinstance(target, LlmClient)
         target._cache_put(target._cache_key(prompt, temperature), raw)
 
-    # ---- internals ----
 
     def _cached_read_for_hole(
         self,

@@ -37,7 +37,6 @@ def CalcWindSurfaceTheta(WindDir: Float64, SurfAzimuth: Float64) -> Float64:
         return abs(theta - 360.0)
     return theta"""
 
-# DryBulbTemp < LowerBound < UpperBound -> exercises `return LowGradient`
 EXTRA_5ARG_ROW = [0.0, 5.0, 1.0, 3.0, 2.0]
 
 _orig_sample = bld._sample_inputs
@@ -51,7 +50,6 @@ def _patched(params, cpp_body, n=120):
 
 
 bld._sample_inputs = _patched
-# verify() resolved _sample_inputs at module load; patch its global namespace
 verify.__globals__["_sample_inputs"] = _patched
 
 rows = {json.loads(l)["function_name"]: json.loads(l)

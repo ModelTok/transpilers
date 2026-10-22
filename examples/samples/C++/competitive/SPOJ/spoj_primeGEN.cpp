@@ -2,7 +2,6 @@
 #include <vector>
 #include <math.h>
 using namespace std;
-										///took me 8 days to solve :p
 typedef long long typ;
 
 int main() {
@@ -25,30 +24,22 @@ int main() {
 				}
 			}
 		}
-			//for(int i=0;i<=sq;++i)
-			//if(prime[i]) {cout<<i<<endl;
-				//}
 		
 		for(int i=0;i<=sq;++i){
 			if(prime[i]){
 				k = ((int)(m/i)*i);
-				//cout<<"K:"<<k<<endl;
 				for(int x=k;x<=n;x+=i){
 						if(x>=m && x!=i) {
-							//cout<<"index:"<<x<<endl;
 							myprime[x-m] = false; 
 						}
 				}
 			}
 		}
-		//typ g=0;				///comented parts are counter!
 		for(int i=0;i<n-m+1;++i)
 			if(myprime[i]) {
-				if(i+m!=1){ cout<<i+m<<endl;		// base case ignore for 1
-							//g++;
+				if(i+m!=1){ cout<<i+m<<endl;
 						}
 				}
-		//cout<<g<<endl;
 		cout<<endl;
 	}
 	return 0;

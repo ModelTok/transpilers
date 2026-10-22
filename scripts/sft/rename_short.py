@@ -13,7 +13,7 @@ that still pass are kept. Usage: rename_short.py <in.jsonl> <out.jsonl> [limit]
 """
 import json, re, sys, importlib.util
 from pathlib import Path
-REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
+REPO = Path(__file__).resolve().parents[2]
 _d = importlib.util.spec_from_file_location("dv", REPO/"scripts/sft/diff_verify.py")
 dv = importlib.util.module_from_spec(_d); sys.modules["dv"] = dv; _d.loader.exec_module(dv)
 
@@ -34,15 +34,13 @@ def rename_pair(p):
     drv = (p["cpp_driver"] + " " + p["mojo_driver"])
     drv_ids = set(IDENT.findall(drv))
     unit_ids = set(IDENT.findall(cu)) | set(IDENT.findall(mu))
-    # internal = in unit, not in driver, >=5 chars, not reserved, not a type-ish token
     internal = sorted(x for x in unit_ids
                       if len(x) >= 5 and x not in drv_ids and x not in RESERVED
-                      and not x[0].isupper()          # skip Types/structs (Capitalized)
-                      and not x.startswith("__"))      # skip dunders
+                      and not x[0].isupper()
+                      and not x.startswith("__"))
     if not internal:
         return None
     shorts = short_names(len(internal))
-    # avoid colliding with short names already present
     present = {x for x in unit_ids if len(x) < 5}
     shorts = [s for s in short_names(len(internal)+len(present)) if s not in present][:len(internal)]
     mapping = dict(zip(internal, shorts))
@@ -66,7 +64,7 @@ def main():
         if ok:
             kept.append(q); renamed += 1
         else:
-            kept.append(p); broke += 1   # keep ORIGINAL if rename broke it
+            kept.append(p); broke += 1
             print(f"  rename broke {p.get('name','?')}: {why} -> kept original")
     outp.write_text("\n".join(json.dumps(p, ensure_ascii=False) for p in kept) + "\n")
     print(f"renamed+verified {renamed}, unchanged {nochange}, rename-failed(kept orig) {broke}, total {len(kept)} -> {outp}")

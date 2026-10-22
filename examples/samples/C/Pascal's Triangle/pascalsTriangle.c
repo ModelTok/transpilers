@@ -32,7 +32,6 @@ int main()
 			fact2 = iterativeFactorial(k);
 			fact3 = iterativeFactorial(j);
 
-			//Binomial Coefficient
 			printf("%03ld   ", (fact1 / (fact2*fact3)));
 		}
 		printf("\n");

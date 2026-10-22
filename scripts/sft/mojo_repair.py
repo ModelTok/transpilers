@@ -16,8 +16,6 @@ Rules (by cluster):
 from __future__ import annotations
 import re
 
-# intrinsic-backed math fns that LINK under `-Xlinker -ldl` (no -lm). tanh/cbrt/
-# sin/cos/sinh/cosh are EXCLUDED: they parse but fail to LINK.
 _MATH = ["sqrt", "exp", "log", "log2", "log10", "atan", "atan2", "floor", "ceil",
          "trunc", "pow", "isqrt"]
 
@@ -36,14 +34,10 @@ def _add_math_imports(code: str) -> str:
 
 
 def _size_to_len(code: str) -> str:
-    # `name.size()` -> `len(name)` (Mojo List/collections use len(), not .size())
     return re.sub(r"\b([A-Za-z_]\w*)\.size\(\)", r"len(\1)", code)
 
 
 def _self_qualify_params(code: str) -> str:
-    # Inside `struct X[T: ...]:` blocks, a bare struct parameter must be `Self.T`.
-    # Collect single-cap param names from struct headers, then qualify their bare
-    # uses in type positions (`: T`, `-> T`, `[T]`, `Scalar[T]`).
     params = set(re.findall(r"struct\s+\w+\s*\[\s*([A-Z])\b", code))
     params |= set(re.findall(r"struct\s+\w+\s*\[[^\]]*?\b([A-Z])\s*:", code))
     for p in params:
@@ -54,8 +48,6 @@ def _self_qualify_params(code: str) -> str:
 
 
 def _add_raises(code: str) -> str:
-    # For each `def NAME(...) -> RET:` whose indented body contains `raise` or a
-    # raising idiom, add ` raises` before the colon if absent.
     lines = code.splitlines()
     out = list(lines)
     dre = re.compile(r"^(\s*)def\s+\w+\s*\([^)]*\)\s*(->\s*[^:]+?)?\s*:\s*$")

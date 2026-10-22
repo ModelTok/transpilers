@@ -1,6 +1,3 @@
-/**
- * Created by NafisaBarlaskar on 09-05-2017.
- */
 
 import java.text.DecimalFormat;
 
@@ -125,7 +122,7 @@ public class NumberToWords {
 
         finalResult += convertThousands;
 
-        return finalResult; //.replaceAll("^\\s+", "").replaceAll("\\b\\s{2,}\\b", " ");
+        return finalResult;
     }
 
     public static void main(String[] args){

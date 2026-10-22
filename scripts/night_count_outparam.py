@@ -19,7 +19,7 @@ EP = Path("/home/amd/EnergyPlus/src/EnergyPlus")
 def parse_params(arg_str):
     arg_str = _strip_comments(arg_str).strip()
     if not arg_str or arg_str == "void":
-        return None  # void fn with no out-params is useless
+        return None
     params, n_out = [], 0
     for raw in _split_top_level(arg_str):
         p = raw.strip()

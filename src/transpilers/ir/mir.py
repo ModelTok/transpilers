@@ -49,7 +49,6 @@ class MirFunction(MirNode):
     params: list["MirParam"]
     return_type: Type
     body: list[MirNode]
-    # See HirFunction.is_static.
     is_static: bool = False
 
 
@@ -191,7 +190,7 @@ class MirAssign(MirNode):
     value: MirNode
     ty: Type = field(default_factory=UnknownT)
     augmented_op: str | None = None
-    is_declaration: bool = False  # set by mutability inference / scoping
+    is_declaration: bool = False
 
 
 @dataclass

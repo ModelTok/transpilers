@@ -30,20 +30,14 @@ TRAIN = DATA / "train_translation.jsonl"
 HELDOUT = DATA / "heldout_eval.jsonl"
 ACQ = DATA / "mojo_acquisition.json"
 
-# 1280 is `max_length` in train_05b.py / smoke_train.py: a TOKEN cutoff applied
-# by SFTTrainer over the full formatted sequence. We audit char length of the
-# `output` field and flag using a chars/4 token estimate against that cutoff.
 TOKEN_CUTOFF = 1280
 CHARS_PER_TOKEN = 4.0
 
-# difflib similarity threshold for "near duplicate" (after whitespace normalize).
 NEAR_DUP_RATIO = 0.90
 
-# Markers of non-idiomatic FFI in the acquisition outputs.
 FFI_MARKERS = ("unsafe_from_address", "ptr: Int")
 
 CPP_FENCE_RE = re.compile(r"```cpp\s*\n(.*?)```", re.DOTALL)
-# function name = identifier immediately before the first '(' in the cpp body.
 FUNC_NAME_RE = re.compile(r"([A-Za-z_]\w*)\s*\(")
 
 
@@ -61,8 +55,6 @@ def extract_cpp_func_name(text: str) -> str | None:
     if not m:
         return None
     body = m.group(1)
-    # The first identifier directly preceding '(' is the function name; this
-    # naturally skips multi-word/pointer return types (Real64, bool, int const).
     fm = FUNC_NAME_RE.search(body)
     return fm.group(1) if fm else None
 
@@ -100,10 +92,10 @@ def find_near_dups(outputs: list[str], bucket: bool = False
     for i, j in cand_pairs:
         a, c = normed[i], normed[j]
         if a == c:
-            continue  # exact dup, reported separately
+            continue
         lo, hi = sorted((len(a), len(c)))
         if hi == 0 or lo / hi < 0.80:
-            continue  # too different in length to reach the ratio threshold
+            continue
         ratio = SequenceMatcher(None, a, c).ratio()
         if ratio >= NEAR_DUP_RATIO:
             pairs.append((i, j, ratio))
@@ -135,13 +127,11 @@ def main() -> None:
     print("# cpp->mojo SFT DATASET QA REPORT")
     print("#" * 70)
 
-    # ---- record counts ------------------------------------------------------
     hr("RECORD COUNTS")
     print(f"train_translation.jsonl : {len(train)}")
     print(f"heldout_eval.jsonl      : {len(heldout)}")
     print(f"mojo_acquisition.json   : {len(acq)}")
 
-    # ---- exact & near duplicate outputs (train) -----------------------------
     hr("DUPLICATE OUTPUTS (train_translation.jsonl)")
     train_outputs = [r["output"] for r in train]
     exact: dict[str, list[int]] = defaultdict(list)
@@ -163,7 +153,6 @@ def main() -> None:
         nj = extract_cpp_func_name(train[j]["instruction"])
         print(f"   {ratio:.3f}  row {i}({ni})  ~  row {j}({nj})")
 
-    # ---- train/heldout leakage ---------------------------------------------
     hr("TRAIN / HELDOUT LEAKAGE")
     train_funcs: dict[str, list[int]] = defaultdict(list)
     for i, r in enumerate(train):
@@ -176,7 +165,6 @@ def main() -> None:
         if name:
             heldout_funcs[name] = i
         else:
-            # fallback: pull from the cpp fence in the user prompt
             for m in r.get("prompt", []):
                 if m.get("role") == "user":
                     fn = extract_cpp_func_name(m.get("content", ""))
@@ -193,18 +181,12 @@ def main() -> None:
     if not leaked:
         print("   clean: no train cpp function appears in the heldout eval set.")
 
-    # ---- output length distribution + truncation risk (train) ---------------
     hr("OUTPUT LENGTH DISTRIBUTION + TRUNCATION RISK (train)")
     lens = [len(o) for o in train_outputs]
     d = dist(lens)
     print(f"output chars  min/median/mean/max : "
           f"{d['min']} / {d['median']} / {d['mean']} / {d['max']}")
 
-    # The 1280 cutoff is `max_length` in train_05b.py / smoke_train.py: a TOKEN
-    # cap SFTTrainer applies to the FULL formatted sequence
-    # (system + instruction + input + output). Right-truncation (tokenizer
-    # default) drops the END of the sequence -> the mojo answer. So a record
-    # over the cutoff is trained on a TRUNCATED answer = corrupted labels.
     def seq_chars(r: dict) -> int:
         return (len(r.get("system", "")) + len(r.get("instruction", ""))
                 + len(r.get("input", "")) + len(r.get("output", "")))
@@ -229,7 +211,6 @@ def main() -> None:
           f"({extract_cpp_func_name(train[longest]['instruction'])}) "
           f"= {lens[longest]} chars (~{int(lens[longest]/CHARS_PER_TOKEN)} tok)")
 
-    # ---- acquisition set: non-idiomatic FFI ---------------------------------
     hr("ACQUISITION SET FFI AUDIT (mojo_acquisition.json)")
     acq_outputs = [r.get("output", "") for r in acq]
     ffi = [i for i, o in enumerate(acq_outputs)
@@ -244,8 +225,6 @@ def main() -> None:
     for m, c in by_marker.items():
         print(f"   contains {m!r:24}: {c}")
 
-    # acquisition exact + near dups (near-dup surfaces templated/batch-kernel
-    # redundancy that exact-match misses; bucketed for the 1163-record set).
     acq_exact: dict[str, int] = defaultdict(int)
     for o in acq_outputs:
         acq_exact[o] += 1

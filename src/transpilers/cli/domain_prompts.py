@@ -33,7 +33,6 @@ def detect_domains(source_text: str, source_path: str = "") -> list[str]:
         domains.append(GTEST)
     if _EIGEN_INCLUDE.search(source_text) or _EIGEN_TYPE.search(source_text):
         domains.append(EIGEN)
-    # SSC is Eigen/SAM-idiom heavy even where a file has no direct Eigen use.
     norm = source_path.replace("\\", "/")
     if EIGEN not in domains and "third_party/ssc/" in norm:
         domains.append(EIGEN)

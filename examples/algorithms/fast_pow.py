@@ -1,5 +1,3 @@
-# Fast exponentiation via repeated squaring. `O(log n)` instead of
-# `O(n)`. Tests bit-like control flow built from `%` and `//`.
 
 
 def fast_pow(base: int, exp: int) -> int:

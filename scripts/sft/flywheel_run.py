@@ -58,9 +58,6 @@ from transpilers.repair.outcomes import (  # noqa: E402
 )
 
 
-# ---------------------------------------------------------------------------
-# Step 1: harvest + verify
-# ---------------------------------------------------------------------------
 
 
 def _run_crawler(
@@ -117,9 +114,6 @@ def _count_records(path: Path) -> int:
     )
 
 
-# ---------------------------------------------------------------------------
-# Bridge: crawler JSONL -> RepairOutcome log
-# ---------------------------------------------------------------------------
 
 
 def _emit_outcomes_from_crawl(*, crawl_out: Path, log: Path) -> int:
@@ -150,7 +144,6 @@ def _emit_outcomes_from_crawl(*, crawl_out: Path, log: Path) -> int:
     """
     if not crawl_out.exists():
         return 0
-    # Load existing fingerprints so we only emit new ones.
     seen: set = set()
     if log.exists():
         for line in log.read_text(encoding="utf-8").splitlines():
@@ -181,9 +174,6 @@ def _emit_outcomes_from_crawl(*, crawl_out: Path, log: Path) -> int:
                 continue
             seen.add(fp)
             verification = meta.get("verification", "compile-only")
-            # A behavioral-verified pair counts as algorithmic (the LLM
-            # call, if any, was in the pipeline at transpile time and
-            # produced verifiable output).
             verdict = "algorithmic" if verification == "behavioral" else "rule"
             outcome = RepairOutcome(
                 source_lang=meta.get("source_lang", "cpp"),
@@ -193,7 +183,7 @@ def _emit_outcomes_from_crawl(*, crawl_out: Path, log: Path) -> int:
                 construct=meta.get("construct", ""),
                 bucket=meta.get("bucket", ""),
                 verdict=verdict,
-                n_llm_calls=0,  # crawler never logs a per-unit LLM call count
+                n_llm_calls=0,
                 n_rule_passes=0 if verdict == "algorithmic" else 1,
                 n_repair_passes=0,
                 wallclock_ms=0,
@@ -208,9 +198,6 @@ def _emit_outcomes_from_crawl(*, crawl_out: Path, log: Path) -> int:
     return written
 
 
-# ---------------------------------------------------------------------------
-# Step 2: promote
-# ---------------------------------------------------------------------------
 
 
 def _run_promotion(
@@ -236,9 +223,6 @@ def _run_promotion(
     return subprocess.run(cmd, capture_output=False).returncode
 
 
-# ---------------------------------------------------------------------------
-# Step 3: metrics
-# ---------------------------------------------------------------------------
 
 
 def _run_metrics(*, log: Path, metrics: Path, md: Path | None) -> int:
@@ -256,9 +240,6 @@ def _run_metrics(*, log: Path, metrics: Path, md: Path | None) -> int:
     return subprocess.run(cmd, capture_output=False).returncode
 
 
-# ---------------------------------------------------------------------------
-# One full pass
-# ---------------------------------------------------------------------------
 
 
 def run_once(
@@ -303,7 +284,6 @@ def run_once(
         if summary["crawled"] < 0:
             print("[flywheel] crawl step failed - aborting pass", file=sys.stderr)
             return summary
-        # Bridge: turn each new crawl record into a RepairOutcome.
         summary["outcomes_emitted"] = _emit_outcomes_from_crawl(
             crawl_out=crawl_out, log=log
         )
@@ -320,7 +300,6 @@ def run_once(
 
     summary["elapsed_s"] = round(time.time() - started, 2)
 
-    # Print the headline metric so cron logs show the loop closing.
     snap = rollup(log_path=log, metrics_path=metrics)
     summary["llm_fraction"] = snap["llm_fraction"]
     summary["algorithmic_fraction"] = snap["algorithmic_fraction"]
@@ -334,9 +313,6 @@ def run_once(
     return summary
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 
 def main(argv=None) -> int:

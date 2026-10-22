@@ -18,9 +18,6 @@ from typing import Any
 
 _MAPS_DIR = Path(__file__).parent
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 def load_stdlib_maps(path: Path | str | None = None) -> dict[str, dict[str, list[str]]]:
@@ -60,7 +57,6 @@ def load_stdlib_maps(path: Path | str | None = None) -> dict[str, dict[str, list
 
     text = yaml_path.read_text(encoding="utf-8")
 
-    # Try PyYAML first (optional dependency).
     try:
         import yaml  # type: ignore
 
@@ -69,14 +65,11 @@ def load_stdlib_maps(path: Path | str | None = None) -> dict[str, dict[str, list
             return _normalise(data)
         return {}
     except ImportError:
-        pass  # fall through to the hand-rolled parser
+        pass
 
     return _parse_yaml_fallback(text)
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _normalise(data: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
@@ -108,7 +101,6 @@ def _parse_yaml_fallback(text: str) -> dict[str, dict[str, list[str]]]:
     result: dict[str, dict[str, list[str]]] = {}
     current_section: str | None = None
 
-    # Pattern: optional whitespace, quoted key, colon, inline list of quoted strings.
     entry_re = re.compile(
         r'^\s+"([^"]+)":\s*\[([^\]]*)\]',
     )
@@ -117,18 +109,15 @@ def _parse_yaml_fallback(text: str) -> dict[str, dict[str, list[str]]]:
     for raw_line in text.splitlines():
         line = raw_line.rstrip()
 
-        # Skip blank lines and comments.
         if not line or line.lstrip().startswith("#"):
             continue
 
-        # Section header?
         sec_m = section_re.match(line)
         if sec_m:
             current_section = sec_m.group(1)
             result.setdefault(current_section, {})
             continue
 
-        # Entry?
         if current_section is None:
             continue
 
@@ -136,7 +125,6 @@ def _parse_yaml_fallback(text: str) -> dict[str, dict[str, list[str]]]:
         if ent_m:
             key = ent_m.group(1)
             raw_list = ent_m.group(2)
-            # Extract quoted strings from the inline list.
             values = re.findall(r'"([^"]*)"', raw_list)
             result[current_section][key] = values
 

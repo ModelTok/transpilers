@@ -41,9 +41,6 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Failure categorisation
-# ---------------------------------------------------------------------------
 
 _CATEGORY_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("STDLIB-GAP",        re.compile(r"stdlib|std::|not in stdlib_maps|no mapping", re.I)),
@@ -72,9 +69,6 @@ def categorise(error_msg: str) -> str:
     return "OTHER"
 
 
-# ---------------------------------------------------------------------------
-# First-pass transpile
-# ---------------------------------------------------------------------------
 
 EXT_MAP = {
     "c": "c", "cpp": "cpp", "cs": "csharp", "f90": "fortran",
@@ -139,9 +133,6 @@ def first_pass(
     return successes, failures
 
 
-# ---------------------------------------------------------------------------
-# Triage report
-# ---------------------------------------------------------------------------
 
 def triage(failures: dict[Path, str]) -> dict[str, list[Path]]:
     """Bucket failures by category."""
@@ -174,9 +165,6 @@ def print_triage(
     print()
 
 
-# ---------------------------------------------------------------------------
-# Category repair
-# ---------------------------------------------------------------------------
 
 _REPAIR_PROMPT = """\
 You are a transpiler repair assistant helping fix a batch of {target} translation errors
@@ -256,9 +244,7 @@ def repair_category(
         except Exception as exc:
             print(f"  LLM call failed (attempt {attempt + 1}): {exc}", file=sys.stderr)
             break
-        # Parse outputs separated by ### FILE <name> ###
         parts = re.split(r"###\s*FILE\s+([^\s#]+)\s*###", response)
-        # parts = [prefix, name1, code1, name2, code2, ...]
         i = 1
         while i + 1 < len(parts):
             fname = parts[i].strip()
@@ -272,9 +258,6 @@ def repair_category(
     return repaired
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -302,7 +285,6 @@ def main(argv: list[str] | None = None) -> int:
     root = args.root.resolve()
     output_dir = args.output_dir or (root / "_repaired")
 
-    # Gather files
     files = [
         f for f in sorted(root.rglob("*"))
         if f.is_file() and EXT_MAP.get(f.suffix.lstrip("."))
@@ -329,7 +311,6 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     if not args.triage_only and failures:
-        # Lazy import LLM client only when repair is needed
         try:
             _src = Path(__file__).resolve().parent.parent / "src"
             sys.path.insert(0, str(_src))

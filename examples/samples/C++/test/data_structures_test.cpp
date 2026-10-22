@@ -127,4 +127,4 @@ TEST(SegmentTreeTest, Maximum)
     ASSERT_EQ(tree.query(5, 6), 0);
 }
 
-} // namespace mehara::test
+}

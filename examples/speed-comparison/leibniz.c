@@ -6,26 +6,26 @@ double pi = 1.0;
 
 int main()
 {
-    FILE *infile = fopen("rounds.txt", "r");   // open file
+    FILE *infile = fopen("rounds.txt", "r");
     if (infile == NULL) {
         perror("open file");
         return EXIT_FAILURE;
     }
-    if (fscanf(infile, "%u", &rounds) != 1) {  // read from file
+    if (fscanf(infile, "%u", &rounds) != 1) {
         perror("read file");
         return EXIT_FAILURE;
     }
-    fclose(infile);                            // close file
+    fclose(infile);
 
-    rounds += 2u; // do this outside the loop
+    rounds += 2u;
 
-    for (unsigned i=2u; i < rounds; ++i) // use ++i instead of i++
+    for (unsigned i=2u; i < rounds; ++i)
     {
-        double x = -1.0 + 2.0 * (i & 0x1); // allows vectorization
-        pi += (x / (2u * i - 1u)); // double / unsigned = double
+        double x = -1.0 + 2.0 * (i & 0x1);
+        pi += (x / (2u * i - 1u));
     }
 
     pi *= 4;
-    printf("%.16f\n", pi); // print 16 decimal digits of pi
+    printf("%.16f\n", pi);
     return EXIT_SUCCESS;
 }

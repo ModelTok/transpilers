@@ -29,7 +29,7 @@ rh = importlib.util.module_from_spec(_r); sys.modules["rh"] = rh; _r.loader.exec
 HELD = REPO / "data/sft/cpp_mojo/heldout_eval.jsonl"
 
 MAX_NEW_TOKENS = 1024
-ERR_CHARS = 1500  # cap compiler error fed back into the repair prompt
+ERR_CHARS = 1500
 
 
 def extract_code(text, lang):
@@ -39,24 +39,20 @@ def extract_code(text, lang):
     ans = re.search(r"<answer>(.*?)</answer>", text, re.S)
     scope = ans.group(1) if ans else text
 
-    # 1) well-formed fences: ```lang ... ```  then any ``` ... ```
     for pat in (rf"```{lang}\s*\n(.*?)```", r"```[a-zA-Z]*\s*\n(.*?)```"):
         m = re.search(pat, scope, re.S)
         if m and m.group(1).strip():
             return m.group(1).strip()
 
-    # 2) opening fence with NO closing fence -> take everything after it
     m = re.search(r"```[a-zA-Z]*\s*\n(.*)$", scope, re.S)
     if m and m.group(1).strip():
         return _trim_trailing_fence(m.group(1)).strip()
 
-    # 3) no fence at all -> grab the largest contiguous block of code-looking lines
     blk = _largest_code_block(scope)
     return blk if blk else None
 
 
 def _trim_trailing_fence(s):
-    # if a stray closing fence shows up later, cut at it
     idx = s.find("```")
     return s[:idx] if idx != -1 else s
 
@@ -81,13 +77,11 @@ def _largest_code_block(text):
         else:
             cur.append(l)
     flush()
-    # trim leading/trailing prose lines that don't look like code
     while best and not _CODE_RE.match(best[0]):
         best.pop(0)
     while best and not _CODE_RE.match(best[-1]):
         best.pop()
     out = "\n".join(best).strip()
-    # only accept if it actually contains a def/fn (a callable to test)
     return out if re.search(r"^\s*(fn|def)\s+\w+\s*\(", out, re.M) else None
 
 
@@ -110,7 +104,6 @@ def mojo_compile_error(code, fn, inputs, arg_types):
         except subprocess.TimeoutExpired:
             return "compilation timed out"
     err = cp.stderr or cp.stdout or ""
-    # prefer the lines around 'error:' if the log is long
     if len(err) > ERR_CHARS:
         elines = [l for l in err.splitlines() if "error:" in l or "note:" in l]
         if elines:
@@ -173,7 +166,6 @@ def main():
         first_status = status
         rounds = 0
 
-        # compile-repair loop (only Mojo ever yields compile_error)
         while (status == "compile_error" and rounds < args.repair):
             rounds += 1
             err = mojo_compile_error(code, ei["function_name"], gt["inputs"], ei["arg_types"])

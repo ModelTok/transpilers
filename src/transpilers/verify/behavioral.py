@@ -68,26 +68,13 @@ def _muffled():
         yield
 
 
-# Wall-clock cap on a single in-process exec()+call of untrusted-shaped
-# source. Without it, a pathological input (infinite loop, runaway
-# recursion) hangs the caller forever -- there is no subprocess boundary to
-# kill here, unlike the native-compiler verifiers.
 _PY_EXEC_TIMEOUT_S = 5
 
-# ---------------------------------------------------------------------------
-# Type tags
-# ---------------------------------------------------------------------------
 
-# The signature type tags this harness understands. Kept as plain strings so
-# callers (and the trace-typing pass, #49) can hand them over without importing
-# the MIR type lattice.
 SCALAR_TAGS = ("int", "float", "bool", "str")
 SUPPORTED_TAGS = SCALAR_TAGS + ("list[int]", "list[float]", "list[str]", "list[bool]")
 
 
-# ---------------------------------------------------------------------------
-# Samples + report
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -95,17 +82,14 @@ class IOSample:
     """One input and the behavior it produced on a given runner."""
 
     args: tuple
-    token: str = ""  # canonical token of the return value (when ok)
-    ok: bool = True  # False == the runner raised / exited non-zero
-    error: str = ""  # short description when ``ok`` is False
+    token: str = ""
+    ok: bool = True
+    error: str = ""
 
     def input_repr(self) -> str:
         return ", ".join(repr(a) for a in self.args)
 
 
-# Recognized divergence classes. Naming the *kind* of behavioral difference —
-# not just "they differ" — gives the repair loop (#47) a sharper hint and lets a
-# sweep bucket failures by root cause instead of one opaque "wrong" pile.
 DIV_FLOORED_MOD = "floored_vs_truncated_intdiv"
 DIV_TARGET_ERROR = "target_errored"
 DIV_VALUE = "value_mismatch"
@@ -142,13 +126,10 @@ def classify_divergence(div: Divergence, ret_tag: str) -> str:
             exp, act = int(div.expected), int(div.actual)
         except TypeError, ValueError:
             return DIV_VALUE
-        # Floored/truncated mod & div differ by k*divisor for some integer arg.
         delta = exp - act
         if delta != 0 and any(
             isinstance(a, int) and a != 0 and delta % a == 0 for a in div.args
         ):
-            # Require at least one negative operand — the only case where
-            # floored and truncated integer ops actually disagree.
             if any(isinstance(a, int) and a < 0 for a in div.args):
                 return DIV_FLOORED_MOD
     return DIV_VALUE
@@ -162,9 +143,9 @@ class BehavioralReport:
     total: int
     matched: int
     divergences: list[Divergence] = field(default_factory=list)
-    supported: bool = True  # False == harness could not drive this signature
-    reason: str = ""  # why unsupported / why no samples
-    divergence_class: str = ""  # root-cause label of the first divergence
+    supported: bool = True
+    reason: str = ""
+    divergence_class: str = ""
 
     @property
     def pass_rate(self) -> float:
@@ -183,9 +164,6 @@ class BehavioralReport:
         return head
 
 
-# ---------------------------------------------------------------------------
-# Signature inference + input generation
-# ---------------------------------------------------------------------------
 
 _ANNOT_MAP = {
     "int": "int",
@@ -241,8 +219,6 @@ def _annotation_tag(annotation: ast.expr | None) -> str:
     return "int"
 
 
-# Deterministic edge cases per tag — these run first so boundary behavior is
-# always exercised, with fuzz appended to reach the requested count.
 _EDGE_CASES: dict[str, list[Any]] = {
     "int": [0, 1, -1, 2, 7, -8, 100],
     "float": [0.0, 1.0, -1.0, 0.5, -2.5, 3.14159],
@@ -278,13 +254,10 @@ def generate_inputs(
     """Build *n* input tuples over *param_tags* (edge cases first, then fuzz)."""
     rng = random.Random(seed)
     if not param_tags:
-        return [()]  # nullary function — one call
+        return [()]
     per_arg: list[list[Any]] = []
     for idx, tag in enumerate(param_tags):
         edges = list(_EDGE_CASES.get(tag, _EDGE_CASES["int"]))
-        # Rotate each arg's edge list by its position so distinct arguments
-        # take distinct values — otherwise (0,0),(1,1),… would never surface
-        # arg-order bugs (e.g. a-b emitted as b-a).
         if edges:
             r = idx % len(edges)
             edges = edges[r:] + edges[:r]
@@ -294,9 +267,6 @@ def generate_inputs(
     return [tuple(per_arg[a][i] for a in range(len(param_tags))) for i in range(n)]
 
 
-# ---------------------------------------------------------------------------
-# Canonical-token comparison
-# ---------------------------------------------------------------------------
 
 _FLOAT_TOL = 1e-6
 
@@ -329,9 +299,6 @@ def _floats_close(a: str, b: str) -> bool:
         return a == b
 
 
-# ---------------------------------------------------------------------------
-# Runner protocol
-# ---------------------------------------------------------------------------
 
 
 class Runner(Protocol):
@@ -394,7 +361,7 @@ class PythonRunner:
                             error=f"timeout after {_PY_EXEC_TIMEOUT_S}s",
                         )
                     )
-                except Exception as exc:  # noqa: BLE001 — capturing source behavior
+                except Exception as exc:  # noqa: BLE001
                     samples.append(
                         IOSample(
                             args=args, ok=False, error=f"{type(exc).__name__}: {exc}"
@@ -429,9 +396,6 @@ class RustRunner:
         for tag in (*param_tags, ret_tag):
             if tag not in SUPPORTED_TAGS:
                 raise self.UnsupportedSignature(f"rust runner cannot drive tag {tag!r}")
-        # The transpiler emits collection params by reference (``& Vec<i64>``);
-        # match the emitted signature so the harness call type-checks rather
-        # than reporting a false divergence.
         byref = _detect_rust_byref(code, func_name, len(param_tags))
         harness = (
             code
@@ -458,7 +422,6 @@ class RustRunner:
                 timeout=30,
             )
             if comp.returncode != 0:
-                # Whole batch fails to build — every input is a divergence.
                 err = _first_line(comp.stderr)
                 return [
                     IOSample(args=a, ok=False, error=f"compile: {err}") for a in inputs
@@ -532,7 +495,6 @@ def _detect_rust_byref(code: str, func_name: str, n_params: int) -> list[bool]:
     params_src = code[start:i]
     if not params_src.strip():
         return [False] * n_params
-    # Split params at top-level commas (avoid commas inside Vec<...> etc.).
     parts: list[str] = []
     buf = ""
     d = 0
@@ -628,9 +590,6 @@ def _first_line(text: str) -> str:
 _RUNNERS: dict[str, Runner] = {"python": PythonRunner(), "rust": RustRunner()}
 
 
-# ---------------------------------------------------------------------------
-# Top-level check
-# ---------------------------------------------------------------------------
 
 
 def check_behavioral_equivalence(
@@ -689,8 +648,6 @@ def check_behavioral_equivalence(
 
     inputs = generate_inputs(param_tags, n=n_inputs, seed=seed)
 
-    # 1. Source oracle (Python). Observe the return type from the first
-    #    successful call; default to int if the oracle only ever raised.
     oracle = PythonRunner().run(
         source, func_name, inputs, param_tags=param_tags, ret_tag="int"
     )
@@ -710,7 +667,6 @@ def check_behavioral_equivalence(
         )
     runnable_inputs = [args for args, _ in runnable]
 
-    # 2. Target replay over the same inputs.
     try:
         actual = target_runner.run(
             target_code,
@@ -724,8 +680,6 @@ def check_behavioral_equivalence(
             ok=False, total=0, matched=0, supported=False, reason=str(exc)
         )
 
-    # 3. Compare canonical tokens. The target runner returns samples in input
-    #    order, so pair by index (args may be unhashable lists or repeat).
     matched = 0
     divergences: list[Divergence] = []
     for i, (args, expected_tok) in enumerate(runnable):
@@ -799,9 +753,6 @@ def _value_tag(v: Any) -> str:
     return "int"
 
 
-# ---------------------------------------------------------------------------
-# Repair-loop adapter
-# ---------------------------------------------------------------------------
 
 
 def make_behavioral_verifier(

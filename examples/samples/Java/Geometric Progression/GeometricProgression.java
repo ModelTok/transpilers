@@ -14,7 +14,6 @@ public class GeometricProgression {
         System.out.println("number of terms: " + numberOfTerms);
         System.out.println();
 
-        //Geometric Progression
         System.out.println("Geometric Progression: ");
         for (int i = 0; i < numberOfTerms; i++) {
             double ithTerm = firstTerm * Math.pow(commonRatio, i);

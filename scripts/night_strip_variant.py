@@ -25,8 +25,8 @@ INSTRUCTION_TMPL = (
 def strip_comments(s: str) -> str:
     s = re.sub(r"/\*.*?\*/", "", s, flags=re.S)
     s = re.sub(r"//[^\n]*", "", s)
-    s = re.sub(r"[ \t]+\n", "\n", s)          # trailing ws
-    s = re.sub(r"\n{3,}", "\n\n", s)          # collapse blank-line runs
+    s = re.sub(r"[ \t]+\n", "\n", s)
+    s = re.sub(r"\n{3,}", "\n\n", s)
     return s.strip()
 
 

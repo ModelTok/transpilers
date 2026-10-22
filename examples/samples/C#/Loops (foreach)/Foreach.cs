@@ -14,7 +14,6 @@ namespace Programming
             Console.WriteLine();
 
 
-            // Compare the previous loop to a similar for loop. 
             for (int i = 0; i < fibarray.Length; i++)
             {
                 Console.WriteLine(fibarray[i]);
@@ -22,7 +21,6 @@ namespace Programming
             Console.WriteLine();
 
 
-            // You can maintain a count of the elements in the collection. 
             int count = 0;
             foreach (int element in fibarray)
             {

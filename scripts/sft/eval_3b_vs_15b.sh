@@ -1,11 +1,3 @@
-#!/usr/bin/env bash
-# eval_3b_vs_15b.sh — compare 3B adapter vs 1.5B baseline on transpilation-bench.
-#
-# Runs eval_transbench.py for both adapters (pass@1, cpp_source) and prints a
-# side-by-side summary. Run this after train_3b.sh completes.
-#
-# Usage (from WSL Ubuntu-24.04 as root):
-#   bash scripts/sft/eval_3b_vs_15b.sh 2>&1 | tee eval_3b_vs_15b.log
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -18,7 +10,6 @@ source "$VENV/bin/activate"
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
-# ─── Eval 1.5B baseline ───────────────────────────────────────────────────────
 log "=== Evaluating 1.5B baseline (adapter_15b_v2) ==="
 T_START=$(date +%s)
 
@@ -45,7 +36,6 @@ PY
 PASS_15B=$(grep -oP '(?<=pass@1: )\d+\.\d+(?=%)' /tmp/eval_15b.log || echo "?")
 log "1.5B done in ${T1_WALL}s — pass@1 = ${PASS_15B}%"
 
-# ─── Eval 3B new adapter ──────────────────────────────────────────────────────
 log "=== Evaluating 3B new adapter (adapter_3b_v1) ==="
 T_START=$(date +%s)
 
@@ -72,7 +62,6 @@ PY
 PASS_3B=$(grep -oP '(?<=pass@1: )\d+\.\d+(?=%)' /tmp/eval_3b.log || echo "?")
 log "3B done in ${T2_WALL}s — pass@1 = ${PASS_3B}%"
 
-# ─── Side-by-side summary ─────────────────────────────────────────────────────
 echo ""
 echo "====================================================="
 echo "  TRANSPILATION-BENCH RESULTS (cpp_source -> Mojo)"

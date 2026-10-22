@@ -13,7 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.'''
 
 
-# Program to implement merge sort algorithm in Python3 language.
 l=[4,5,9,8,7,6,2,3]
 
 ''' Function which performs merge sort recursively by calling itself
@@ -29,7 +28,6 @@ def merge_sort(l,s,e):
 	p2=merge_sort(l,m+1,e)
 	return merge(p1,p2)
 
-# "merge" function performs the main action of merging together the elements of two list together in sorted order.
 
 def merge(p1,p2):
 	i=0
@@ -51,7 +49,6 @@ def merge(p1,p2):
 		j+=1
 	return sorted_list
 
-# Calling the function merge_sort
 
 l=merge_sort(l,0,len(l)-1)
 print(l)

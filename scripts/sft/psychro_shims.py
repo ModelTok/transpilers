@@ -32,17 +32,13 @@ from __future__ import annotations
 
 import math
 
-# EnergyPlus constants (DataGlobalConstants.hh).
 KELVIN = 273.15
 TRIPLE_POINT_OF_WATER_TEMP_KELVIN = 273.16
 
-# Saturation-pressure coefficients (Psychrometrics.cc, non-IF97 branch).
-# 173.15 K .. triple point (sub-triple-point / over ice).
 _C1, _C2, _C3, _C4, _C5, _C6, _C7 = (
     -5674.5359, 6.3925247, -0.9677843e-2, 0.62215701e-6,
     0.20747825e-8, -0.9484024e-12, 4.1635019,
 )
-# triple point .. 473.15 K (over liquid water).
 _C8, _C9, _C10, _C11, _C12, _C13 = (
     -5800.2206, 1.3914993, -0.048640239, 0.41764768e-4,
     -0.14452093e-7, 6.5459673,
@@ -75,10 +71,6 @@ def psy_psat_fn_temp(t_dry_bulb_c: float) -> float:
     return 1555073.745636215
 
 
-# ---------------------------------------------------------------------------
-# Shim text emission (Mojo + C++). Same constants, same branch order, so the
-# two compile to identical numerics (verified in Python; compile-match deferred).
-# ---------------------------------------------------------------------------
 
 _COEFFS_DOC = "EnergyPlus Psychrometrics.cc PsyPsatFnTemp_raw (non-IF97)"
 

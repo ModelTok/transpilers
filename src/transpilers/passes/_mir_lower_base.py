@@ -43,7 +43,6 @@ __all__ = [
 ]
 
 
-# -- provenance helper -------------------------------------------------------
 
 
 def copy_provenance(lir_node: lir.LirNode, mir_node: mir.MirNode) -> lir.LirNode:
@@ -56,13 +55,6 @@ def copy_provenance(lir_node: lir.LirNode, mir_node: mir.MirNode) -> lir.LirNode
     return lir_node
 
 
-# --------------------------------------------------------------------------- #
-# Shared MIR-walk analysis helpers
-# --------------------------------------------------------------------------- #
-#
-# These walk the nested statement structure (if / while / for-range bodies)
-# the same way in every target. They were copy-pasted across rust/mojo;
-# this is the single source of truth.
 
 
 def _walk_blocks(node: mir.MirNode):
@@ -147,9 +139,6 @@ def is_list_concat(node: mir.MirBinOp) -> bool:
     )
 
 
-# --------------------------------------------------------------------------- #
-# Node namespace
-# --------------------------------------------------------------------------- #
 
 
 class LirNS:
@@ -168,15 +157,12 @@ class LirNS:
     def __getattr__(self, kind: str):
         try:
             return getattr(lir, f"{self._prefix}{kind}")
-        except AttributeError as exc:  # pragma: no cover - developer error
+        except AttributeError as exc:
             raise AttributeError(
                 f"LIR dialect {self._prefix!r} has no node {self._prefix}{kind}"
             ) from exc
 
 
-# --------------------------------------------------------------------------- #
-# Base lowering visitor
-# --------------------------------------------------------------------------- #
 
 
 class MirLoweringBase:
@@ -198,12 +184,10 @@ class MirLoweringBase:
     def __init__(self) -> None:
         self.ns = LirNS(self.prefix)
 
-    # -- type map (must be provided) --------------------------------------- #
 
-    def type_str(self, ty: Type) -> str:  # pragma: no cover - abstract
+    def type_str(self, ty: Type) -> str:
         raise NotImplementedError
 
-    # -- module / struct / function --------------------------------------- #
 
     def lower_module(self, module: mir.MirModule):
         items: list[lir.LirNode] = []
@@ -240,8 +224,6 @@ class MirLoweringBase:
         params = self.lower_params(fn)
         ret = self.return_type(fn)
         declared, mut, preamble = self.function_preamble(fn, param_names)
-        # `lower_stmt` may return None to *drop* a statement (e.g. a target with
-        # no `assert` — see the Mojo backend); filter those out.
         lowered = [self.lower_stmt(n, declared, mut) for n in fn.body]
         body = preamble + [s for s in lowered if s is not None]
         return self.make_function(fn, params, ret, body)
@@ -269,7 +251,6 @@ class MirLoweringBase:
         and no preamble."""
         return set(param_names), set(), []
 
-    # -- statements -------------------------------------------------------- #
 
     def lower_stmt(self, node: mir.MirNode, declared: set[str], mut: set[str]):
         if isinstance(node, mir.MirRaw):
@@ -353,10 +334,9 @@ class MirLoweringBase:
 
     def lower_assign(
         self, node: mir.MirAssign, declared: set[str], mut: set[str]
-    ):  # pragma: no cover - abstract
+    ):
         raise NotImplementedError
 
-    # -- expressions ------------------------------------------------------- #
 
     def lower_expr(self, node: mir.MirNode):
         if isinstance(node, mir.MirRaw):
@@ -464,13 +444,13 @@ class MirLoweringBase:
             node,
         )
 
-    def lower_binop(self, node: mir.MirBinOp):  # pragma: no cover - abstract
+    def lower_binop(self, node: mir.MirBinOp):
         raise NotImplementedError
 
-    def lower_call(self, node: mir.MirCall):  # pragma: no cover - abstract
+    def lower_call(self, node: mir.MirCall):
         raise NotImplementedError
 
-    def lower_list(self, node: mir.MirList):  # pragma: no cover - abstract
+    def lower_list(self, node: mir.MirList):
         raise NotImplementedError
 
     def lower_subscript(self, node: mir.MirSubscript):
@@ -481,7 +461,7 @@ class MirLoweringBase:
             node,
         )
 
-    def lower_null(self, node: mir.MirNullLiteral):  # pragma: no cover - abstract
+    def lower_null(self, node: mir.MirNullLiteral):
         raise NotImplementedError
 
     def lower_raw(self, node: mir.MirRaw):
