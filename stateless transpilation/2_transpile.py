@@ -88,17 +88,34 @@ def _oracle_paths(file: str) -> tuple[Path, Path | None]:
     return ORACLE / f"{file}.cc", ORACLE / f"{file}.hh"
 
 
+def detect_domains(cc_text: str, cc_path) -> list[str]:
+    """gtest/Eigen domains evident in a whole source file (opt-in, issues #96/#97).
+
+    Detected on the full file, not a chunk, so chunks without the gtest include
+    still get the guidance. Imported lazily to keep this script standalone."""
+    from transpilers.cli.domain_prompts import detect_domains as _detect
+
+    return _detect(cc_text, str(cc_path))
+
+
 def build_prompt(file: str, cc: str | None = None, hh: str | None = None,
-                 name: str | None = None, note: str = "") -> str:
+                 name: str | None = None, note: str = "",
+                 domains: list[str] | None = None) -> str:
     """Fill the prompt template. `cc`/`hh` override the oracle text (chunking);
-    `name` overrides the output stem ({FILE}); `note` is prepended to the body."""
+    `name` overrides the output stem ({FILE}); `note` is prepended to the body;
+    `domains` adds gtest/Eigen guidance before the output-format section."""
     cc_path, hh_path = _oracle_paths(file)
     cc = read(cc_path) if cc is None else cc
     hh = read(hh_path) if hh is None else hh
     lang = (_BY_NAME.get(file) or {}).get("lang", "cpp")
     stem = name or file
-    return (note + _BODY.replace("{FILE}", stem).replace("{snake_file}", snake(stem))
-            .replace("{LANG}", lang).replace("{CC}", cc).replace("{HH}", hh))
+    prompt = (note + _BODY.replace("{FILE}", stem).replace("{snake_file}", snake(stem))
+              .replace("{LANG}", lang).replace("{CC}", cc).replace("{HH}", hh))
+    if domains:
+        from transpilers.cli.domain_prompts import domain_guidance, insert_guidance
+
+        prompt = insert_guidance(prompt, domain_guidance(domains, dual_port=True))
+    return prompt
 
 
 # --- oversize inputs: compress, then chunk + stitch (issues #91, #92) ---------
@@ -208,7 +225,7 @@ def _strip_fence(body: str) -> str:
     return re.sub(r"\n```\s*$", "", re.sub(r"^```[a-zA-Z]*\n", "", body))
 
 
-def transpile_chunked(file, cc, fn, model, timeout, endpoint, max_chars) -> dict:
+def transpile_chunked(file, cc, fn, model, timeout, endpoint, max_chars, domains=None) -> dict:
     """Split `cc` into chunks, call `fn` per chunk, validate each response has a
     Python and a Mojo FILE block, stitch, syntax-check the Python, then write.
     All-or-nothing: any failed chunk writes nothing."""
@@ -217,7 +234,8 @@ def transpile_chunked(file, cc, fn, model, timeout, endpoint, max_chars) -> dict
         return {"file": file, "status": f"error: chunking supports cpp only, not {lang}",
                 "written": []}
     hh = read(_oracle_paths(file)[1])
-    overhead = len(build_prompt(file, cc="", hh=hh, note=_CHUNK_NOTE.format(i=99, n=99, file=file)))
+    overhead = len(build_prompt(file, cc="", hh=hh, domains=domains,
+                                note=_CHUNK_NOTE.format(i=99, n=99, file=file)))
     budget = max_chars - overhead
     if budget <= 0:
         return {"file": file, "status": "error: header alone exceeds prompt limit", "written": []}
@@ -228,6 +246,7 @@ def transpile_chunked(file, cc, fn, model, timeout, endpoint, max_chars) -> dict
     py_parts, mojo_parts, cost = [], [], 0.0
     for i, chunk in enumerate(chunks, 1):
         prompt = build_prompt(file, cc=chunk, hh=hh, name=f"{file}_part{i:02d}",
+                              domains=domains,
                               note=_CHUNK_NOTE.format(i=i, n=len(chunks), file=file))
         text, meta = fn(prompt, model, timeout, endpoint)
         cost += (meta or {}).get("cost_usd") or 0.0
@@ -390,7 +409,8 @@ def is_real(file: str) -> bool:
     return "__todo__" not in t and "Phase-1 C++->Python lift" not in t
 
 
-def transpile_one(file, backend, model, timeout, force, endpoint, max_chars, chunk=False) -> dict:
+def transpile_one(file, backend, model, timeout, force, endpoint, max_chars, chunk=False,
+                  domain_prompts=False) -> dict:
     # Skip only files whose manifest status is "done" (BOTH ports present).
     # "partial" (one port missing) must re-run to complete; is_real() alone is
     # python-only and would wrongly skip partials.
@@ -399,16 +419,18 @@ def transpile_one(file, backend, model, timeout, force, endpoint, max_chars, chu
         return {"file": file, "status": "skipped (already done)", "written": []}
     try:
         cc_path, _ = _oracle_paths(file)
-        prompt = build_prompt(file)
+        domains = detect_domains(read(cc_path), cc_path) if domain_prompts else None
+        prompt = build_prompt(file, domains=domains)
         if not prompt.strip() or not cc_path.exists():
             return {"file": file, "status": "no oracle .cc", "written": []}
         fn = {"lmstudio": call_openai, "openrouter": call_openrouter}.get(backend, call_claude)
         if len(prompt) > max_chars and chunk:
             cc = compress_source(read(cc_path))  # context guard: shrink first
-            if len(build_prompt(file, cc=cc)) <= max_chars:
-                prompt = build_prompt(file, cc=cc)
+            if len(build_prompt(file, cc=cc, domains=domains)) <= max_chars:
+                prompt = build_prompt(file, cc=cc, domains=domains)
             else:
-                return transpile_chunked(file, cc, fn, model, timeout, endpoint, max_chars)
+                return transpile_chunked(file, cc, fn, model, timeout, endpoint, max_chars,
+                                         domains)
         if len(prompt) > max_chars:
             return {"file": file, "status": f"skip: prompt {len(prompt):,} chars > limit "
                     f"(use --chunk)", "written": []}
@@ -449,6 +471,9 @@ def main() -> int:
     ap.add_argument("--chunk", action="store_true",
                     help="oversize prompts: compress, else split into top-level chunks, "
                          "transpile each and stitch (cpp only)")
+    ap.add_argument("--domain-prompts", action="store_true",
+                    help="add gtest/Eigen guidance when the source uses them "
+                         "(issues #96, #97); off by default")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -489,7 +514,8 @@ def main() -> int:
         lane = free.get()
         try:
             return transpile_one(file, args.backend, args.model, args.timeout,
-                                 args.force, lane, args.max_chars, args.chunk)
+                                 args.force, lane, args.max_chars, args.chunk,
+                                 args.domain_prompts)
         finally:
             free.put(lane)
 

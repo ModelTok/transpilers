@@ -105,24 +105,102 @@ EIGEN / SAM RULES (this file uses Eigen or System Advisor Model idioms):
   branches and parameter/input/output index enums verbatim.
 """
 
+GTEST_DUAL_GUIDANCE = """\
+GOOGLETEST RULES (this file is a gtest unit test; it overrides "do not write
+tests" above: the tests ARE the source, so port every one of them):
+- Still emit BOTH <<<FILE ...>>> blocks (Python and Mojo), complete. Never
+  answer with prose or refuse because the file only contains tests.
+- Every `TEST(Suite, Name)` / `TEST_F(Fixture, Name)` / `TEST_P` body is ported,
+  in order, with its name kept. Do not merge, skip or comment out tests.
+- Fixture classes (`class X : public testing::Test`) -> a class/struct `X` with
+  `SetUp` and `TearDown` methods; members become fields. A `TEST_F` body builds
+  a fresh fixture, calls `SetUp()` first and `TearDown()` last (`try/finally`
+  if the body can raise).
+- Python: `def test_Suite_Name():` with plain `assert` statements.
+    EXPECT_EQ/ASSERT_EQ(a, b)   -> assert a == b
+    EXPECT_NE(a, b)             -> assert a != b
+    EXPECT_TRUE(x) / FALSE(x)   -> assert x / assert not x
+    EXPECT_NEAR(a, b, tol)      -> assert abs(a - b) <= tol
+    EXPECT_DOUBLE_EQ/FLOAT_EQ   -> assert a == pytest.approx(b, rel=1e-12)
+    EXPECT_LT/LE/GT/GE(a, b)    -> assert a < b  (etc.)
+- Mojo: `fn test_Suite_Name() raises:` using `from testing import
+  assert_equal, assert_not_equal, assert_true, assert_false,
+  assert_almost_equal` (`EXPECT_NEAR(a, b, tol)` -> `assert_almost_equal(a, b,
+  atol=tol)`; comparisons -> `assert_true(a < b)`).
+- Streamed messages (`EXPECT_TRUE(x) << "msg"`) -> keep `msg` as the assertion
+  message in both ports.
+
+WORKED EXAMPLE
+C++:
+    TEST_F(EnergyPlusFixture, Foo_Calc) {
+        Real64 r = Foo::calc(2.0);
+        EXPECT_NEAR(4.0, r, 0.001);
+        ASSERT_TRUE(r > 0.0);
+    }
+Python:
+    def test_EnergyPlusFixture_Foo_Calc():
+        fixture = EnergyPlusFixture()
+        fixture.SetUp()
+        r = calc(2.0)
+        assert abs(4.0 - r) <= 0.001
+        assert r > 0.0
+        fixture.TearDown()
+Mojo:
+    fn test_EnergyPlusFixture_Foo_Calc() raises:
+        var fixture = EnergyPlusFixture()
+        fixture.SetUp()
+        var r: Float64 = calc(2.0)
+        assert_almost_equal(4.0, r, atol=0.001)
+        assert_true(r > 0.0)
+        fixture.TearDown()
+"""
+
+_SINGLE_BLOCK = "Output is exactly one <<<FILE ...>>> block."
+_DUAL_BLOCK = "Output is both <<<FILE ...>>> blocks (Python and Mojo)."
+
 _GUIDANCE = {GTEST: GTEST_GUIDANCE, EIGEN: EIGEN_GUIDANCE}
+_OUTPUT_MARKERS = ("\nOUTPUT FORMAT:", "\n## Output format")
 
 
-def domain_guidance(domains: list[str]) -> str:
-    """Render guidance for ``domains`` (empty string when none apply)."""
-    return "\n".join(_GUIDANCE[d] for d in domains if d in _GUIDANCE)
+def domain_guidance(domains: list[str], dual_port: bool = False) -> str:
+    """Render guidance for ``domains`` (empty string when none apply).
+
+    ``dual_port`` selects the variant for drivers that ask for a Python and a
+    Mojo file per source (the stateless runner) rather than Mojo alone.
+    """
+    parts = []
+    for d in domains:
+        if d not in _GUIDANCE:
+            continue
+        if dual_port and d == GTEST:
+            parts.append(GTEST_DUAL_GUIDANCE)
+        elif dual_port:
+            parts.append(_GUIDANCE[d].replace(_SINGLE_BLOCK, _DUAL_BLOCK))
+        else:
+            parts.append(_GUIDANCE[d])
+    return "\n".join(parts)
 
 
-def apply_domain_guidance(prompt: str, source_text: str, source_path: str = "") -> str:
+def insert_guidance(prompt: str, guidance: str) -> str:
+    """Insert ``guidance`` before the output-format section of ``prompt``.
+
+    Appends it when no known output-format heading is present.
+    """
+    if not guidance:
+        return prompt
+    for marker in _OUTPUT_MARKERS:
+        if marker in prompt:
+            head, tail = prompt.split(marker, 1)
+            return f"{head}\n{guidance}{marker}{tail}"
+    return f"{prompt}\n\n{guidance}"
+
+
+def apply_domain_guidance(
+    prompt: str, source_text: str, source_path: str = "", dual_port: bool = False
+) -> str:
     """Insert domain guidance before the OUTPUT FORMAT block of ``prompt``.
 
     Returns ``prompt`` unchanged when no domain is detected.
     """
-    guidance = domain_guidance(detect_domains(source_text, source_path))
-    if not guidance:
-        return prompt
-    marker = "\nOUTPUT FORMAT:"
-    if marker in prompt:
-        head, tail = prompt.split(marker, 1)
-        return f"{head}\n{guidance}{marker}{tail}"
-    return f"{prompt}\n\n{guidance}"
+    domains = detect_domains(source_text, source_path)
+    return insert_guidance(prompt, domain_guidance(domains, dual_port))
