@@ -99,3 +99,5 @@ verified on domain-restricted samples (still full branch coverage); marked
   `night_qa.py` (+ one-off `night_*` debug/rescue helpers).
 - Intermediate artifacts: `data/night/` (Windows) and WSL `~/night/`.
 - Nothing committed — working tree only.
+
+> **Note (2026-10-22):** the `scripts/night_*` helpers named in this report were removed from the tree as unused. They are in git history: `git log --diff-filter=D --name-only -- 'scripts/night_*'`.
