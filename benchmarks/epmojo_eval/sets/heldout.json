@@ -1,0 +1,252 @@
+{
+ "epmojo_commit": "6ae386b2",
+ "description": "held-out set: unique names not in the development set",
+ "routines": [
+  {
+   "tag": "leaf_scalars_ehi__Le",
+   "name": "Le",
+   "file": "leaf_scalars.ehi.upstream.inc",
+   "inputs": [
+    "T"
+   ],
+   "lines": 10
+  },
+  {
+   "tag": "roomair_hc_detailed__CalcWaltonStableHorizontalOrTilt",
+   "name": "CalcWaltonStableHorizontalOrTilt",
+   "file": "roomair_hc_detailed.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "CosineTilt"
+   ],
+   "lines": 17
+  },
+  {
+   "tag": "conv_inside_natural_a__CalcAlamdariHammondVerticalWall",
+   "name": "CalcAlamdariHammondVerticalWall",
+   "file": "conv_inside_natural_a.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "Height"
+   ],
+   "lines": 18
+  },
+  {
+   "tag": "conv_int_ceiling_diffuser__CalcGoldsteinNovoselacCeilingDiffuserFloor",
+   "name": "CalcGoldsteinNovoselacCeilingDiffuserFloor",
+   "file": "conv_int_ceiling_diffuser.upstream.inc",
+   "inputs": [
+    "AirSystemFlowRate",
+    "ZoneExtPerimLength"
+   ],
+   "lines": 18
+  },
+  {
+   "tag": "leaf_scalars_pu__BoundValueToWithinTwoValues",
+   "name": "BoundValueToWithinTwoValues",
+   "file": "leaf_scalars.pu.upstream.inc",
+   "inputs": [
+    "ValueToBound",
+    "LowerBound",
+    "UpperBound"
+   ],
+   "lines": 18
+  },
+  {
+   "tag": "roomair_hc_detailed__CalcWaltonUnstableHorizontalOrTilt",
+   "name": "CalcWaltonUnstableHorizontalOrTilt",
+   "file": "roomair_hc_detailed.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "CosineTilt"
+   ],
+   "lines": 18
+  },
+  {
+   "tag": "air_psy__PsyHgAirFnWTdb",
+   "name": "PsyHgAirFnWTdb",
+   "file": "air_psy.upstream.inc",
+   "inputs": [
+    "w",
+    "T"
+   ],
+   "lines": 19
+  },
+  {
+   "tag": "comfort_ashrae55_extras__CalcSatVapPressFromTemp",
+   "name": "CalcSatVapPressFromTemp",
+   "file": "comfort_ashrae55_extras.upstream.inc",
+   "inputs": [
+    "Temp"
+   ],
+   "lines": 19
+  },
+  {
+   "tag": "wel_vb_ashwat__FNU",
+   "name": "FNU",
+   "file": "wel_vb_ashwat.upstream.inc",
+   "inputs": [
+    "RA"
+   ],
+   "lines": 19
+  },
+  {
+   "tag": "psychrometrics__PsyRhovFnTdbRhLBnd0C",
+   "name": "PsyRhovFnTdbRhLBnd0C",
+   "file": "psychrometrics.upstream.inc",
+   "inputs": [
+    "Tdb",
+    "RH"
+   ],
+   "lines": 20
+  },
+  {
+   "tag": "air_psy__PsyDeltaHSenFnTdb2Tdb1W",
+   "name": "PsyDeltaHSenFnTdb2Tdb1W",
+   "file": "air_psy.upstream.inc",
+   "inputs": [
+    "TDB2",
+    "TDB1",
+    "W"
+   ],
+   "lines": 21
+  },
+  {
+   "tag": "conv_inside_natural_b2__CalcAwbiHattonHeatedFloor",
+   "name": "CalcAwbiHattonHeatedFloor",
+   "file": "conv_inside_natural_b2.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter"
+   ],
+   "lines": 21
+  },
+  {
+   "tag": "psychrometrics__PsyRhovFnTdbWPb",
+   "name": "PsyRhovFnTdbWPb",
+   "file": "psychrometrics.upstream.inc",
+   "inputs": [
+    "Tdb",
+    "dW",
+    "PB"
+   ],
+   "lines": 21
+  },
+  {
+   "tag": "air_psy__PsyHfgAirFnWTdb",
+   "name": "PsyHfgAirFnWTdb",
+   "file": "air_psy.upstream.inc",
+   "inputs": [
+    "w",
+    "T"
+   ],
+   "lines": 23
+  },
+  {
+   "tag": "micro_chp_thermal__FuncDetermineEngineTemp",
+   "name": "FuncDetermineEngineTemp",
+   "file": "micro_chp_thermal.upstream.inc",
+   "inputs": [
+    "TcwOut",
+    "MCeng",
+    "UAHX",
+    "UAskin",
+    "Troom",
+    "Qgenss",
+    "TengLast",
+    "time"
+   ],
+   "lines": 24
+  },
+  {
+   "tag": "conv_int_bm_mixed__CalcBeausoleilMorrisonMixedStableCeiling",
+   "name": "CalcBeausoleilMorrisonMixedStableCeiling",
+   "file": "conv_int_bm_mixed.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter",
+    "SurfTemp",
+    "SupplyAirTemp",
+    "AirChangeRate"
+   ],
+   "lines": 25
+  },
+  {
+   "tag": "conv_int_bm_mixed__CalcBeausoleilMorrisonMixedStableFloor",
+   "name": "CalcBeausoleilMorrisonMixedStableFloor",
+   "file": "conv_int_bm_mixed.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter",
+    "SurfTemp",
+    "SupplyAirTemp",
+    "AirChangeRate"
+   ],
+   "lines": 25
+  },
+  {
+   "tag": "conv_inside_natural_b3__CalcFohannoPolidoriVerticalWall",
+   "name": "CalcFohannoPolidoriVerticalWall",
+   "file": "conv_inside_natural_b3.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "Height",
+    "SurfTemp",
+    "QdotConv"
+   ],
+   "lines": 26
+  },
+  {
+   "tag": "conv_int_bm_mixed__CalcBeausoleilMorrisonMixedUnstableCeiling",
+   "name": "CalcBeausoleilMorrisonMixedUnstableCeiling",
+   "file": "conv_int_bm_mixed.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter",
+    "SurfTemp",
+    "SupplyAirTemp",
+    "AirChangeRate"
+   ],
+   "lines": 26
+  },
+  {
+   "tag": "window_optics_transrefl__InterpolateBetweenFourValues",
+   "name": "InterpolateBetweenFourValues",
+   "file": "window_optics.transrefl.upstream.inc",
+   "inputs": [
+    "X",
+    "Y",
+    "X1",
+    "X2",
+    "Y1",
+    "Y2",
+    "Fx1y1",
+    "Fx1y2",
+    "Fx2y1",
+    "Fx2y2"
+   ],
+   "lines": 28
+  },
+  {
+   "tag": "wel_vb_ashwat__FRA",
+   "name": "FRA",
+   "file": "wel_vb_ashwat.upstream.inc",
+   "inputs": [
+    "TM",
+    "T",
+    "DT",
+    "AK",
+    "BK",
+    "CK",
+    "ACP",
+    "BCP",
+    "CCP",
+    "AVISC",
+    "BVISC",
+    "CVISC",
+    "RHOGAS"
+   ],
+   "lines": 32
+  }
+ ]
+}

@@ -179,6 +179,10 @@ python generate_tasks.py
 
 ---
 
+## EnergyPlusMojo bit-exactness harness
+
+`epmojo_eval/` scores drafts of Mojo kernels by whether they are bit-for-bit identical to the verbatim C++ routines of an EnergyPlusMojo checkout (raw, and after the post-pass), and provides the oracle verifier for `transpile-llm --samples N --verify-cmd`. See [epmojo_eval/README.md](epmojo_eval/README.md).
+
 ## License
 
 MIT

@@ -1,0 +1,429 @@
+{
+ "epmojo_commit": "6ae386b2",
+ "description": "development set: the rules were written while looking at its failures (40 routines, 31 unique names)",
+ "routines": [
+  {
+   "tag": "ice_storage__TempIPtoSI",
+   "name": "TempIPtoSI",
+   "file": "ice_storage.upstream.inc",
+   "inputs": [
+    "Temp"
+   ],
+   "lines": 4
+  },
+  {
+   "tag": "ice_storage__TempSItoIP",
+   "name": "TempSItoIP",
+   "file": "ice_storage.upstream.inc",
+   "inputs": [
+    "Temp"
+   ],
+   "lines": 4
+  },
+  {
+   "tag": "leaf_scalars_eir__Fahrenheit2Celsius",
+   "name": "Fahrenheit2Celsius",
+   "file": "leaf_scalars.eir.upstream.inc",
+   "inputs": [
+    "F"
+   ],
+   "lines": 4
+  },
+  {
+   "tag": "leaf_scalars_tarcog__pos",
+   "name": "pos",
+   "file": "leaf_scalars.tarcog.upstream.inc",
+   "inputs": [
+    "x"
+   ],
+   "lines": 4
+  },
+  {
+   "tag": "std_ratings__GetIEEREquationResult",
+   "name": "GetIEEREquationResult",
+   "file": "std_ratings.upstream.inc",
+   "inputs": [
+    "A",
+    "B",
+    "C",
+    "D"
+   ],
+   "lines": 4
+  },
+  {
+   "tag": "water_coil_f6f7__F6",
+   "name": "F6",
+   "file": "water_coil.f6f7.upstream.inc",
+   "inputs": [
+    "X",
+    "A0",
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5"
+   ],
+   "lines": 4
+  },
+  {
+   "tag": "comfort_ashrae55_extras__CalcSatVapPressFromTempTorr",
+   "name": "CalcSatVapPressFromTempTorr",
+   "file": "comfort_ashrae55_extras.upstream.inc",
+   "inputs": [
+    "Temp"
+   ],
+   "lines": 5
+  },
+  {
+   "tag": "conv_ashrae_doe2__CalcMoWITTNatural",
+   "name": "CalcMoWITTNatural",
+   "file": "conv_ashrae_doe2.upstream.inc",
+   "inputs": [
+    "DeltaTemp"
+   ],
+   "lines": 5
+  },
+  {
+   "tag": "leaf_scalars_rc__CalcTransMTActualEnthalpyChange",
+   "name": "CalcTransMTActualEnthalpyChange",
+   "file": "leaf_scalars.rc.upstream.inc",
+   "inputs": [
+    "hCompInHP",
+    "hGasCoolerOut",
+    "delHSubcoolerDis"
+   ],
+   "lines": 5
+  },
+  {
+   "tag": "water_coil_f6f7__F7",
+   "name": "F7",
+   "file": "water_coil.f6f7.upstream.inc",
+   "inputs": [
+    "X",
+    "A0",
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6"
+   ],
+   "lines": 5
+  },
+  {
+   "tag": "conv_ashrae_doe2__CalcMoWITTForcedLeeward",
+   "name": "CalcMoWITTForcedLeeward",
+   "file": "conv_ashrae_doe2.upstream.inc",
+   "inputs": [
+    "WindAtZ"
+   ],
+   "lines": 6
+  },
+  {
+   "tag": "conv_ashrae_doe2__CalcMoWITTForcedWindward",
+   "name": "CalcMoWITTForcedWindward",
+   "file": "conv_ashrae_doe2.upstream.inc",
+   "inputs": [
+    "WindAtZ"
+   ],
+   "lines": 6
+  },
+  {
+   "tag": "comfort_ashrae55_extras__CalcRelativeAirVelocity",
+   "name": "CalcRelativeAirVelocity",
+   "file": "comfort_ashrae55_extras.upstream.inc",
+   "inputs": [
+    "AirVel",
+    "ActMet"
+   ],
+   "lines": 7
+  },
+  {
+   "tag": "fluid_water_interp__GetInterpValue",
+   "name": "GetInterpValue",
+   "file": "fluid_water.interp.upstream.inc",
+   "inputs": [
+    "Tact",
+    "Tlo",
+    "Thi",
+    "Xlo",
+    "Xhi"
+   ],
+   "lines": 9
+  },
+  {
+   "tag": "leaf_scalars_ehi__Ra",
+   "name": "Ra",
+   "file": "leaf_scalars.ehi.upstream.inc",
+   "inputs": [
+    "Ts",
+    "Ta"
+   ],
+   "lines": 9
+  },
+  {
+   "tag": "leaf_scalars_ehi__Ra_bar",
+   "name": "Ra_bar",
+   "file": "leaf_scalars.ehi.upstream.inc",
+   "inputs": [
+    "Tf",
+    "Ta"
+   ],
+   "lines": 9
+  },
+  {
+   "tag": "leaf_scalars_ehi__Ra_un",
+   "name": "Ra_un",
+   "file": "leaf_scalars.ehi.upstream.inc",
+   "inputs": [
+    "Ts",
+    "Ta"
+   ],
+   "lines": 9
+  },
+  {
+   "tag": "psychrometrics__PsyHFnTdbW_fast",
+   "name": "PsyHFnTdbW_fast",
+   "file": "psychrometrics.upstream.inc",
+   "inputs": [
+    "TDB",
+    "dW"
+   ],
+   "lines": 9
+  },
+  {
+   "tag": "leaf_scalars_ppsm__calcFluxWeightingFactor",
+   "name": "calcFluxWeightingFactor",
+   "file": "leaf_scalars.ppsm.upstream.inc",
+   "inputs": [
+    "weightedHeatFlux",
+    "uniformHeatFlux"
+   ],
+   "lines": 11
+  },
+  {
+   "tag": "zone_volume_calc_rotAzmDiffDeg__rotAzmDiffDeg",
+   "name": "rotAzmDiffDeg",
+   "file": "zone_volume_calc.rotAzmDiffDeg.upstream.inc",
+   "inputs": [
+    "AzmA",
+    "AzmB"
+   ],
+   "lines": 12
+  },
+  {
+   "tag": "leaf_scalars_spm__interpSetPoint",
+   "name": "interpSetPoint",
+   "file": "leaf_scalars.spm.upstream.inc",
+   "inputs": [
+    "LowVal",
+    "HighVal",
+    "RefVal",
+    "SetptAtLowVal",
+    "SetptAtHighVal"
+   ],
+   "lines": 13
+  },
+  {
+   "tag": "dispvent_hc__calculateThirdOrderFloorTemperature",
+   "name": "calculateThirdOrderFloorTemperature",
+   "file": "dispvent_hc.upstream.inc",
+   "inputs": [
+    "temperatureHistoryTerm",
+    "HAT_floor",
+    "HA_floor",
+    "MCpT_Total",
+    "MCp_Total",
+    "occupiedTemp",
+    "nonAirSystemResponse",
+    "zoneMultiplier",
+    "airCap"
+   ],
+   "lines": 14
+  },
+  {
+   "tag": "conv_inside_natural_b2__CalcAwbiHattonHeatedWall",
+   "name": "CalcAwbiHattonHeatedWall",
+   "file": "conv_inside_natural_b2.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter"
+   ],
+   "lines": 15
+  },
+  {
+   "tag": "conv_int_natural__CalcAwbiHattonHeatedWall",
+   "name": "CalcAwbiHattonHeatedWall",
+   "file": "conv_int_natural.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter"
+   ],
+   "lines": 15
+  },
+  {
+   "tag": "conv_outside_wind_c1__CalcMcAdams",
+   "name": "CalcMcAdams",
+   "file": "conv_outside_wind_c1.upstream.inc",
+   "inputs": [
+    "WindAtZ"
+   ],
+   "lines": 15
+  },
+  {
+   "tag": "conv_outside_wind_c2__CalcMitchell",
+   "name": "CalcMitchell",
+   "file": "conv_outside_wind_c2.upstream.inc",
+   "inputs": [
+    "WindAtZ",
+    "LengthScale"
+   ],
+   "lines": 15
+  },
+  {
+   "tag": "leaf_scalars_wmgr__InterpolateBetweenTwoValues",
+   "name": "InterpolateBetweenTwoValues",
+   "file": "leaf_scalars.wmgr.upstream.inc",
+   "inputs": [
+    "X",
+    "X0",
+    "X1",
+    "F0",
+    "F1"
+   ],
+   "lines": 15
+  },
+  {
+   "tag": "window_optics_transrefl__InterpolateBetweenTwoValues",
+   "name": "InterpolateBetweenTwoValues",
+   "file": "window_optics.transrefl.upstream.inc",
+   "inputs": [
+    "X",
+    "X0",
+    "X1",
+    "F0",
+    "F1"
+   ],
+   "lines": 15
+  },
+  {
+   "tag": "air_psy__PsyHFnTdbW",
+   "name": "PsyHFnTdbW",
+   "file": "air_psy.upstream.inc",
+   "inputs": [
+    "TDB",
+    "dW"
+   ],
+   "lines": 16
+  },
+  {
+   "tag": "conv_inside_natural_a__CalcAlamdariHammondStableHorizontal",
+   "name": "CalcAlamdariHammondStableHorizontal",
+   "file": "conv_inside_natural_a.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter"
+   ],
+   "lines": 16
+  },
+  {
+   "tag": "conv_int_natural__CalcAlamdariHammondStableHorizontal",
+   "name": "CalcAlamdariHammondStableHorizontal",
+   "file": "conv_int_natural.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter"
+   ],
+   "lines": 16
+  },
+  {
+   "tag": "conv_outside_wind_c1__CalcNusseltJurges",
+   "name": "CalcNusseltJurges",
+   "file": "conv_outside_wind_c1.upstream.inc",
+   "inputs": [
+    "WindAtZ"
+   ],
+   "lines": 16
+  },
+  {
+   "tag": "zone_eq_sizers_psy__PsyHFnTdbW",
+   "name": "PsyHFnTdbW",
+   "file": "zone_eq_sizers.psy.upstream.inc",
+   "inputs": [
+    "TDB",
+    "dW"
+   ],
+   "lines": 16
+  },
+  {
+   "tag": "zone_equip_output_psy__PsyHFnTdbW",
+   "name": "PsyHFnTdbW",
+   "file": "zone_equip_output.psy.upstream.inc",
+   "inputs": [
+    "TDB",
+    "dW"
+   ],
+   "lines": 16
+  },
+  {
+   "tag": "zone_size_equip_psy__PsyHFnTdbW",
+   "name": "PsyHFnTdbW",
+   "file": "zone_size_equip.psy.upstream.inc",
+   "inputs": [
+    "TDB",
+    "dW"
+   ],
+   "lines": 16
+  },
+  {
+   "tag": "zone_sys_step_psy__PsyHFnTdbW",
+   "name": "PsyHFnTdbW",
+   "file": "zone_sys_step.psy.upstream.inc",
+   "inputs": [
+    "TDB",
+    "dW"
+   ],
+   "lines": 16
+  },
+  {
+   "tag": "air_psy__PsyTdbFnHW",
+   "name": "PsyTdbFnHW",
+   "file": "air_psy.upstream.inc",
+   "inputs": [
+    "H",
+    "dW"
+   ],
+   "lines": 17
+  },
+  {
+   "tag": "conv_inside_natural_a__CalcAlamdariHammondUnstableHorizontal",
+   "name": "CalcAlamdariHammondUnstableHorizontal",
+   "file": "conv_inside_natural_a.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter"
+   ],
+   "lines": 17
+  },
+  {
+   "tag": "conv_int_natural__CalcAlamdariHammondUnstableHorizontal",
+   "name": "CalcAlamdariHammondUnstableHorizontal",
+   "file": "conv_int_natural.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter"
+   ],
+   "lines": 17
+  },
+  {
+   "tag": "psychrometrics__PsyTdbFnHW",
+   "name": "PsyTdbFnHW",
+   "file": "psychrometrics.upstream.inc",
+   "inputs": [
+    "H",
+    "dW"
+   ],
+   "lines": 17
+  }
+ ]
+}
