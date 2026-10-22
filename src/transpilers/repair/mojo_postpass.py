@@ -27,6 +27,7 @@ import ast
 import io
 import re
 import tokenize
+from collections.abc import Callable, Container
 from dataclasses import dataclass, field
 
 _INT_NAMES_ANNOT = re.compile(r"\b(\w+)\s*:\s*U?Int(?:8|16|32|64)?\b")
@@ -478,6 +479,7 @@ def _const_value(node: ast.AST) -> float | None:
 
 
 Plan = dict[int, tuple[str, list[ast.AST]]]
+Replace = Callable[[ast.AST, Callable[[ast.AST], str]], str]
 
 
 _POW_N = {
@@ -552,15 +554,28 @@ def _plan_math(
     return plan, libm, fp, unknown_min, pows
 
 
-def _render_plan(node: ast.AST, text: str, plan: Plan, offs: list[int]) -> str:
-    """Source text of `node` with every planned rewrite at or below it applied."""
+def _line_offsets(text: str) -> list[int]:
+    """Index of the start of each line, plus one past the end: (row, col) -> text index."""
+    offs = [0]
+    for ln in text.split("\n"):
+        offs.append(offs[-1] + len(ln) + 1)
+    return offs
+
+
+def _splice(node: ast.AST, text: str, offs: list[int], marked: Container[int], replace: Replace) -> str:
+    """Source text of `node` with every rewrite at or below it applied.
+
+    `marked` holds the id() of each node to rewrite; `replace(node, render)` returns the new text for a
+    marked node, calling `render` on the sub-nodes it keeps. All other text is copied as written."""
+
+    def render(n: ast.AST) -> str:
+        return _splice(n, text, offs, marked, replace)
 
     def span(n: ast.AST) -> tuple[int, int]:
         return offs[n.lineno - 1] + n.col_offset, offs[n.end_lineno - 1] + n.end_col_offset
 
-    if id(node) in plan:
-        fmt, kids = plan[id(node)]
-        return fmt.format(*[_render_plan(k, text, plan, offs) for k in kids])
+    if id(node) in marked:
+        return replace(node, render)
     start, end = span(node)
     pieces: list[tuple[int, int, str]] = []
 
@@ -568,9 +583,9 @@ def _render_plan(node: ast.AST, text: str, plan: Plan, offs: list[int]) -> str:
         for child in ast.iter_child_nodes(n):
             if not hasattr(child, "lineno"):
                 descend(child)
-            elif any(id(x) in plan for x in ast.walk(child)):
+            elif any(id(x) in marked for x in ast.walk(child)):
                 s, e = span(child)
-                pieces.append((s, e, _render_plan(child, text, plan, offs)))
+                pieces.append((s, e, render(child)))
 
     descend(node)
     pieces.sort()
@@ -583,6 +598,26 @@ def _render_plan(node: ast.AST, text: str, plan: Plan, offs: list[int]) -> str:
         pos = b
     out.append(text[pos:end])
     return "".join(out)
+
+
+def _splice_expression(wrapped: str, tree: ast.AST, marked: Container[int], replace: Replace) -> str:
+    """`wrapped` is `"(" + expression + ")"` and `tree` its parsed body: the expression with rewrites applied."""
+    offs = _line_offsets(wrapped)
+    s0 = offs[tree.lineno - 1] + tree.col_offset
+    e0 = offs[tree.end_lineno - 1] + tree.end_col_offset
+    return wrapped[1:s0] + _splice(tree, wrapped, offs, marked, replace) + wrapped[e0:-1]
+
+
+def _apply_plan(plan: Plan) -> Replace:
+    def replace(node: ast.AST, render: Callable[[ast.AST], str]) -> str:
+        fmt, kids = plan[id(node)]
+        return fmt.format(*[render(k) for k in kids])
+
+    return replace
+
+
+def _nc_mul(node: ast.AST, render: Callable[[ast.AST], str]) -> str:
+    return f"nc_mul({render(node.left)}, {render(node.right)})"
 
 
 def _insert_after_imports(src: str, block: list[str]) -> str:
@@ -641,9 +676,7 @@ def _fix_math(src: str, changes: list[str], unresolved: list[str], source: str |
             min_helper = "objexx_min"
     pow_n = {int(n) for n in re.findall(r"\bpow_([2-7])\s*\(", source or "")}
     ints = _int_names(src)
-    line_offs = [0]
-    for ln in src.split("\n"):
-        line_offs.append(line_offs[-1] + len(ln) + 1)
+    line_offs = _line_offsets(src)
     edits: list[tuple[int, int, str]] = []
     pows_used: set[int] = set()
     libm_used: set[str] = set()
@@ -670,12 +703,7 @@ def _fix_math(src: str, changes: list[str], unresolved: list[str], source: str |
             pows_used |= pows
             if not plan:
                 continue
-            offs = [0]
-            for ln in wrapped.split("\n"):
-                offs.append(offs[-1] + len(ln) + 1)
-            s0 = offs[tree.lineno - 1] + tree.col_offset
-            e0 = offs[tree.end_lineno - 1] + tree.end_col_offset
-            edits.append((a, b, wrapped[1:s0] + _render_plan(tree, wrapped, plan, offs) + wrapped[e0:-1]))
+            edits.append((a, b, _splice_expression(wrapped, tree, plan, _apply_plan(plan))))
             libm_used |= libm
             fp_used |= fp
             changes.append(f"line {logical[lo].start[0]}: {len(plan)} math call(s) made glibc/ObjexxFCL-exact")
@@ -825,44 +853,6 @@ def _collect_guards(root: ast.AST, ints: set[str], floats: set[str], augmented_a
     return guards
 
 
-def _render(node: ast.AST, text: str, guards: set[int], offs: list[int]) -> str:
-    """Source text of `node` with every guarded product below (or at) it rewritten."""
-
-    def span(n: ast.AST) -> tuple[int, int]:
-        return offs[n.lineno - 1] + n.col_offset, offs[n.end_lineno - 1] + n.end_col_offset
-
-    if id(node) in guards:
-        return f"nc_mul({_render(node.left, text, guards, offs)}, {_render(node.right, text, guards, offs)})"
-    start, end = span(node)
-    pieces: list[tuple[int, int, str]] = []
-
-    def descend(n: ast.AST) -> None:
-        for child in ast.iter_child_nodes(n):
-            if not hasattr(child, "lineno"):
-                descend(child)
-                continue
-            if id(child) in guards or _contains_guard(child, guards):
-                s, e = span(child)
-                pieces.append((s, e, _render(child, text, guards, offs)))
-            # a child without guards inside is left as written
-
-    descend(node)
-    pieces.sort()
-    out, pos = [], start
-    for s, e, repl in pieces:
-        if s < pos:
-            continue
-        out.append(text[pos:s])
-        out.append(repl)
-        pos = e
-    out.append(text[pos:end])
-    return "".join(out)
-
-
-def _contains_guard(node: ast.AST, guards: set[int]) -> bool:
-    return any(id(n) in guards for n in ast.walk(node))
-
-
 _AUG = {"+=", "-="}
 
 
@@ -935,9 +925,7 @@ def _product_variables(src: str, tokens: list[tokenize.TokenInfo], ints: set[str
 
     Contraction works across variables (EnergyPlusMojo measured that `var p = a*b; p + c` still fuses),
     so the product is guarded where it is defined."""
-    line_offs = [0]
-    for ln in src.split("\n"):
-        line_offs.append(line_offs[-1] + len(ln) + 1)
+    line_offs = _line_offsets(src)
     products: set[str] = set()
     used: set[str] = set()
     logical: list[tokenize.TokenInfo] = []
@@ -974,9 +962,7 @@ def _fix_fma(src: str, changes: list[str], unresolved: list[str]) -> tuple[str, 
     ints = _int_names(src)
     floats = _float_names(src)
     product_vars = _product_variables(src, tokens, ints, floats)
-    line_offs = [0]
-    for ln in src.split("\n"):
-        line_offs.append(line_offs[-1] + len(ln) + 1)
+    line_offs = _line_offsets(src)
 
     def abs_off(pos: tuple[int, int]) -> int:
         return line_offs[pos[0] - 1] + pos[1]
@@ -1011,13 +997,7 @@ def _fix_fma(src: str, changes: list[str], unresolved: list[str]) -> tuple[str, 
                 guards.add(id(tree))
             if not guards:
                 continue
-            offs = [0]
-            for ln in wrapped.split("\n"):
-                offs.append(offs[-1] + len(ln) + 1)
-            s0 = offs[tree.lineno - 1] + tree.col_offset
-            e0 = offs[tree.end_lineno - 1] + tree.end_col_offset
-            new = wrapped[1:s0] + _render(tree, wrapped, guards, offs) + wrapped[e0:-1]
-            edits.append((a, b, new))
+            edits.append((a, b, _splice_expression(wrapped, tree, guards, _nc_mul)))
             changes.append(f"line {logical[lo].start[0]}: {len(guards)} product(s) feeding an add/subtract -> nc_mul")
         logical = []
     if not edits:
