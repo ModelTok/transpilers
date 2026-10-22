@@ -24,6 +24,9 @@ except ImportError:
 from openrouter import OpenRouter  # noqa: E402
 
 from transpilers.cli.domain_prompts import apply_domain_guidance  # noqa: E402
+from transpilers.cli.local_client import OpenAICompatClient  # noqa: E402
+
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 
 PROMPT_TEMPLATE = """\
 Convert this C++ file to Mojo. Faithful 1:1 translation, no refactoring.
@@ -213,6 +216,13 @@ def transpile_one(
     return result
 
 
+def make_client(endpoint: str | None, api_key: str, timeout: float):
+    """OpenRouter SDK client, or a local OpenAI-compatible one when ``endpoint`` is set."""
+    if endpoint:
+        return OpenAICompatClient(endpoint, api_key, timeout)
+    return OpenRouter(api_key=api_key)
+
+
 def save_config(config_path: Path, config: list[dict]) -> None:
     tmp = config_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(config, indent=2))
@@ -227,11 +237,25 @@ def step_bar(step: int, total: int, width: int = 40) -> str:
 def main() -> int:
     global RAW_DIR
     ap = argparse.ArgumentParser(
-        description="Transpile C++/Fortran to Mojo via OpenRouter from a JSON config",
+        description=(
+            "Transpile C++/Fortran to Mojo from a JSON config, via OpenRouter or a local "
+            "OpenAI-compatible server (--endpoint)"
+        ),
     )
     ap.add_argument("config", help="JSON config file from build_config.py")
     ap.add_argument(
-        "--model", default="deepseek/deepseek-v4-flash", help="OpenRouter model"
+        "--model",
+        default=None,
+        help=f"Model name (default {DEFAULT_MODEL} on OpenRouter; required with --endpoint)",
+    )
+    ap.add_argument(
+        "--endpoint",
+        default=None,
+        help=(
+            "Base URL of an OpenAI-compatible server (e.g. http://localhost:11434/v1 for "
+            "Ollama, http://localhost:1234/v1 for LM Studio). No OpenRouter key needed; "
+            "LLM_API_KEY is sent if set."
+        ),
     )
     ap.add_argument(
         "--repair", action="store_true", help="Enable compile-driven repair loop"
@@ -339,10 +363,17 @@ def main() -> int:
         print("No entries to transpile")
         return 0
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        print("ERROR: OPENROUTER_API_KEY not set", file=sys.stderr)
-        return 1
+    if args.endpoint:
+        if not args.model:
+            print("ERROR: --model is required with --endpoint", file=sys.stderr)
+            return 1
+        api_key = os.environ.get("LLM_API_KEY") or "local"
+    else:
+        args.model = args.model or DEFAULT_MODEL
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            print("ERROR: OPENROUTER_API_KEY not set", file=sys.stderr)
+            return 1
 
     if args.dry_run:
         print(f"Dry run: {len(entries)} file(s)")
@@ -367,7 +398,7 @@ def main() -> int:
 
     def work(entry: dict) -> dict:
         nonlocal ok_count, completed
-        with OpenRouter(api_key=api_key) as client:
+        with make_client(args.endpoint, api_key, args.timeout) as client:
             result = transpile_one(
                 entry,
                 args.model,
