@@ -96,7 +96,7 @@ def main() -> int:
     (BASE / "3_verify_report.json").write_text(json.dumps(out, indent=2))
     print(f"\npassed={len(out['passed'])}  skeleton={len(skeletons)}  failed={len(failures)} / {len(files)}")
     if skeletons + failures:
-        print("repair:  python3 batch_transpile.py --files "
+        print("repair:  uv run transpile-stateless --files "
               + " ".join((skeletons + failures)[:20]) + " --force")
     return 0
 

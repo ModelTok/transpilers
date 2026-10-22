@@ -200,7 +200,7 @@ For whole-repository migrations such as EnergyPlus:
    to each draft; `--samples N --verify-cmd CMD` keeps the first of up to N drafts that
    a verifier accepts. `--domain-prompts` adds GoogleTest or Eigen guidance when those
    sources are detected. See [Using the local fine-tuned model](#using-the-local-fine-tuned-model).
-3. **Stateless one-shot runner:** `stateless transpilation/2_transpile.py` produces a
+3. **Stateless one-shot runner:** `transpile-stateless` produces a
    Python and a Mojo port per file in one completion. Backends: `claude`, `lmstudio`
    (load-balanced across endpoints) and `openrouter` (retries with backoff, and model
    failover via `OPENROUTER_FAILOVER`). `--chunk` compresses or splits oversize files
@@ -316,7 +316,7 @@ examples/          verified corpus (algorithms/ + per-language samples)
 tests/             engine test suite (Mojo-gated and GPU/ML cases skip automatically)
 benchmarks/        transpilation-bench (40-task C++/Python → Mojo) · epmojo_eval/ (bit-exactness harness)
 tools/             migraph (migration dashboard) · cloud (portable NVIDIA training bundle)
-stateless transpilation/   one-shot per-file runner for large batches
+stateless transpilation/   workspace for the one-shot runner (manifest, out/) and its review/verify scripts
 deploy/            Dockerfile for the HTTP API
 ```
 

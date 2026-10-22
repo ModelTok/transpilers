@@ -5,12 +5,11 @@ Mock client only; no network.
 
 from __future__ import annotations
 
-import importlib.util
 import re
-import sys
-from pathlib import Path
 
 import pytest
+
+from transpilers.stateless import runner as T
 
 from transpilers.cli.domain_prompts import (
     EIGEN,
@@ -19,14 +18,6 @@ from transpilers.cli.domain_prompts import (
     insert_guidance,
 )
 
-REPO = Path(__file__).resolve().parents[1]
-
-_spec = importlib.util.spec_from_file_location(
-    "stateless_transpile_domain", REPO / "stateless transpilation" / "2_transpile.py"
-)
-T = importlib.util.module_from_spec(_spec)
-sys.modules["stateless_transpile_domain"] = T
-_spec.loader.exec_module(T)
 
 GTEST_SRC = """#include <gtest/gtest.h>
 TEST_F(EnergyPlusFixture, A) {

@@ -5,21 +5,13 @@ fake and the backoff sleep is captured instead of slept.
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 import types
-from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[1]
+from transpilers.stateless import runner as T
 
-_spec = importlib.util.spec_from_file_location(
-    "stateless_transpile", REPO / "stateless transpilation" / "2_transpile.py"
-)
-T = importlib.util.module_from_spec(_spec)
-sys.modules["stateless_transpile"] = T
-_spec.loader.exec_module(T)
 
 PRIMARY, CHEAP, STRONG = "primary/model", "fallback/cheap", "fallback/strong"
 

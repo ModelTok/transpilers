@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
 """Stateless batch transpiler — one isolated completion per EnergyPlus file.
 
-Flat toolkit: this script + batch_transpile.md + transpile_manifest.json live in
-one folder. Each file becomes a single completion whose ONLY input is that file's
+The prompt (transpile_prompt.md) ships with the package; the manifest
+(1_manifest.json) and the out/ tree live in the workspace folder (workspace_dir()).
+Each file becomes a single completion whose ONLY input is that file's
 .cc/.hh + skeleton + the prompt — no tools, no other files, no conversation.
 
 Backends:
@@ -11,11 +11,11 @@ Backends:
                                  round-robin across --endpoints (your machines)
 
 Usage:
-  python3 batch_transpile.py --tier 1 --workers 6
-  python3 batch_transpile.py --all --backend lmstudio \
+  transpile-stateless --tier 1 --workers 6
+  transpile-stateless --all --backend lmstudio \
       --endpoints http://192.168.1.50:1234/v1 http://192.168.1.51:1234/v1 \
       --model qwen2.5-coder-32b-instruct --workers 2 --timeout 1800
-  python3 batch_transpile.py --files DataSizing --force
+  transpile-stateless --files DataSizing --force
 """
 
 from __future__ import annotations
@@ -37,8 +37,21 @@ try:  # load OPENROUTER_API_KEY (and friends) from .env if python-dotenv is pres
 except ImportError:
     pass
 
-BASE = Path(__file__).resolve().parent
-PROMPT_TEMPLATE = (BASE / "2_transpile.md").read_text()
+
+def workspace_dir() -> Path:
+    """Folder holding the manifest (1_manifest.json) and the generated out/ tree.
+
+    `TRANSPILERS_STATELESS_DIR` wins; otherwise the repo's `stateless transpilation/`
+    folder when running from a checkout; otherwise the current directory."""
+    env = os.environ.get("TRANSPILERS_STATELESS_DIR")
+    if env:
+        return Path(env).resolve()
+    repo_dir = Path(__file__).resolve().parents[3] / "stateless transpilation"
+    return repo_dir if repo_dir.is_dir() else Path.cwd()
+
+
+BASE = workspace_dir()
+PROMPT_TEMPLATE = Path(__file__).with_name("transpile_prompt.md").read_text(encoding="utf-8")
 MANIFEST = BASE / "1_manifest.json"
 _MANIFEST = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {"files": []}
 _BY_NAME = {r["name"]: r for r in _MANIFEST["files"]}
@@ -289,7 +302,8 @@ def call_claude(prompt: str, model: str, timeout: int, endpoint: str | None) -> 
 
 def call_openai(prompt: str, model: str, timeout: int, endpoint: str) -> tuple[str, dict]:
     """One completion against an OpenAI-compatible endpoint (LM Studio, vLLM)."""
-    import os, urllib.request
+    import os
+    import urllib.request
 
     # API key from env; falls back to LM Studio's dummy token.
     key = os.environ.get("LLM_API_KEY") or "lm-studio"
@@ -487,7 +501,7 @@ def main() -> int:
     else:
         files = files_from_manifest(None)
 
-    print(f"batch_transpile: {len(files)} files, backend={args.backend}, model={args.model}, "
+    print(f"transpile-stateless: {len(files)} files, backend={args.backend}, model={args.model}, "
           f"workers={args.workers}" + (f", endpoints={args.endpoints}" if args.backend == "lmstudio" else ""))
     if args.dry_run:
         for f in files:

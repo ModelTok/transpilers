@@ -5,8 +5,8 @@
 #   ./run_local_server.sh            # foreground
 #   nohup ./run_local_server.sh &    # background (log -> /tmp/llama-server.log)
 #
-# Then point 2_transpile.py at it:
-#   python3 2_transpile.py --files <names> --backend lmstudio \
+# Then point transpile-stateless at it:
+#   uv run transpile-stateless --files <names> --backend lmstudio \
 #     --endpoints http://127.0.0.1:8080/v1 --model qwen2.5-coder-14b \
 #     --per-endpoint 1 --max-chars 60000 --timeout 1800
 set -euo pipefail

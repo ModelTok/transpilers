@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Transpilation benchmark — compare models on the one-shot stateless transpile task.
 
-Runs the SAME prompt used by 2_transpile.py (imported, not duplicated) for a fixed
+Runs the SAME prompt used by transpile-stateless (imported, not duplicated) for a fixed
 set of "good example" files against one or more OpenRouter models, and reports
 objective per-(model,file) metrics:
 
@@ -25,16 +25,14 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
-import importlib
 import json
 import re
-import sys
 import time
 from pathlib import Path
 
+from transpilers.stateless import runner as T  # reuse build_prompt / call_openrouter / regex
+
 BASE = Path(__file__).resolve().parent
-sys.path.insert(0, str(BASE))
-T = importlib.import_module("2_transpile")  # reuse build_prompt / call_openrouter / regex
 
 BENCH_OUT = BASE / "bench_out"
 
