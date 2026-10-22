@@ -1,0 +1,56 @@
+{
+ "epmojo_commit": "6ae386b2",
+ "description": "the three routines greedy decoding fails, used for best-of-n",
+ "routines": [
+  {
+   "tag": "water_coil_f6f7__F7",
+   "name": "F7",
+   "file": "water_coil.f6f7.upstream.inc",
+   "inputs": [
+    "X",
+    "A0",
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6"
+   ],
+   "lines": 5
+  },
+  {
+   "tag": "conv_int_bm_mixed__CalcBeausoleilMorrisonMixedStableCeiling",
+   "name": "CalcBeausoleilMorrisonMixedStableCeiling",
+   "file": "conv_int_bm_mixed.upstream.inc",
+   "inputs": [
+    "DeltaTemp",
+    "HydraulicDiameter",
+    "SurfTemp",
+    "SupplyAirTemp",
+    "AirChangeRate"
+   ],
+   "lines": 25
+  },
+  {
+   "tag": "wel_vb_ashwat__FRA",
+   "name": "FRA",
+   "file": "wel_vb_ashwat.upstream.inc",
+   "inputs": [
+    "TM",
+    "T",
+    "DT",
+    "AK",
+    "BK",
+    "CK",
+    "ACP",
+    "BCP",
+    "CCP",
+    "AVISC",
+    "BVISC",
+    "CVISC",
+    "RHOGAS"
+   ],
+   "lines": 32
+  }
+ ]
+}
