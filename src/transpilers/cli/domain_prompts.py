@@ -78,6 +78,34 @@ Mojo:
         fixture.TearDown()
 """
 
+_EIGEN_SEMANTICS = """\
+- Eigen views vs copies: `m.block(...)`, `m.col(j)`, `m.row(i)`, `v.head(n)`,
+  `v.segment(i, n)`, `m.diagonal()` and `Eigen::Map<...>` are WRITABLE VIEWS of
+  the parent, not copies. When one is assigned to (`m.col(j) = v`,
+  `m.block(i, j, r, c) += x`, `m.diagonal().setOnes()`), write the elements
+  into the parent matrix. A view bound with `auto`/`Block<...>` that is later
+  assigned through must also write through. Only read-only uses may copy.
+- Aliasing: Eigen evaluates a matrix product into a temporary before
+  assigning, so `a = b * a` reads the OLD `a` throughout. Compute the whole
+  product into a fresh matrix, then assign. The same applies after `.eval()`.
+- Comma initialiser `m << a, b, c, d;` fills row by row (row-major reading
+  order) into `m`'s existing size; `Matrix<double, 3, 3>` fixed sizes are the
+  same as dynamic ones with that size.
+- Reductions: `.sum()`, `.prod()`, `.maxCoeff()`, `.minCoeff()`,
+  `.squaredNorm()`, `.cwiseAbs()`, `.array() * x`, `.array().abs()` are
+  element-wise; translate to explicit loops or helpers, keeping the
+  accumulation order of a left-to-right loop.
+"""
+
+_SAM_RULES = """\
+- SAM idioms: keep `sscapi_t`, `ssc_data_t`, `cmod_*` compute-module classes and
+  `var_info` tables with the same names and field order. A `compute()`
+  function is translated in place; `ssc_module_exec`-style calls stay calls.
+- TCS (`tcstype`) state machines: keep the `init` / `call` / `converged`
+  callbacks as separate methods and preserve the `switch (ncall)` / mode
+  branches and parameter/input/output index enums verbatim.
+"""
+
 EIGEN_GUIDANCE = """\
 EIGEN / SAM RULES (this file uses Eigen or System Advisor Model idioms):
 - Output is exactly one <<<FILE ...>>> block. Do not drop an operation because
@@ -91,18 +119,86 @@ EIGEN / SAM RULES (this file uses Eigen or System Advisor Model idioms):
     m.transpose()                   -> m.transpose()
     a * b (matrix product)          -> matmul(a, b)
     a.cwiseProduct(b)               -> elementwise_mul(a, b)
-    m.block(i, j, r, c)             -> m.block(i, j, r, c) (copy)
-    m.col(j) / m.row(i)             -> m.col(j) / m.row(i)
+    m.block(i, j, r, c) (read)      -> m.block(i, j, r, c)  (copy is fine)
+    m.block(i, j, r, c) = x (write) -> m.set_block(i, j, x)
+    m.col(j) / m.row(i) (read)      -> m.col(j) / m.row(i)
+    m.col(j) = v / m.row(i) = v     -> m.set_col(j, v) / m.set_row(i, v)
     v.dot(w) / v.norm()             -> dot(v, w) / norm(v)
     A.llt().solve(b)                -> cholesky_solve(A, b)
     A.lu().solve(b) / A.inverse()   -> lu_solve(A, b) / inverse(A)
 - Keep the order of floating-point operations exactly as written.
-- SAM idioms: keep `sscapi_t`, `ssc_data_t`, `cmod_*` compute-module classes and
-  `var_info` tables with the same names and field order. A `compute()`
-  function is translated in place; `ssc_module_exec`-style calls stay calls.
-- TCS (`tcstype`) state machines: keep the `init` / `call` / `converged`
-  callbacks as separate methods and preserve the `switch (ncall)` / mode
-  branches and parameter/input/output index enums verbatim.
+""" + _EIGEN_SEMANTICS + _SAM_RULES + """
+WORKED EXAMPLE
+C++:
+    MatrixXd A(3, 3);
+    A.setZero();
+    A.col(1) = VectorXd::Ones(3);
+    A.block(0, 0, 2, 2) += B;
+    VectorXd x = A.lu().solve(b);
+Mojo:
+    var A = Matrix(3, 3)
+    A.set_zero()
+    A.set_col(1, ones(3))
+    A.set_block(0, 0, A.block(0, 0, 2, 2) + B)
+    var x = lu_solve(A, b)
+"""
+
+EIGEN_DUAL_GUIDANCE = """\
+EIGEN / SAM RULES (this file uses Eigen or System Advisor Model idioms):
+- Output is both <<<FILE ...>>> blocks (Python and Mojo), complete. Do not
+  drop an operation because it looks like linear algebra; translate it or keep
+  a named helper call.
+- Eigen -> Python (numpy, 0-based like C++; `import numpy as np`):
+    MatrixXd(r, c) / VectorXd(n)   -> np.zeros((r, c)) / np.zeros(n)
+    m(i, j), v(i)                   -> m[i, j], v[i]
+    m.rows() / m.cols() / v.size()  -> m.shape[0] / m.shape[1] / v.size
+    m.setZero() / setIdentity()     -> m[:] = 0.0 / m[:] = np.eye(*m.shape)
+    m.transpose()                   -> m.T
+    a * b (matrix product)          -> a @ b
+    a.cwiseProduct(b)               -> a * b
+    m.block(i, j, r, c)             -> m[i:i + r, j:j + c]  (a numpy view: assign
+                                       through it to write the parent)
+    m.col(j) / m.row(i)             -> m[:, j] / m[i, :]
+    v.dot(w) / v.norm()             -> np.dot(v, w) / np.linalg.norm(v)
+    A.llt().solve(b)                -> np.linalg.solve(A, b)
+    A.lu().solve(b) / A.inverse()   -> np.linalg.solve(A, b) / np.linalg.inv(A)
+- Eigen -> Mojo table (use `Matrix`/`Vector` helpers with row-major
+  `List[Float64]` storage; declare any helper you need in the same file):
+    MatrixXd(r, c) / VectorXd(n)   -> Matrix(r, c) / Vector(n), zero-filled
+    m(i, j), v(i)                   -> m[i, j], v[i]  (0-based, as in C++)
+    m.rows() / m.cols() / v.size()  -> m.rows / m.cols / v.size
+    m.setZero() / setIdentity()     -> m.set_zero() / m.set_identity()
+    m.transpose()                   -> m.transpose()
+    a * b (matrix product)          -> matmul(a, b)
+    a.cwiseProduct(b)               -> elementwise_mul(a, b)
+    m.block(i, j, r, c) (read)      -> m.block(i, j, r, c)  (copy is fine)
+    m.block(i, j, r, c) = x (write) -> m.set_block(i, j, x)
+    m.col(j) / m.row(i) (read)      -> m.col(j) / m.row(i)
+    m.col(j) = v / m.row(i) = v     -> m.set_col(j, v) / m.set_row(i, v)
+    v.dot(w) / v.norm()             -> dot(v, w) / norm(v)
+    A.llt().solve(b)                -> cholesky_solve(A, b)
+    A.lu().solve(b) / A.inverse()   -> lu_solve(A, b) / inverse(A)
+- Keep the order of floating-point operations exactly as written in scalar
+  code. Solves and products may use the library routine above.
+""" + _EIGEN_SEMANTICS + _SAM_RULES + """
+WORKED EXAMPLE
+C++:
+    MatrixXd A(3, 3);
+    A.setZero();
+    A.col(1) = VectorXd::Ones(3);
+    A.block(0, 0, 2, 2) += B;
+    VectorXd x = A.lu().solve(b);
+Python:
+    A = np.zeros((3, 3))
+    A[:, 1] = np.ones(3)
+    A[0:2, 0:2] += B
+    x = np.linalg.solve(A, b)
+Mojo:
+    var A = Matrix(3, 3)
+    A.set_zero()
+    A.set_col(1, ones(3))
+    A.set_block(0, 0, A.block(0, 0, 2, 2) + B)
+    var x = lu_solve(A, b)
 """
 
 GTEST_DUAL_GUIDANCE = """\
@@ -155,10 +251,8 @@ Mojo:
         fixture.TearDown()
 """
 
-_SINGLE_BLOCK = "Output is exactly one <<<FILE ...>>> block."
-_DUAL_BLOCK = "Output is both <<<FILE ...>>> blocks (Python and Mojo)."
-
 _GUIDANCE = {GTEST: GTEST_GUIDANCE, EIGEN: EIGEN_GUIDANCE}
+_DUAL_GUIDANCE = {GTEST: GTEST_DUAL_GUIDANCE, EIGEN: EIGEN_DUAL_GUIDANCE}
 _OUTPUT_MARKERS = ("\nOUTPUT FORMAT:", "\n## Output format")
 
 
@@ -172,12 +266,7 @@ def domain_guidance(domains: list[str], dual_port: bool = False) -> str:
     for d in domains:
         if d not in _GUIDANCE:
             continue
-        if dual_port and d == GTEST:
-            parts.append(GTEST_DUAL_GUIDANCE)
-        elif dual_port:
-            parts.append(_GUIDANCE[d].replace(_SINGLE_BLOCK, _DUAL_BLOCK))
-        else:
-            parts.append(_GUIDANCE[d])
+        parts.append(_DUAL_GUIDANCE[d] if dual_port else _GUIDANCE[d])
     return "\n".join(parts)
 
 
