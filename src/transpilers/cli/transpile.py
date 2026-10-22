@@ -93,11 +93,29 @@ def extract_file_block(text: str) -> str | None:
             re.DOTALL,
         )
     if not m:
-        return None
+        return _single_mojo_fence(text)
     body = m.group("body")
     body = re.sub(r"^```[a-zA-Z]*\n", "", body)
     body = re.sub(r"\n```\s*$", "", body)
     return body
+
+
+_FENCE = re.compile(r"```(?P<lang>[^\n`]*)\n(?P<body>.*?)\n```", re.DOTALL)
+
+
+def _single_mojo_fence(text: str) -> str | None:
+    """Fallback for models that answer with one fenced mojo block instead of <<<FILE>>>.
+
+    The repo's fine-tuned adapter was trained to reply with "a single ```mojo fenced block".
+    Only a closed fence tagged ``mojo`` counts, and only when there is exactly one: with
+    several (code plus examples) it is unclear which is the file, so none is taken.
+    """
+    blocks = [
+        m.group("body")
+        for m in _FENCE.finditer(text)
+        if m.group("lang").strip().lower() in ("mojo", "\U0001f525")
+    ]
+    return blocks[0] if len(blocks) == 1 else None
 
 
 def mojo_compile(path: Path) -> tuple[bool, str]:
