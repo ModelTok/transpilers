@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Step 4 — independent faithfulness review by a DIFFERENT model.
 
-The transpiler (2_transpile.py) only produces ports. This step fires each file's
+The transpiler (transpile-stateless) only produces ports. This step fires each file's
 Python AND Mojo ports + the C++ oracle at a separate model that did NOT write
 them, asking for a structured faithfulness verdict (and python/mojo agreement).
 Same blind spots aren't shared, so this catches wrong-coefficient / wrong-branch
@@ -9,7 +9,7 @@ Same blind spots aren't shared, so this catches wrong-coefficient / wrong-branch
 
 One stateless completion per file (no tools). Self-contained. Emits
 4_review_report.json with the defect list -> feed back to the transpiler:
-    python3 2_transpile.py --files <defective> --force --model <stronger>
+    uv run transpile-stateless --files <defective> --force --model <stronger>
 
 Usage:
   python3 4_review.py --tier 1 --model opus
@@ -53,7 +53,7 @@ def _oracle(file: str) -> tuple[Path, Path | None]:
     return Path(), None
 
 
-# ---- transport (mirrors 2_transpile.py; duplicated so each step stands alone) ----
+# ---- transport (mirrors transpilers.stateless.runner; duplicated so each step stands alone) ----
 def call_claude(prompt, model, timeout, endpoint):
     cmd = ["claude", "-p", "--output-format", "json", "--model", model,
            "--max-turns", "1", "--tools", ""]
@@ -171,7 +171,7 @@ def main() -> int:
     print(f"\nfaithful={sum(1 for r in results if r.get('verdict') == 'faithful')}  "
           f"needs-work={len(defective)} / {len(files)}")
     if defective:
-        print("repair:  python3 2_transpile.py --force --model <stronger> --files "
+        print("repair:  uv run transpile-stateless --force --model <stronger> --files "
               + " ".join(defective[:20]) + (" ..." if len(defective) > 20 else ""))
     return 0
 

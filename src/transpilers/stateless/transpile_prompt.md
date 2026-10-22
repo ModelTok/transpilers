@@ -1,4 +1,4 @@
-# TRANSPILE PROMPT (one-shot, stateless — used by 2_transpile.py)
+# TRANSPILE PROMPT (one-shot, stateless — used by transpilers.stateless.runner)
 
 Single completion per file. No tools, no git, no tests, no self-verification —
 this model does ONE job: produce TWO faithful ports of the file. A different

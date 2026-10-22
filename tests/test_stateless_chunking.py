@@ -4,21 +4,12 @@ validation and the oversize guard (issues #91, #92). Mock client only; no networ
 
 from __future__ import annotations
 
-import importlib.util
 import re
-import sys
-from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[1]
+from transpilers.stateless import runner as T
 
-_spec = importlib.util.spec_from_file_location(
-    "stateless_transpile_chunk", REPO / "stateless transpilation" / "2_transpile.py"
-)
-T = importlib.util.module_from_spec(_spec)
-sys.modules["stateless_transpile_chunk"] = T
-_spec.loader.exec_module(T)
 
 SRC = """// header comment
 #include <cmath>

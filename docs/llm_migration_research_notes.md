@@ -109,7 +109,7 @@ Repo:
 - Have (elsewhere): `scripts/sft/migrate.py` generates K candidates and accepts the
   first that verifies against the C++ reference, so nothing failing the gate is
   accepted (module docstring, lines 1-11). The stateless driver is all-or-nothing
-  per file when chunking (`stateless transpilation/2_transpile.py:211-214`).
+  per file when chunking (`transpile_chunked` in `src/transpilers/stateless/runner.py`).
   `scripts/escalating_repair_bench.py` compares one-shot against the loop, which is
   a corpus-level baseline comparison, not a per-unit gate.
 

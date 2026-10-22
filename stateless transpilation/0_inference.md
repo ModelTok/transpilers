@@ -1,7 +1,7 @@
 # 0 — Inference: running the C++/Fortran→Mojo transpiler model
 
 Everything needed to serve the fine-tuned transpiler model and point this
-pipeline (`2_transpile.py --backend lmstudio`) at it.
+pipeline (`transpile-stateless --backend lmstudio`) at it.
 
 ---
 
@@ -26,7 +26,7 @@ pipeline (`2_transpile.py --backend lmstudio`) at it.
 
 ## Recommended: serve the GGUF over an OpenAI-compatible endpoint
 
-`2_transpile.py` talks to OpenAI-compatible `/v1/chat/completions` endpoints and
+`transpile-stateless` talks to OpenAI-compatible `/v1/chat/completions` endpoints and
 round-robins across `--endpoints` (your machines). Two ways to expose one:
 
 ### Option A — llama.cpp `llama-server` (fastest, headless)
@@ -45,7 +45,7 @@ Built (Vulkan) at `~/Github/llama.cpp-diffusion/build/bin/`. On the **890M** box
 Then transpile against it:
 
 ```bash
-python3 2_transpile.py --all --backend lmstudio \
+uv run transpile-stateless --all --backend lmstudio \
   --endpoints http://localhost:1234/v1 \
   --model transpiler-1.5B-Q4 --per-endpoint 32
 ```
@@ -59,7 +59,7 @@ LM Studio is installed as a Flatpak; server at `http://127.0.0.1:1234`.
    `~/.var/app/ai.lmstudio.lm-studio/.lmstudio/models/<author>/<repo>/`), or
    import via the GUI.
 2. Load it, enable **Serve on Local Network**, set parallelism.
-3. Point `2_transpile.py --endpoints http://<host>:1234/v1`.
+3. Point `transpile-stateless --endpoints http://<host>:1234/v1`.
 
 Driving LM Studio's CLI from a host shell (it lives in the flatpak):
 ```bash
@@ -70,11 +70,11 @@ HOME=$APP $APP/.lmstudio/bin/lms load <model> --gpu max -c 32768 -y
 
 ### Multi-machine (round-robin across several endpoints)
 
-`2_transpile.py` is built for this — list every endpoint; the scheduler hands the
+`transpile-stateless` is built for this — list every endpoint; the scheduler hands the
 next free file to whichever machine is idle (faster boxes naturally do more):
 
 ```bash
-python3 2_transpile.py --all --backend lmstudio \
+uv run transpile-stateless --all --backend lmstudio \
   --endpoints http://localhost:1234/v1 http://<other-host>:1234/v1 \
   --model transpiler-1.5B-Q4 --per-endpoint 16
 ```
@@ -175,7 +175,7 @@ nohup ./run_local_server.sh > /tmp/llama-server.log 2>&1 &   # background
 
 Run the batch against it:
 ```bash
-python3 2_transpile.py --all --backend lmstudio \
+uv run transpile-stateless --all --backend lmstudio \
   --endpoints http://127.0.0.1:8080/v1 --model qwen2.5-coder-14b \
   --per-endpoint 3 --max-chars 60000 --timeout 1800
 ```
