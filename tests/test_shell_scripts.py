@@ -14,19 +14,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# These ROCm scripts lost their shebang in the same pass and are deleted by the ROCm/RunPod removal
-# (PR #138, which carries #137). Delete this set once that has merged; entries for files that no
-# longer exist are ignored, so the test passes whichever of the two lands first.
-PENDING_REMOVAL = {
-    "scripts/sft/_run_gemma4.sh",
-    "scripts/sft/setup_lf61.sh",
-    "scripts/sft/setup_lf7.sh",
-    "scripts/sft/train_3b.sh",
-    "scripts/sft/train_3b_rocm61.sh",
-    "scripts/sft/train_3b_rocm7.sh",
-}
-
-
 def tracked_shell_scripts() -> list[str]:
     if shutil.which("git") is None or not (ROOT / ".git").exists():
         pytest.skip("needs a git checkout")
@@ -42,11 +29,7 @@ def first_line(path: str) -> bytes:
 
 
 def test_every_tracked_shell_script_starts_with_a_shebang():
-    missing = [
-        p
-        for p in tracked_shell_scripts()
-        if (ROOT / p).exists() and p not in PENDING_REMOVAL and not first_line(p).startswith(b"#!")
-    ]
+    missing = [p for p in tracked_shell_scripts() if (ROOT / p).exists() and not first_line(p).startswith(b"#!")]
     assert not missing, f"no shebang on the first line of: {missing}"
 
 
