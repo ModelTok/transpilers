@@ -7,6 +7,11 @@ Two families of C++ files defeat the generic prompt (issues #96 and #97):
 * Eigen-heavy code (``third_party/ssc``), where ``MatrixXd``/``.block()``
   idioms have a weak Eigen -> Mojo training signal.
 
+A third domain targets the EnergyPlusMojo repository's kernel conventions
+(bit-exact ``@export`` batch kernels checked against a g++ oracle); it is
+selected by a ``.upstream.inc`` source path, the name EnergyPlusMojo's
+``extract_fn.py`` gives verbatim upstream text.
+
 ``detect_domains`` inspects a source path and text; ``domain_guidance`` renders
 the matching rules.  Nothing here runs unless the caller opts in.
 """
@@ -17,6 +22,7 @@ import re
 
 GTEST = "gtest"
 EIGEN = "eigen"
+EPMOJO = "epmojo"
 
 _GTEST_INCLUDE = re.compile(r'#\s*include\s*[<"]gtest/[^>"]+[>"]')
 _GTEST_MACRO = re.compile(
@@ -27,7 +33,7 @@ _EIGEN_TYPE = re.compile(r"\bEigen::\w+|\b(?:Matrix|Vector|Array)(?:X|[234])[dfi
 
 
 def detect_domains(source_text: str, source_path: str = "") -> list[str]:
-    """Return the domains (``gtest``, ``eigen``) evident in a source file."""
+    """Return the domains (``gtest``, ``eigen``, ``epmojo``) evident in a source file."""
     domains: list[str] = []
     if _GTEST_INCLUDE.search(source_text) or _GTEST_MACRO.search(source_text):
         domains.append(GTEST)
@@ -36,6 +42,8 @@ def detect_domains(source_text: str, source_path: str = "") -> list[str]:
     norm = source_path.replace("\\", "/")
     if EIGEN not in domains and "third_party/ssc/" in norm:
         domains.append(EIGEN)
+    if norm.endswith(".upstream.inc"):
+        domains.append(EPMOJO)
     return domains
 
 
@@ -201,6 +209,72 @@ Mojo:
     var x = lu_solve(A, b)
 """
 
+EPMOJO_GUIDANCE = """\
+ENERGYPLUSMOJO KERNEL RULES (this text is verbatim upstream EnergyPlus for a
+kernel in the EnergyPlusMojo repository). Where these rules differ from the
+generic rules above, these win.
+- Output is exactly one <<<FILE ...>>> block: the kernel `src/kernels/<name>.mojo`.
+  Write Mojo 1.0 syntax: `def` (not `fn`), `comptime` constants (not `alias`),
+  stdlib imports as `from std.math import ...` / `from std.ffi import
+  external_call`, and sibling modules by plain name (`from fp_strict import
+  nc_mul`). Do NOT use the quoted-path import form `from "X" import` shown above.
+- Port only the maths. If the routine reads `state.data*` values, take them as
+  explicit Float64/Int arguments and edit only those accesses; a `ShowWarning*` /
+  `ShowFatal*` call becomes a returned sentinel value. List every such edit in a
+  comment above the function. Write no Python or NumPy twin and no extra files.
+- Entry point: one `@export def <name>_batch(n: Int, <in>_ptr: Int, ...,
+  out_ptr: Int) -> None`. Each `_ptr` is the integer address of a contiguous
+  Float64[n] array (an array column of k values per row is ONE pointer to n*k
+  row-major doubles, element j of row i at `v[k*i + j]`). Open each with
+  `UnsafePointer[Float64, MutAnyOrigin](unsafe_from_address=ptr)`, loop `i` over
+  `range(n)`, call the translated function and write `out[i]`. Keep the maths in
+  ordinary helper functions that the batch entry calls.
+- The kernel must match upstream compiled with g++ -ffp-contract=off BIT FOR BIT:
+  * Mojo fuses `a*b + c` into a fused multiply-add; upstream does not. Wrap the
+    product in `nc_mul` (`from fp_strict import nc_mul`) in every `a*b + c`,
+    `c - a*b`, `a*b - c` and `acc += a*b`, e.g. `nc_mul(a, b) + c`. `a*b*c`,
+    `a/b + c` and `a*(b+c)` need no guard. A `var` temporary, parentheses or an
+    `@always_inline` helper do NOT prevent fusion. A helper whose result callers
+    add to (ObjexxFCL `pow_2`, `pow_6`) must itself end with `return nc_mul(t, t)`.
+  * Keep the C++ evaluation order and grouping and every literal exactly.
+    ObjexxFCL `pow_2(x)` is `x*x`, `pow_3(x)` is `(x*x)*x`; never `x ** n`.
+  * Call libm `pow`, `exp`, `log`, `sin`, `cos` through `external_call`, e.g.
+    `external_call["pow", Float64, Float64, Float64](x, y)`; the `std.math`
+    versions differ from glibc by up to about 1e-10 relative.
+  * Absolute value: built-in `abs(x)` or `ep_abs(x)`; never `-x if x < 0.0 else x`
+    (it keeps the sign of -0.0 and -NaN).
+  * min/max: never the built-in `min`/`max` (they differ for NaN). Read how
+    upstream spells it: an UNQUALIFIED `min(a, b)` / `max(a, b)` is ObjexxFCL's,
+    so use `objexx_min` / `objexx_max`; `std::min` is `ep_min` and `std::max` is
+    `ep_max`. All four come from `fp_strict`.
+
+WORKED EXAMPLE
+C++ (upstream, verbatim):
+    Real64 CalcFoo(Real64 const dT, Real64 const L)
+    {
+        Real64 h = 1.23 * (dT * dT) + std::pow(L, 0.25);
+        return std::max(h, 0.1);
+    }
+Mojo:
+    from std.ffi import external_call
+    from fp_strict import nc_mul, ep_max
+
+
+    @always_inline
+    def CalcFoo(dT: Float64, L: Float64) -> Float64:
+        var h = nc_mul(1.23, dT * dT) + external_call["pow", Float64, Float64, Float64](L, 0.25)
+        return ep_max(h, 0.1)
+
+
+    @export
+    def CalcFoo_batch(n: Int, dT_ptr: Int, L_ptr: Int, out_ptr: Int) -> None:
+        var dT = UnsafePointer[Float64, MutAnyOrigin](unsafe_from_address=dT_ptr)
+        var L = UnsafePointer[Float64, MutAnyOrigin](unsafe_from_address=L_ptr)
+        var out = UnsafePointer[Float64, MutAnyOrigin](unsafe_from_address=out_ptr)
+        for i in range(n):
+            out[i] = CalcFoo(dT[i], L[i])
+"""
+
 GTEST_DUAL_GUIDANCE = """\
 GOOGLETEST RULES (this file is a gtest unit test; it overrides "do not write
 tests" above: the tests ARE the source, so port every one of them):
@@ -251,7 +325,7 @@ Mojo:
         fixture.TearDown()
 """
 
-_GUIDANCE = {GTEST: GTEST_GUIDANCE, EIGEN: EIGEN_GUIDANCE}
+_GUIDANCE = {GTEST: GTEST_GUIDANCE, EIGEN: EIGEN_GUIDANCE, EPMOJO: EPMOJO_GUIDANCE}
 _DUAL_GUIDANCE = {GTEST: GTEST_DUAL_GUIDANCE, EIGEN: EIGEN_DUAL_GUIDANCE}
 _OUTPUT_MARKERS = ("\nOUTPUT FORMAT:", "\n## Output format")
 
@@ -260,13 +334,15 @@ def domain_guidance(domains: list[str], dual_port: bool = False) -> str:
     """Render guidance for ``domains`` (empty string when none apply).
 
     ``dual_port`` selects the variant for drivers that ask for a Python and a
-    Mojo file per source (the stateless runner) rather than Mojo alone.
+    Mojo file per source (the stateless runner) rather than Mojo alone. The
+    ``epmojo`` domain has no dual-port variant (EnergyPlusMojo is Mojo only), so
+    it adds nothing there.
     """
     parts = []
     for d in domains:
-        if d not in _GUIDANCE:
-            continue
-        parts.append(_DUAL_GUIDANCE[d] if dual_port else _GUIDANCE[d])
+        text = (_DUAL_GUIDANCE if dual_port else _GUIDANCE).get(d)
+        if text:
+            parts.append(text)
     return "\n".join(parts)
 
 

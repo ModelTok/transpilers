@@ -77,3 +77,93 @@ def test_transpile_one_default_unchanged_and_opt_in(tmp_path: Path):
     t.transpile_one(dict(entry), "m", Client, False, 0, domain_prompts=True)
     assert "GOOGLETEST RULES" not in prompts[0]
     assert "GOOGLETEST RULES" in prompts[1]
+
+
+UPSTREAM_INC = "Real64 CalcFoo(Real64 const dT) { return 1.23 * dT * dT; }\n"
+
+
+def test_detects_epmojo_by_upstream_inc_path_only():
+    from transpilers.cli.domain_prompts import EPMOJO
+
+    assert detect_domains(UPSTREAM_INC, "tests/oracles/foo.upstream.inc") == [EPMOJO]
+    assert detect_domains(UPSTREAM_INC, "tests" + chr(92) + "oracles" + chr(92) + "foo.upstream.inc") == [EPMOJO]
+    assert detect_domains(UPSTREAM_INC, "src/EnergyPlus/Foo.cc") == []
+    assert detect_domains(UPSTREAM_INC) == []
+
+
+def test_epmojo_guidance_states_the_kernel_conventions():
+    from transpilers.cli.domain_prompts import EPMOJO
+
+    g = domain_guidance([EPMOJO])
+    for token in (
+        "nc_mul",
+        "external_call",
+        "ep_abs",
+        "objexx_min",
+        "ep_max",
+        "@export def <name>_batch",
+        "unsafe_from_address",
+        "fp_strict",
+        "-ffp-contract=off",
+        "def` (not `fn`)",
+        "WORKED EXAMPLE",
+    ):
+        assert token in g
+    assert "from \"X\" import" in g and "Do NOT use" in g  # overrides the generic import rule
+
+
+def test_epmojo_adds_nothing_for_the_dual_port_runner():
+    from transpilers.cli.domain_prompts import EPMOJO
+
+    assert domain_guidance([EPMOJO], dual_port=True) == ""
+    assert domain_guidance([GTEST, EPMOJO], dual_port=True) == domain_guidance([GTEST], dual_port=True)
+
+
+def test_apply_inserts_epmojo_rules_before_output_format():
+    out = apply_domain_guidance(BASE, UPSTREAM_INC, "tests/oracles/foo.upstream.inc")
+    assert out.index("ENERGYPLUSMOJO KERNEL RULES") < out.index("OUTPUT FORMAT:")
+    assert out.endswith("<<<END>>>")
+
+
+def test_guidance_helper_names_exist_in_epmojo_fp_strict():
+    import os
+    import re
+
+    import pytest
+
+    from transpilers.cli.domain_prompts import EPMOJO
+
+    root = Path(os.environ.get("EPMOJO_DIR", Path(__file__).resolve().parents[2] / "EnergyPlusMojo"))
+    fp = root / "src" / "kernels" / "fp_strict.mojo"
+    if not fp.exists():
+        pytest.skip("EnergyPlusMojo checkout not found (set EPMOJO_DIR)")
+    defined = set(re.findall(r"^def (\w+)\(", fp.read_text(encoding="utf-8"), re.MULTILINE))
+    g = domain_guidance([EPMOJO])
+    named = set(re.findall(r"\b(nc_mul|ep_abs|ep_max|ep_min|objexx_min|objexx_max)\b", g))
+    assert named and named <= defined
+
+
+def test_transpile_one_applies_epmojo_rules_only_for_upstream_inc(tmp_path: Path):
+    from transpilers.cli import transpile as t
+
+    prompts: list[str] = []
+
+    class Client:
+        class chat:
+            @staticmethod
+            def send(**kw):
+                prompts.append(kw["messages"][0]["content"])
+                msg = SimpleNamespace(content="<<<FILE x>>>\npass\n<<<END>>>")
+                return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+
+    inc = tmp_path / "foo.upstream.inc"
+    inc.write_text(UPSTREAM_INC)
+    plain = tmp_path / "bar.cc"
+    plain.write_text(UPSTREAM_INC)
+    for src in (inc, plain):
+        t.transpile_one(
+            {"source": str(src), "target": str(tmp_path / (src.stem + ".mojo"))},
+            "m", Client, False, 0, domain_prompts=True,
+        )
+    assert "ENERGYPLUSMOJO KERNEL RULES" in prompts[0]
+    assert "ENERGYPLUSMOJO KERNEL RULES" not in prompts[1]
