@@ -9,8 +9,9 @@ Visual Basic, and Assembly (via PyGhidra → C-like pseudocode).
 
 It is built for migrating large C++ codebases (EnergyPlus → Mojo and Python is the
 main driver), so besides the translator itself it ships batch drivers, a verification
-stack, a migration-progress tool and an NVIDIA fine-tuning toolchain for a
-C++/Python → Mojo model.
+stack, a migration-progress tool, an NVIDIA fine-tuning toolchain for a C++/Python → Mojo
+model, and the machinery to make that model's drafts usable: a deterministic post-pass,
+best-of-n selection against an oracle, and a bit-exactness evaluation harness.
 
 ## Contents
 
@@ -18,6 +19,7 @@ C++/Python → Mojo model.
 - [How it works](#how-it-works) · [Fidelity dial](#fidelity-dial) · [Status](#status)
 - [Verification and reporting](#verification-and-reporting)
 - [Migrating a large codebase](#migrating-a-large-codebase)
+- [Using the local fine-tuned model](#using-the-local-fine-tuned-model)
 - [Mojo fine-tuning (NVIDIA)](#mojo-fine-tuning-nvidia) · [Documentation](#documentation)
 - [Layout](#layout) · [Development](#development) · [Roadmap](#roadmap) · [Licence](#licence)
 
@@ -30,7 +32,8 @@ C++/Python → Mojo model.
 - **API keys**, only for the LLM paths:
   - `ANTHROPIC_API_KEY` for `transpile --infer-with-llm` and `--llm-rename`.
   - An OpenRouter key (`OPENROUTER_API_KEY`) for `transpile-llm` and the stateless
-    runner's `openrouter` backend.
+    runner's `openrouter` backend. `transpile-llm --endpoint URL` talks to a local
+    OpenAI-compatible server instead (Ollama, LM Studio, llama.cpp, vLLM) and needs no key.
 - **Optional extras:** `clang` for `--ir-augment`; the `codebase-memory-mcp` CLI for
   `--cbm`; `uv sync --group api` for `transpile-api`.
 - **A CUDA build of PyTorch and an NVIDIA GPU** only for fine-tuning (see
@@ -62,7 +65,8 @@ uv run pytest
 |---|---|
 | `transpile` | Translate one file through the strict HIR → MIR → LIR pipeline. Choose `--source`/`--target`, `--verify`, `--fidelity`, `--path`. |
 | `transpile-levels` | Run at object · file · module · folder granularity, with `--engine {strict\|lift}`. |
-| `transpile-llm` | Batch C++/Fortran → Mojo through OpenRouter from a JSON config (repair loop, parallel workers, `--domain-prompts`). |
+| `transpile-llm` | Batch C++/Fortran → Mojo from a JSON config, through OpenRouter or a local server (`--endpoint`). Repair loop, parallel workers, `--postpass`, best-of-n with `--samples`/`--verify-cmd`, `--domain-prompts`. |
+| `transpile-postpass` | Deterministic fixes for LLM-drafted Mojo kernels: C++/pre-1.0 syntax, `Array1D` loops, glibc-exact maths, `nc_mul` guards. See [below](#using-the-local-fine-tuned-model). |
 | `transpile-build-config` | Scan a source tree and write the JSON config that `transpile-llm` consumes. |
 | `transpile-comments` | Strip C++ comments from the sources referenced by a config, or from a single file. |
 | `transpile-api` | HTTP API server. Needs `uv sync --group api`. |
@@ -86,9 +90,7 @@ uv run transpile examples/example.cpp --path python_pivot --target rust
 uv run transpile-levels examples/example.cpp --level file --engine lift
 ```
 
-Run any command with `--help` for the full option list. If you redirect output on
-Windows under a legacy (non-UTF-8) code page and hit a `UnicodeEncodeError`, set
-`PYTHONUTF8=1`; a real console is not affected.
+Run any command with `--help` for the full option list.
 
 ## How it works
 
@@ -193,8 +195,11 @@ For whole-repository migrations such as EnergyPlus:
    `--exclude`, `--min-lines`/`--max-lines`, `--tier`, `--sort`).
 2. **Transpile:** `transpile-llm config.json` (add `--repair` for the compile-driven
    repair loop, `--dry-run` or `--status` to inspect first, `--resolve` to retry
-   entries marked done but missing their `.mojo`). `--domain-prompts` adds GoogleTest
-   or Eigen guidance when those sources are detected.
+   entries marked done but missing their `.mojo`). `--endpoint URL --model NAME` uses
+   a local server instead of OpenRouter; `--postpass` applies the deterministic fixes
+   to each draft; `--samples N --verify-cmd CMD` keeps the first of up to N drafts that
+   a verifier accepts. `--domain-prompts` adds GoogleTest or Eigen guidance when those
+   sources are detected. See [Using the local fine-tuned model](#using-the-local-fine-tuned-model).
 3. **Stateless one-shot runner:** `stateless transpilation/2_transpile.py` produces a
    Python and a Mojo port per file in one completion. Backends: `claude`, `lmstudio`
    (load-balanced across endpoints) and `openrouter` (retries with backoff, and model
@@ -207,7 +212,59 @@ For whole-repository migrations such as EnergyPlus:
    `tools/migraph/` renders the migration as an interactive graph you can scrub through
    git history.
 5. **Benchmark models:** `benchmarks/` holds `transpilation-bench`, a 40-task
-   C++/Python → Mojo suite ([benchmarks/README.md](benchmarks/README.md)).
+   C++/Python → Mojo suite ([benchmarks/README.md](benchmarks/README.md)), and
+   `benchmarks/epmojo_eval/`, which scores drafts by whether they are bit-for-bit identical
+   to the verbatim C++ ([benchmarks/epmojo_eval/README.md](benchmarks/epmojo_eval/README.md)).
+
+## Using the local fine-tuned model
+
+The repo ships the LoRA adapter (`data/sft/cpp_mojo/adapter_15b_v2`, on
+`Qwen/Qwen2.5-Coder-1.5B-Instruct`), not the base weights. To serve it, merge the adapter
+into the base and convert it to GGUF for Ollama, llama.cpp or LM Studio
+(`stateless transpilation/0_inference.md` has the recipe). Then:
+
+```sh
+uv run transpile-llm config.json --endpoint http://localhost:11434/v1 \
+    --model <the name you gave the model> --postpass
+```
+
+Things worth knowing, all measured on this adapter:
+
+- **It answers with one fenced `mojo` block**, which `transpile-llm` accepts when there are no
+  `<<<FILE>>>` markers (exactly one closed `mojo` fence; several fences are refused as ambiguous).
+- **Leave `--domain-prompts` off for it.** With the EnergyPlusMojo guidance the model often copies the
+  guidance's example function instead of translating the routine.
+- **Raw drafts are rarely bit-exact; the post-pass is what makes them usable.** It is
+  `transpilers.repair.mojo_postpass`, also available as `transpile-postpass FILE`, and every rule can be
+  switched off (`--no-syntax`, `--no-structs`, `--no-arrays`, `--no-mut`, `--no-libm`, `--no-fma`):
+  - C++ and pre-1.0 Mojo habits become Mojo 1.0 (`//` comments, `fn`, `let`, `alias`, `&&`, `const`, quoted imports);
+  - a field-less struct with one method is lifted to a function named after the C++ routine;
+  - `Array1D` parameters become `List` only when every use is the canonical `for i in range(a.l(), a.u() + 1)`
+    loop with the variable used solely as `x[i]`; anything else is reported, never guessed;
+  - `std.math` calls (`exp`, `pow`, `log`, ...) are routed to glibc, `pow(x, 2)` becomes `nc_mul(x, x)`,
+    ObjexxFCL's `pow_N` and `max`/`min` follow the upstream spelling (pass `--source` the C++ text);
+  - `mut` is added to `List`-like parameters the body index-assigns;
+  - products that feed an add or subtract are wrapped in `nc_mul`, including products bound to variables,
+    because Mojo fuses `a*b + c` into an FMA that the oracle build (`-ffp-contract=off`) does not.
+  Anything it cannot fix (C++ braces, unknown types, no `@export` entry) is listed in the report.
+- **Best-of-n when a verifier exists.** `--samples N --temperature 0.8 --verify-cmd CMD` draws up to N drafts
+  per file and keeps the first that `CMD` accepts with exit status 0 (`{target}` and `{source}` are
+  substituted). `benchmarks/epmojo_eval/verify_one.py` is such a verifier for routines extracted from
+  EnergyPlusMojo: it accepts a draft only if it is bit-exact.
+
+Measured with the harness in `benchmarks/epmojo_eval/` (3,000 edge-case inputs per routine, bit for bit
+against the verbatim C++, no guidance, temperature 0 unless stated):
+
+| Set | Raw output | With the post-pass |
+|---|---|---|
+| Development, 40 routines (31 unique) | 8 exact | 39 exact |
+| Held-out, 21 unique routines | 1 exact | 16 exact (19 after the struct rule, which was written after seeing that pattern) |
+| The 3 routines greedy decoding fails, best-of-8 with the oracle | | 2 recovered |
+
+Read these numbers narrowly: the routines are short, stateless, numeric `Real64 → Real64` functions (52
+unique in total); the development set was used while writing the rules, so the held-out 16 of 21 is the fair
+figure; routines with arrays, state, output parameters or callees were not measured; and the post-pass is
+meant for model drafts, not for rewriting existing kernels. Best-of-n needs an oracle for the routine.
 
 ## Mojo fine-tuning (NVIDIA)
 
@@ -245,7 +302,9 @@ adapter. It runs on NVIDIA GPUs with a CUDA build of PyTorch.
 | Multi-LLM pipeline | [docs/multi_llm_pipeline.md](docs/multi_llm_pipeline.md) |
 | Migrating Topologic | [docs/topologic_migration.md](docs/topologic_migration.md) |
 | Strategy and research | [docs/north_star_strategy.md](docs/north_star_strategy.md), [docs/transpilation-methods-research.md](docs/transpilation-methods-research.md), [docs/related_projects.md](docs/related_projects.md) |
-| Benchmark | [benchmarks/README.md](benchmarks/README.md) |
+| Benchmarks | [benchmarks/README.md](benchmarks/README.md) |
+| Bit-exactness evaluation harness | [benchmarks/epmojo_eval/README.md](benchmarks/epmojo_eval/README.md) |
+| Post-pass rules | [src/transpilers/repair/mojo_postpass.py](src/transpilers/repair/mojo_postpass.py) (module docstring) |
 
 ## Layout
 
@@ -255,7 +314,7 @@ scripts/           dataset builders · sft/ (fine-tune + eval) · rag/ · migrat
 data/              datasets · the shipped Mojo LoRA adapter · codebase RAG index
 examples/          verified corpus (algorithms/ + per-language samples)
 tests/             engine test suite (Mojo-gated and GPU/ML cases skip automatically)
-benchmarks/        transpilation-bench (40-task C++/Python → Mojo)
+benchmarks/        transpilation-bench (40-task C++/Python → Mojo) · epmojo_eval/ (bit-exactness harness)
 tools/             migraph (migration dashboard) · cloud (portable NVIDIA training bundle)
 stateless transpilation/   one-shot per-file runner for large batches
 deploy/            Dockerfile for the HTTP API
