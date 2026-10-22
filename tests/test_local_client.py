@@ -146,3 +146,115 @@ def test_main_end_to_end_accepts_a_fenced_reply(tmp_path, monkeypatch, server):
     monkeypatch.setattr(sys, "argv", ["transpile-llm", str(cfg), "--endpoint", base, "--model", "m"])
     assert t.main() == 0
     assert (tmp_path / "foo.mojo").read_text() == "def f(x: Float64) -> Float64:\n    return x"
+
+
+def test_temperature_flag_reaches_the_model_call(tmp_path, monkeypatch, server):
+    base, seen, _ = server
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    cfg = _config(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["transpile-llm", str(cfg), "--endpoint", base, "--model", "m"])
+    assert t.main() == 0
+    assert seen[-1]["body"]["temperature"] == 0.0
+    data = json.loads(cfg.read_text())
+    data[0]["decision"] = "pending"
+    cfg.write_text(json.dumps(data))
+    monkeypatch.setattr(sys, "argv", ["transpile-llm", str(cfg), "--endpoint", base, "--model", "m",
+                                      "--temperature", "0.8"])
+    assert t.main() == 0
+    assert seen[-1]["body"]["temperature"] == 0.8
+
+
+# --- best-of-n against a verification command ----------------------------------------------------
+
+
+def _cycling_server(replies):
+    state = {"n": 0}
+    seen = []
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            seen.append(body)
+            content = replies[state["n"] % len(replies)]
+            state["n"] += 1
+            payload = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, seen
+
+
+def _checker(tmp_path: Path, marker: str) -> str:
+    script = tmp_path / "check.py"
+    script.write_text(
+        "import sys\n"
+        f"sys.exit(0 if {marker!r} in open(sys.argv[1], encoding='utf-8').read() else 3)\n"
+    )
+    return f'"{sys.executable}" "{script}" "{{target}}"'
+
+
+def _reply(body: str) -> str:
+    return f"<<<FILE x>>>\n{body}\n<<<END>>>"
+
+
+def test_best_of_n_stops_at_the_first_verified_draft(tmp_path, monkeypatch):
+    srv, seen = _cycling_server([_reply("bad 1"), _reply("bad 2"), _reply("GOOD"), _reply("never asked")])
+    cfg = _config(tmp_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(sys, "argv", [
+        "transpile-llm", str(cfg), "--endpoint", f"http://127.0.0.1:{srv.server_port}/v1", "--model", "m",
+        "--samples", "5", "--temperature", "0.8", "--verify-cmd", _checker(tmp_path, "GOOD"),
+    ])
+    try:
+        assert t.main() == 0
+    finally:
+        srv.shutdown()
+    assert len(seen) == 3 and all(b["temperature"] == 0.8 for b in seen)
+    assert (tmp_path / "foo.mojo").read_text().strip() == "GOOD"
+    assert json.loads(cfg.read_text())[0]["decision"] == "done"
+
+
+def test_best_of_n_reports_when_no_sample_verifies(tmp_path, monkeypatch, capsys):
+    srv, seen = _cycling_server([_reply("bad")])
+    cfg = _config(tmp_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(sys, "argv", [
+        "transpile-llm", str(cfg), "--endpoint", f"http://127.0.0.1:{srv.server_port}/v1", "--model", "m",
+        "--samples", "3", "--temperature", "0.5", "--verify-cmd", _checker(tmp_path, "GOOD"),
+    ])
+    try:
+        t.main()
+    finally:
+        srv.shutdown()
+    assert len(seen) == 3
+    assert "no verified draft in 3 samples" in capsys.readouterr().out
+    assert json.loads(cfg.read_text())[0]["decision"] == "error"
+    assert (tmp_path / "foo.mojo").read_text().strip() == "bad"  # the last draft stays for inspection
+
+
+def test_samples_needs_a_verifier_and_a_temperature(tmp_path, monkeypatch, capsys):
+    cfg = _config(tmp_path)
+    for extra in (["--samples", "3", "--temperature", "0.8"], ["--samples", "3", "--verify-cmd", "true"]):
+        monkeypatch.setattr(sys, "argv", ["transpile-llm", str(cfg), "--endpoint", "http://x/v1", "--model", "m", *extra])
+        with pytest.raises(SystemExit):
+            t.main()
+    assert "--samples needs" in capsys.readouterr().err
+
+
+def test_a_single_sample_ignores_the_verifier(tmp_path):
+    srv, seen = _cycling_server([_reply("whatever")])
+    entry = {"source": str(_config(tmp_path).parent / "foo.upstream.inc"), "target": str(tmp_path / "o.mojo")}
+    try:
+        with t.make_client(f"http://127.0.0.1:{srv.server_port}/v1", "k", 5) as client:
+            r = t.transpile_verified(entry, 1, _checker(tmp_path, "NEVER"), 5, model="m", client=client,
+                                     repair=False, max_retries=0)
+    finally:
+        srv.shutdown()
+    assert r["status"] == "ok" and "attempts" not in r and len(seen) == 1

@@ -4,6 +4,7 @@ feed an add/subtract (the FMA-contraction guard EnergyPlusMojo needs for bit-exa
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -96,7 +97,7 @@ def test_mut_handles_multiline_signatures_with_comments():
     ],
 )
 def test_products_feeding_add_or_sub_are_guarded(src, expected):
-    out = code(f"def f():\n    var y = {src}\n", syntax=False, mut=False)
+    out = code(f"def f():\n    var y = {src}\n", syntax=False, mut=False, libm=False)
     assert f"var y = {expected}\n" in out
     assert "from fp_strict import nc_mul" in out
 
@@ -159,9 +160,9 @@ def test_unparseable_statements_are_skipped_not_mangled():
 
 
 def test_unresolved_items_are_reported_not_guessed():
-    r = postpass("def f(a: DynamicVector[Float64])\n{\n    a[0] = 1.0\n}\n")
+    r = postpass("def f(a: Array2D[Float64])\n{\n    a[0] = 1.0\n}\n")
     text = " ".join(r.unresolved)
-    assert "braces" in text and "DynamicVector" in text and "@export" in text
+    assert "braces" in text and "Array2D" in text and "@export" in text
     assert "@export" not in " ".join(postpass("@export\ndef k(n: Int):\n    pass\n").unresolved)
 
 
@@ -194,8 +195,9 @@ def test_real_drafts():
     assert "nc_mul(r, b[i]) + nc_mul(1.0 - r, a[i])" in out
     r = postpass(DIFFCODER_GUIDED)
     assert r.code.startswith("# upstream: HeatBalFiniteDiffManager.cc:1148\nfrom fp_strict import nc_mul")
-    assert "mut a:" not in r.code  # unknown type: left for the model or the compiler
-    assert any("Array1D" in u for u in r.unresolved)
+    assert "def relax_array(mut a: List[Float64]," in r.code
+    assert "for i in range(len(a)):" in r.code and "Array1D" not in r.code
+    assert not any("Array1D" in u for u in r.unresolved)
 
 
 # --- CLI and transpile-llm integration ---------------------------------------------------------
@@ -310,3 +312,257 @@ def test_gpu_kernels_are_not_given_nc_mul():
     src = "from std.gpu.host import DeviceContext\n\n\ndef f():\n    var y = a * b + c\n"
     r = postpass(src, syntax=False, mut=False)
     assert r.code == src and any("GPU" in u for u in r.unresolved)
+
+
+# --- Array1D -> List (ObjexxFCL arrays walked element-wise) ------------------------------------
+
+ARRAY_DEF = (
+    "def relax(a: Array1D[Float64],  # to relax\n"
+    "          b: Array1D[Float64],\n"
+    "          r: Float64) -> None:\n"
+    "    assert(equal_dimensions(a, b))\n"
+    "    for i in range(a.l(), a.u() + 1):\n"
+    "        a[i] = b[i] * r\n"
+)
+
+
+def test_canonical_array1d_loop_becomes_a_zero_based_list_loop():
+    out = code(ARRAY_DEF, fma=False)
+    assert "def relax(mut a: List[Float64],  # to relax" in out
+    assert "      b: List[Float64]," in out.replace("          b", "      b")
+    assert "assert(len(a) == len(b))" in out
+    assert "for i in range(len(a)):" in out and "a[i] = b[i] * r" in out
+    assert "Array1D" not in out and "equal_dimensions" not in out
+
+
+def test_literal_lower_bound_and_several_loops():
+    src = (
+        "def f(a: Array1D[Float64], b: Array1D[Float64]):\n"
+        "    for i in range(1, a.u() + 1):\n        b[i] = a[i]\n"
+        "    for j in range(b.l(), b.u() + 1):\n        a[j] = b[j]\n"
+    )
+    out = code(src, fma=False)
+    assert out.count("for i in range(len(a)):") == 1 and out.count("for j in range(len(b)):") == 1
+    assert "List[Float64]" in out and "Array1D" not in out
+
+
+@pytest.mark.parametrize(
+    "body, reason",
+    [
+        ("    for i in range(a.l(), a.u() + 1):\n        a[i] = a[i] * i\n", "other than as a direct subscript"),
+        ("    for i in range(a.l(), a.u() + 1):\n        a[i] = a[i + 1]\n", "other than as a direct subscript"),
+        ("    for i in range(a.l(), a.u() + 1):\n        a[i] = 0.0\n    a[1] = 2.0\n", "outside an element-wise loop"),
+        ("    var n = a.u()\n    for i in range(a.l(), a.u() + 1):\n        a[i] = 0.0\n", "outside an element-wise loop"),
+        ("    a[0] = 1.0\n", "element-wise loop"),
+        ("    for i in range(a.l(), a.u() + 1):\n        a[i] = a.u()\n", "inside the loop"),
+    ],
+)
+def test_array1d_rewrite_refuses_when_the_index_base_could_matter(body, reason):
+    src = f"def f(a: Array1D[Float64]):\n{body}"
+    r = postpass(src, fma=False, mut=False)
+    assert "Array1D[Float64]" in r.code and "List[" not in r.code
+    assert any(reason in u for u in r.unresolved), r.unresolved
+
+
+def test_array1d_rewrite_is_per_function_and_leaves_other_types_alone():
+    src = (
+        "def good(a: Array1D[Float64]):\n    for i in range(a.l(), a.u() + 1):\n        a[i] = 0.0\n\n"
+        "def bad(a: Array1D[Float64]):\n    a[1] = 0.0\n\n"
+        "def other(x: List[Float64]):\n    for i in range(len(x)):\n        x[i] = 0.0\n"
+    )
+    r = postpass(src, fma=False)
+    assert "def good(mut a: List[Float64])" in r.code
+    assert "def bad(a: Array1D[Float64])" in r.code
+    assert "def other(mut x: List[Float64])" in r.code
+    assert any("`bad`" in u for u in r.unresolved)
+
+
+def test_dynamicvector_is_renamed_to_list():
+    assert "a: List[Float64]" in code("fn f(a: DynamicVector[Float64]):\n    pass\n", fma=False, mut=False)
+
+
+def test_cli_no_arrays_flag(tmp_path: Path, capsys):
+    f = tmp_path / "k.mojo"
+    f.write_text(ARRAY_DEF)
+    assert main([str(f), "--no-arrays", "--no-fma"]) == 0
+    assert "Array1D" in capsys.readouterr().out
+
+
+# --- glibc-exact maths and ObjexxFCL min/max ----------------------------------------------------
+
+
+def math(src: str, source: str | None = None, **kw) -> str:
+    return postpass(f"def f(x: Float64, y: Float64) -> Float64:\n    var r = {src}\n", fma=False, source=source, **kw).code
+
+
+@pytest.mark.parametrize("fn", ["exp", "log", "log10", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh"])
+def test_libm_calls_are_routed_to_glibc(fn):
+    out = math(f"{fn}(x)")
+    assert f"var r = libm_{fn}(x)" in out
+    assert f'external_call["{fn}", Float64, Float64](x)' in out
+    assert "from std.ffi import external_call" in out
+
+
+def test_two_argument_libm_and_pow_forms():
+    out = math("pow(x, 0.25) + atan2(y, x)")
+    assert "libm_pow(x, 0.25) + libm_atan2(y, x)" in out
+    assert out.count("def libm_pow(") == 1 and out.count("def libm_atan2(") == 1
+    assert 'external_call["pow", Float64, Float64, Float64](x, y)' in out
+    assert "libm_pow(" in math("(1.4 * y) ** 6")
+
+
+def test_squares_and_reciprocals_follow_the_c_compiler():
+    assert "var r = nc_mul(x, x) + nc_mul(y, y)" in math("pow(x, 2) + y ** 2")
+    assert "var r = nc_mul(x + y, x + y)" in math("pow(x + y, 2.0)")
+    assert "var r = (1.0 / x)" in math("x ** -1")
+    assert "libm_pow(x, 3)" in math("x ** 3")
+
+
+def test_nested_calls_and_untouched_statements():
+    out = math("exp(pow(x, 0.5) + sin(y))")
+    assert "var r = libm_exp(libm_pow(x, 0.5) + libm_sin(y))" in out
+    src = "def f(x: Float64) -> Float64:\n    return sqrt(x) + abs(x)\n"
+    assert postpass(src, fma=False).code == src
+
+
+def test_max_is_ep_max_and_min_follows_the_upstream_spelling():
+    assert "var r = ep_max(x, 1e-05)" in math("max(x, 1e-05)")
+    out = math("min(x, y)", source="Real64 f() { return std::min(a, b); }")
+    assert "ep_min(x, y)" in out and "from fp_strict import ep_min" in out
+    out = math("min(x, y)", source="Real64 f() { return min(a, b); }")
+    assert "objexx_min(x, y)" in out
+    r = postpass("def f(x: Float64, y: Float64) -> Float64:\n    var r = min(x, y)\n", fma=False)
+    assert "var r = min(x, y)" in r.code and any("min" in u for u in r.unresolved)
+
+
+def test_integer_max_min_and_pow_are_not_rewritten():
+    src = "def f(n: Int, i: Int) -> Int:\n    var k = max(0, i - 1)\n    var m = min(n, 4)\n    var q = i ** 2\n    return k\n"
+    assert postpass(src, fma=False).code == src
+
+
+def test_math_pass_skips_gpu_kernels_and_can_be_disabled():
+    gpu = "from std.gpu.host import DeviceContext\n\n\ndef f(x: Float64) -> Float64:\n    return exp(x)\n"
+    assert postpass(gpu, fma=False).code == gpu
+    assert "libm_exp" not in math("exp(x)", libm=False)
+
+
+def test_real_adapter_drafts_for_math_heavy_routines():
+    src = (
+        "from std.math import exp\n\ndef CalcSat(Temp: Float64) -> Float64:\n"
+        "    return exp(18.6686 - 4030.183 / (Temp + 235.0))\n"
+    )
+    out = postpass(src).code
+    assert "return libm_exp(18.6686 - 4030.183 / (Temp + 235.0))" in out
+    src = "from std.math import pow\n\ndef Ra(Ts: Float64, Ta: Float64) -> Float64:\n    return (pow(Ts, 2) + pow(Ta, 2)) * (Ts + Ta)\n"
+    assert "return (nc_mul(Ts, Ts) + nc_mul(Ta, Ta)) * (Ts + Ta)" in postpass(src).code
+
+
+# --- products bound to variables, and ObjexxFCL pow_N --------------------------------------------
+
+
+def test_product_bound_to_a_variable_and_later_added_is_guarded_at_its_definition():
+    src = (
+        "def f(a: Float64, b: Float64, c: Float64) -> Float64:\n"
+        "    var hr: Float64 = a * b * (a + b)\n"
+        "    return 1.0 / (c + hr)\n"
+    )
+    out = code(src, syntax=False, mut=False, libm=False)
+    assert "var hr: Float64 = nc_mul(a * b, a + b)" in out
+    assert "return 1.0 / (c + hr)" in out
+
+
+def test_variable_products_that_are_never_added_or_are_integers_are_left_alone():
+    src = (
+        "def f(a: Float64, b: Float64, n: Int) -> Float64:\n"
+        "    var p = a * b\n    var k = n * 4\n    var q = a * b\n    return p / q + Float64(k) + a\n"
+    )
+    assert code(src, syntax=False, mut=False, libm=False) == src
+
+
+def test_reassigned_product_variable_is_guarded_too():
+    src = "def f(a: Float64, b: Float64, c: Float64) -> Float64:\n    var t = 0.0\n    t = a * b\n    return t - c\n"
+    assert "t = nc_mul(a, b)" in code(src, syntax=False, mut=False, libm=False)
+
+
+POW_SRC = "return pow_6(1.4 * x) + 1.63 * pow_2(d) + pow_3(y) + std::pow(z, 0.25);"
+
+
+@pytest.mark.parametrize(
+    "expr, rewritten",
+    [("(1.4 * y) ** 6", "pow_6(1.4 * y)"), ("pow(y, 2)", "pow_2(y)"), ("y ** 3", "pow_3(y)")],
+)
+def test_pow_n_follows_objexxfcl_when_the_source_uses_it(expr, rewritten):
+    out = math(expr, source=POW_SRC)
+    assert f"var r = {rewritten}" in out
+    n = rewritten[4]
+    assert f"def pow_{n}(x: Float64) -> Float64:" in out
+
+
+def test_pow_n_helpers_match_the_oracle_definitions():
+    out = math("y ** 6 + y ** 5 + y ** 4 + y ** 7", source="pow_4(a) pow_5(a) pow_6(a) pow_7(a)")
+    assert "var t = x * x * x\n    return nc_mul(t, t)" in out  # pow_6: t = x*x*x; t*t
+    assert "var t = x * x\n    return nc_mul(t * t, x)" in out  # pow_5: t = x*x; t*t*x
+    assert "var t = x * x\n    return nc_mul(t, t)" in out  # pow_4
+    assert "var t = x * x * x\n    return nc_mul(t * t, x)" in out  # pow_7
+
+
+def test_without_pow_n_in_the_source_powers_use_libm():
+    assert "libm_pow(y, 6)" in math("y ** 6", source="return std::pow(x, 6);")
+
+
+def test_direct_pow_n_calls_get_their_definition():
+    out = math("pow_3(x) + 1.0")
+    assert "def pow_3(x: Float64) -> Float64:" in out and "from fp_strict import nc_mul" in out
+    already = "def pow_3(x: Float64) -> Float64:\n    return x * x * x\n\n\ndef f(x: Float64) -> Float64:\n    var r = pow_3(x)\n"
+    assert postpass(already, fma=False).code.count("def pow_3(") == 1
+
+
+# --- field-less one-method structs -> functions --------------------------------------------------
+
+CPP_ONE = "inline Real64 PsyFoo(Real64 const a, Real64 const b) { return a + b; }"
+STRUCT_CALL = (
+    "@fieldwise_init\nstruct PsyFoo(Copyable, Movable):\n"
+    "    def call(a: Float64, b: Float64) -> Float64:\n        return a + b\n"
+)
+STRUCT_SELF = (
+    "@fieldwise_init\nstruct Whatever(Copyable, Movable):\n"
+    "    def Le(self, T: Float64) -> Float64:\n        var x = T\n        return x\n"
+)
+
+
+def test_struct_with_a_call_method_becomes_a_function_named_after_the_cpp_routine():
+    out = postpass(STRUCT_CALL, source=CPP_ONE, fma=False).code
+    assert out.startswith("def PsyFoo(a: Float64, b: Float64) -> Float64:\n    return a + b")
+    assert "struct" not in out and "fieldwise_init" not in out
+
+
+def test_struct_method_with_self_loses_self_and_keeps_its_own_name_without_a_source():
+    out = postpass(STRUCT_SELF, fma=False).code
+    assert "def Le(T: Float64) -> Float64:\n    var x = T\n    return x" in out
+    assert "self" not in out and "struct" not in out
+
+
+def test_struct_with_a_self_only_method_and_a_staticmethod_marker():
+    src = "struct F:\n    @staticmethod\n    def go(self) -> Float64:\n        return 1.0\n"
+    assert "def go() -> Float64:\n    return 1.0" in postpass(src, fma=False).code
+
+
+@pytest.mark.parametrize(
+    "src, reason",
+    [
+        ("struct S:\n    var a: Float64\n\n    def f(self, x: Float64) -> Float64:\n        return x\n", "fields or several"),
+        ("struct S:\n    def f(self) -> Float64:\n        return 1.0\n    def g(self) -> Float64:\n        return 2.0\n", "fields or several"),
+        ("struct S:\n    def call(a: Float64) -> Float64:\n        return a\n", "names the routine|no single routine name"),
+    ],
+)
+def test_structs_that_are_not_just_a_function_are_left_alone(src, reason):
+    r = postpass(src, fma=False)
+    assert "struct S:" in r.code
+    assert any(re.search(reason, u) for u in r.unresolved), r.unresolved
+
+
+def test_struct_unwrap_can_be_disabled_and_runs_before_the_other_fixes():
+    assert "struct" in postpass(STRUCT_CALL, source=CPP_ONE, structs=False, fma=False).code
+    src = "struct F:\n    def go(self, a: Float64, b: Float64) -> Float64:\n        return a * b + 1.0\n"
+    out = postpass(src).code
+    assert "def go(a: Float64, b: Float64)" in out and "nc_mul(a, b) + 1.0" in out

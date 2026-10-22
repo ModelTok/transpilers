@@ -4,7 +4,14 @@ Drafts from small or general models share mechanical defects that need no model 
 
 * C++ or pre-1.0 Mojo habits: ``//`` comments, ``fn``, ``let``, ``alias``, ``&&``/``||``/``!``,
   ``const``, ``Real64``, quoted-path imports, trailing semicolons;
+* a stateless routine wrapped in a field-less one-method ``struct`` (lifted to a function, named after
+  the C++ routine);
+* ``Array1D`` parameters walked element-wise (rewritten to ``List`` only where the 1-based
+  versus 0-based index base cannot matter), and the old name ``DynamicVector``;
 * a parameter that the body index-assigns but that is not declared ``mut``;
+* ``std.math`` calls (``exp``, ``pow``, ``log``, ...), which differ from the C library in the last
+  bits, ``pow(x, 2)`` (``x*x`` in C++) and ``max``/``min`` (NaN handling differs from ObjexxFCL and
+  ``std::``): rewritten to glibc calls, ``nc_mul(x, x)`` and ``ep_max``/``ep_min``/``objexx_min``;
 * products that feed an add or subtract. Mojo contracts ``a*b + c`` into a fused multiply-add
   while the C++ oracle (``-ffp-contract=off``) does not, so such a product is wrapped in
   ``nc_mul`` (``from fp_strict import nc_mul``).
@@ -30,7 +37,12 @@ _FOR_RANGE = re.compile(r"^\s*for\s+(\w+)\s+in\s+range\b")
 _VAR_INT = re.compile(r"^\s*var\s+(\w+)\s*=\s*(?:-?\d+\s*(?:#.*)?$|len\()")
 _CONVENTIONS = {"mut", "var", "out", "read", "owned", "ref", "borrowed", "inout", "deinit"}
 _MUT_CONTAINERS = {"List", "InlineArray", "Dict", "Set", "Deque"}
-_CPP_LEFTOVERS = re.compile(r"\b(Array1D|Array2D|Array3D|DynamicVector|ObjexxFCL)\b|std::")
+_CPP_LEFTOVERS = re.compile(r"\b(Array1D|Array2D|Array3D|ObjexxFCL)\b|std::")
+_ARRAY1D_PARAM = re.compile(r"\b(\w+)\s*:\s*Array1D\[")
+_ARRAY1D_LOOP = re.compile(
+    r"^(\s*)for\s+(\w+)\s+in\s+range\(\s*(?:(\w+)\.l\(\)|1)\s*,\s*(\w+)\.u\(\)\s*\+\s*1\s*\)\s*:(\s*#.*)?$"
+)
+_EQUAL_DIMS = re.compile(r"\bequal_dimensions\(\s*(\w+)\s*,\s*(\w+)\s*\)")
 
 
 @dataclass
@@ -133,6 +145,7 @@ def _code_rewrites(code: str, changes: list[str], lineno: int) -> str:
     code = re.sub(r"\bfalse\b", "False", code)
     code = re.sub(r"\s*\bconst\b", "", code)
     code = re.sub(r"\bReal64\b", "Float64", code)
+    code = re.sub(r"\bDynamicVector\b", "List", code)
     code = re.sub(r";\s*$", "", code)
     code = re.sub(r"[ \t]{2,}and[ \t]{2,}", " and ", code)
     code = re.sub(r"[ \t]{2,}or[ \t]{2,}", " or ", code)
@@ -182,6 +195,176 @@ def _normalise_syntax(src: str, changes: list[str]) -> str:
             line_out = re.sub(r"^(\s*)#(\S)", r"\1# \2", line_out) if not line_out.lstrip().startswith("# ") else line_out
         out.append(line_out)
     return "\n".join(out)
+
+
+# ---------------------------------------------------------------------------------------------
+# Pass 1c: a stateless routine wrapped in a field-less struct -> free function
+# ---------------------------------------------------------------------------------------------
+
+_CPP_FUNC = re.compile(
+    r"(?m)^[ \t]*(?:(?:inline|static|constexpr)\s+)*(?:Real64|double|int|bool|void)\s+(\w+)\s*\("
+)
+
+
+def _unwrap_struct(src: str, changes: list[str], unresolved: list[str], source: str | None) -> str:
+    """The adapter often answers a pure function with `struct X: def call(a, b) -> R: ...` (or a method
+    taking `self`). A struct with no fields and a single method is just a function: lift it, drop `self`,
+    and name it after the C++ routine when the source is known."""
+    lines = src.split("\n")
+    cpp = _CPP_FUNC.findall(source or "")
+    heads = [i for i, ln in enumerate(lines) if re.match(r"^struct\s+\w+", ln)]
+    if len(heads) != 1:
+        if len(heads) > 1:
+            unresolved.append("several structs in one draft; not unwrapped")
+        return src
+    h = heads[0]
+    end = h + 1
+    while end < len(lines) and (not lines[end].strip() or lines[end][:1] in " \t"):
+        end += 1
+    body = lines[h + 1 : end]
+    indent = next((len(b) - len(b.lstrip()) for b in body if b.strip()), 0)
+    top = [b for b in body if b.strip() and len(b) - len(b.lstrip()) == indent]
+    methods = [b for b in top if re.match(r"\s*def\s+\w+", b)]
+    others = [b for b in top if not re.match(r"\s*(def\s|@staticmethod\b)", b)]
+    if len(methods) != 1 or others or indent == 0:
+        if methods and (others or len(methods) > 1):
+            unresolved.append("struct with fields or several methods; not unwrapped into a function")
+        return src
+    m = re.match(r"(\s*)def\s+(\w+)\s*\(\s*(?:mut\s+|read\s+)?self\s*,?\s*", methods[0])
+    name = re.match(r"\s*def\s+(\w+)", methods[0]).group(1)
+    if len(cpp) == 1:
+        target_name = cpp[0]
+    elif name != "call" and name != "__call__":
+        target_name = name
+    else:
+        unresolved.append("struct method is named `call` and the C++ source gives no single routine name")
+        return src
+    lifted: list[str] = []
+    for b in body:
+        if re.match(rf"\s{{{indent}}}@staticmethod\b", b):
+            continue
+        lifted.append(b[indent:] if b.strip() else b)
+    text = "\n".join(lifted)
+    text = re.sub(
+        r"(?m)^def\s+\w+\s*\(\s*(?:(?:mut|read)\s+)?self\s*,?\s*",
+        f"def {target_name}(",
+        text,
+        count=1,
+    ) if m else re.sub(r"(?m)^def\s+\w+(\s*\()", rf"def {target_name}\1", text, count=1)
+    start = h
+    while start > 0 and lines[start - 1].strip().startswith("@"):
+        start -= 1
+    changes.append(f"line {h + 1}: field-less struct with one method -> free function `{target_name}`")
+    return "\n".join(lines[:start] + text.strip("\n").split("\n") + [""] + lines[end:]).rstrip("\n") + "\n"
+
+
+# ---------------------------------------------------------------------------------------------
+# Pass 1b: ObjexxFCL `Array1D` parameters -> `List`, only where the index base cannot matter
+# ---------------------------------------------------------------------------------------------
+
+
+def _def_spans(lines: list[str]) -> list[tuple[int, int, int, str]]:
+    """(def line, last signature line, end of body, name) of every `def`."""
+    spans = []
+    i = 0
+    while i < len(lines):
+        m = re.match(r"^(\s*)def\s+(\w+)\s*(?:\[[^\]]*\])?\s*\(", lines[i])
+        if not m:
+            i += 1
+            continue
+        indent = len(m.group(1))
+        depth, sig_end = 0, i
+        for k in range(i, len(lines)):
+            code = _blank_non_code(lines[k])
+            depth += code.count("(") - code.count(")")
+            if depth <= 0 and ")" in code:
+                sig_end = k
+                break
+        end = sig_end + 1
+        while end < len(lines) and (not lines[end].strip() or len(lines[end]) - len(lines[end].lstrip()) > indent):
+            end += 1
+        spans.append((i, sig_end, end, m.group(2)))
+        i = sig_end + 1
+    return spans
+
+
+def _fix_array1d(src: str, changes: list[str], unresolved: list[str]) -> str:
+    """Rewrite `Array1D[T]` parameters to `List[T]` when the draft only ever walks them element-wise.
+
+    An ObjexxFCL `Array1D` is indexed from `a.l()` to `a.u()` (1 by default) while a `List` starts
+    at 0. The rewrite is therefore limited to the canonical loop
+    `for i in range(a.l(), a.u() + 1)` whose variable is used only as a direct subscript `x[i]`
+    of the Array1D parameters (visiting every element in order is the same in either base), plus
+    `equal_dimensions(a, b)` -> `len(a) == len(b)`. Anything else that mentions the array (literal
+    subscripts, bounds used in arithmetic, calls) is left alone and reported.
+    """
+    lines = src.split("\n")
+    for start, sig_end, end, name in reversed(_def_spans(lines)):
+        sig = "\n".join(_blank_non_code(ln) for ln in lines[start : sig_end + 1])
+        arrays = set(_ARRAY1D_PARAM.findall(sig))
+        if not arrays:
+            continue
+        names = "|".join(sorted(arrays))
+        subscript = re.compile(rf"\b(?:{names})\s*\[\s*(\w+)\s*\]")
+        loops: list[tuple[int, int, str, str]] = []  # (header line, block end, variable, array)
+        reason = ""
+        k = sig_end + 1
+        while k < end:
+            m = _ARRAY1D_LOOP.match(lines[k])
+            if not m:
+                k += 1
+                continue
+            var, lower, upper = m.group(2), m.group(3), m.group(4)
+            if upper not in arrays or (lower is not None and lower != upper):
+                k += 1
+                continue
+            indent = len(m.group(1))
+            block_end = k + 1
+            while block_end < end and (
+                not lines[block_end].strip() or len(lines[block_end]) - len(lines[block_end].lstrip()) > indent
+            ):
+                block_end += 1
+            block = "\n".join(_blank_non_code(ln) for ln in lines[k + 1 : block_end])
+            rest = re.sub(rf"\b(?:{names})\s*\[\s*{re.escape(var)}\s*\]", " ", block)
+            if re.search(rf"\b{re.escape(var)}\b", rest):
+                reason = f"loop variable `{var}` is used other than as a direct subscript"
+                break
+            if re.search(rf"\b(?:{names})\b", rest):
+                reason = "an Array1D parameter is used inside the loop other than as `x[i]`"
+                break
+            for sub in subscript.finditer(block):
+                if sub.group(1) != var:
+                    reason = f"subscript `[{sub.group(1)}]` is not the loop variable"
+                    break
+            if reason:
+                break
+            loops.append((k, block_end, var, upper))
+            k = block_end
+        if not reason:
+            covered = {j for lo, hi, _, _ in loops for j in range(lo, hi)}
+            for j in range(sig_end + 1, end):
+                if j in covered:
+                    continue
+                code = _EQUAL_DIMS.sub(" ", _blank_non_code(lines[j]))
+                if re.search(rf"\b(?:{names})\b", code):
+                    reason = f"an Array1D parameter is used outside an element-wise loop (line {j + 1})"
+                    break
+        if not loops and not reason:
+            reason = "no element-wise loop over the Array1D parameters"
+        if reason:
+            unresolved.append(f"Array1D rewrite skipped in `{name}`: {reason}")
+            continue
+        for j in range(start, sig_end + 1):
+            lines[j] = re.sub(r"\bArray1D\[", "List[", lines[j])
+        for lo, _, var, arr in loops:
+            m = _ARRAY1D_LOOP.match(lines[lo])
+            lines[lo] = f"{m.group(1)}for {var} in range(len({arr})):{m.group(5) or ''}"
+        for j in range(sig_end + 1, end):
+            lines[j] = _EQUAL_DIMS.sub(r"len(\1) == len(\2)", lines[j])
+        changes.append(
+            f"line {start + 1}: `{name}`: Array1D -> List, {len(loops)} element-wise loop(s) now 0-based"
+        )
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -263,6 +446,267 @@ def _fix_mut(src: str, changes: list[str]) -> str:
         lines[pline] = ln[:at] + "mut " + ln[at:]
         changes.append(f"line {pline + 1}: parameter `{name}` is index-assigned -> `mut {name}`")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------------------------
+# Pass 2b: glibc-exact maths and ObjexxFCL min/max semantics
+# ---------------------------------------------------------------------------------------------
+
+_LIBM_ONE = {"exp", "log", "log10", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh"}
+_LIBM_TWO = {"pow", "atan2"}
+
+
+def _libm_helper(name: str) -> str:
+    if name in _LIBM_TWO:
+        return (
+            f"@always_inline\ndef libm_{name}(x: Float64, y: Float64) -> Float64:\n"
+            f'    return external_call["{name}", Float64, Float64, Float64](x, y)\n'
+        )
+    return (
+        f"@always_inline\ndef libm_{name}(x: Float64) -> Float64:\n"
+        f'    return external_call["{name}", Float64, Float64](x)\n'
+    )
+
+
+def _const_value(node: ast.AST) -> float | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+        return float(node.value)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        inner = _const_value(node.operand)
+        return -inner if inner is not None else None
+    return None
+
+
+Plan = dict[int, tuple[str, list[ast.AST]]]
+
+
+_POW_N = {
+    2: "    return nc_mul(x, x)",
+    3: "    return nc_mul(x * x, x)",
+    4: "    var t = x * x\n    return nc_mul(t, t)",
+    5: "    var t = x * x\n    return nc_mul(t * t, x)",
+    6: "    var t = x * x * x\n    return nc_mul(t, t)",
+    7: "    var t = x * x * x\n    return nc_mul(t * t, x)",
+}
+
+
+def _pow_helper(n: int) -> str:
+    return f"@always_inline\ndef pow_{n}(x: Float64) -> Float64:\n{_POW_N[n]}\n"
+
+
+def _plan_math(
+    root: ast.AST, ints: set[str], min_helper: str | None, pow_n: set[int]
+) -> tuple[Plan, set[str], set[str], bool, set[int]]:
+    """Rewrite plan for libm calls, `pow`/`**`, and `max`/`min`: id(node) -> (format, children)."""
+    plan: Plan = {}
+    libm: set[str] = set()
+    fp: set[str] = set()
+    pows: set[int] = set()
+    unknown_min = False
+
+    def plan_pow(node: ast.AST, base: ast.AST, expo: ast.AST) -> None:
+        if _intish(base, ints):
+            return
+        v = _const_value(expo)
+        if v is not None and v == int(v) and int(v) in pow_n:
+            plan[id(node)] = (f"pow_{int(v)}({{0}})", [base])
+            pows.add(int(v))
+            fp.add("nc_mul")
+        elif v == 2.0:
+            plan[id(node)] = ("nc_mul({0}, {0})", [base])
+            fp.add("nc_mul")
+        elif v == -1.0:
+            plan[id(node)] = ("(1.0 / {0})", [base])
+        else:
+            plan[id(node)] = ("libm_pow({0}, {1})", [base, expo])
+            libm.add("pow")
+
+    def visit(node: ast.AST) -> None:
+        nonlocal unknown_min
+        if isinstance(node, ast.Subscript):
+            visit(node.value)
+            return
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.keywords:
+            f, args = node.func.id, node.args
+            if f in _LIBM_ONE and len(args) == 1:
+                plan[id(node)] = (f"libm_{f}({{0}})", [args[0]])
+                libm.add(f)
+            elif f == "atan2" and len(args) == 2:
+                plan[id(node)] = ("libm_atan2({0}, {1})", list(args))
+                libm.add("atan2")
+            elif f == "pow" and len(args) == 2:
+                plan_pow(node, args[0], args[1])
+            elif f in ("max", "min") and len(args) == 2 and not any(_intish(a, ints) for a in args):
+                helper = "ep_max" if f == "max" else min_helper
+                if helper:
+                    plan[id(node)] = (helper + "({0}, {1})", list(args))
+                    fp.add(helper)
+                else:
+                    unknown_min = True
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
+            plan_pow(node, node.left, node.right)
+        for child in ast.iter_child_nodes(node):
+            visit(child)
+
+    visit(root)
+    return plan, libm, fp, unknown_min, pows
+
+
+def _render_plan(node: ast.AST, text: str, plan: Plan, offs: list[int]) -> str:
+    """Source text of `node` with every planned rewrite at or below it applied."""
+
+    def span(n: ast.AST) -> tuple[int, int]:
+        return offs[n.lineno - 1] + n.col_offset, offs[n.end_lineno - 1] + n.end_col_offset
+
+    if id(node) in plan:
+        fmt, kids = plan[id(node)]
+        return fmt.format(*[_render_plan(k, text, plan, offs) for k in kids])
+    start, end = span(node)
+    pieces: list[tuple[int, int, str]] = []
+
+    def descend(n: ast.AST) -> None:
+        for child in ast.iter_child_nodes(n):
+            if not hasattr(child, "lineno"):
+                descend(child)
+            elif any(id(x) in plan for x in ast.walk(child)):
+                s, e = span(child)
+                pieces.append((s, e, _render_plan(child, text, plan, offs)))
+
+    descend(node)
+    pieces.sort()
+    out, pos = [], start
+    for a, b, repl in pieces:
+        if a < pos:
+            continue
+        out.append(text[pos:a])
+        out.append(repl)
+        pos = b
+    out.append(text[pos:end])
+    return "".join(out)
+
+
+def _insert_after_imports(src: str, block: list[str]) -> str:
+    lines = src.split("\n")
+    last_import, first_code, i = -1, None, 0
+    while i < len(lines):
+        ln = lines[i]
+        if re.match(r"^(from|import)\s", ln):
+            end, depth = i, ln.count("(") - ln.count(")")
+            while depth > 0 and end + 1 < len(lines):
+                end += 1
+                depth += lines[end].count("(") - lines[end].count(")")
+            last_import = end
+            i = end + 1
+            continue
+        if first_code is None and re.match(r"^(def|@|comptime|struct|var)\b", ln):
+            first_code = i
+        i += 1
+    if last_import >= 0:
+        lines[last_import + 1 : last_import + 1] = block
+    else:
+        at = first_code if first_code is not None else 0
+        lines[at:at] = block + ["", ""]
+    return "\n".join(lines)
+
+
+def _ensure_fp_names(src: str, names: set[str], changes: list[str]) -> str:
+    """Make `from fp_strict import ...` provide `names` (extending a single-line import)."""
+    have: set[str] = set()
+    for m in re.finditer(r"^\s*from\s+fp_strict\s+import\s+([^\n(]+)$", src, re.MULTILINE):
+        have |= {n.strip() for n in m.group(1).split(",")}
+    missing = sorted(names - have)
+    if not missing:
+        return src
+    m = re.search(r"^from\s+fp_strict\s+import\s+([^\n(\\]+)$", src, re.MULTILINE)
+    changes.append("fp_strict import: " + ", ".join(missing))
+    if m:
+        return src[: m.end()] + ", " + ", ".join(missing) + src[m.end() :]
+    return _insert_after_imports(src, ["from fp_strict import " + ", ".join(missing)])
+
+
+def _fix_math(src: str, changes: list[str], unresolved: list[str], source: str | None) -> str:
+    """Glibc-exact maths: `std.math` calls differ from the C library in the last bits, `pow(x, 2)`
+    is `x*x` in C++, and Mojo's `max`/`min` treat NaN differently from ObjexxFCL / `std::`."""
+    if re.search(r"^\s*(?:from|import)\s+(?:std\.)?gpu\b|\bDeviceContext\b", src, re.MULTILINE):
+        return src
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(src).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return src
+    min_helper = None
+    if source is not None:
+        if re.search(r"\bstd::min\b", source):
+            min_helper = "ep_min"
+        elif re.search(r"(?<![\w:.])min\s*\(", source):
+            min_helper = "objexx_min"
+    pow_n = {int(n) for n in re.findall(r"\bpow_([2-7])\s*\(", source or "")}
+    ints = _int_names(src)
+    line_offs = [0]
+    for ln in src.split("\n"):
+        line_offs.append(line_offs[-1] + len(ln) + 1)
+    edits: list[tuple[int, int, str]] = []
+    pows_used: set[int] = set()
+    libm_used: set[str] = set()
+    fp_used: set[str] = set()
+    unknown_min = False
+    logical: list[tokenize.TokenInfo] = []
+    for tok in tokens:
+        logical.append(tok)
+        if tok.type != tokenize.NEWLINE and tok.type != tokenize.ENDMARKER:
+            continue
+        for lo, hi, _aug, _target in _statement_expressions(logical):
+            a = line_offs[logical[lo].start[0] - 1] + logical[lo].start[1]
+            b = line_offs[logical[hi].end[0] - 1] + logical[hi].end[1]
+            text = src[a:b]
+            if not text.isascii():
+                continue
+            wrapped = "(" + text + ")"
+            try:
+                tree = ast.parse(wrapped, mode="eval").body
+            except SyntaxError:
+                continue
+            plan, libm, fp, unk, pows = _plan_math(tree, ints, min_helper, pow_n)
+            unknown_min = unknown_min or unk
+            pows_used |= pows
+            if not plan:
+                continue
+            offs = [0]
+            for ln in wrapped.split("\n"):
+                offs.append(offs[-1] + len(ln) + 1)
+            s0 = offs[tree.lineno - 1] + tree.col_offset
+            e0 = offs[tree.end_lineno - 1] + tree.end_col_offset
+            edits.append((a, b, wrapped[1:s0] + _render_plan(tree, wrapped, plan, offs) + wrapped[e0:-1]))
+            libm_used |= libm
+            fp_used |= fp
+            changes.append(f"line {logical[lo].start[0]}: {len(plan)} math call(s) made glibc/ObjexxFCL-exact")
+        logical = []
+    if unknown_min:
+        unresolved.append("`min` semantics depend on the upstream spelling (std::min vs ObjexxFCL min); pass the C++ source")
+    for a, b, new in sorted(edits, reverse=True):
+        src = src[:a] + new + src[b:]
+    # a draft that calls ObjexxFCL's pow_N directly needs its definition
+    for n in sorted({int(m) for m in re.findall(r"\bpow_([2-7])\s*\(", src)}):
+        if not re.search(rf"^def\s+pow_{n}\(", src, re.MULTILINE) and re.search(rf"\bpow_{n}\s*\(", src):
+            pows_used.add(n)
+    if not edits and not pows_used:
+        return src
+    block: list[str] = []
+    if libm_used and not re.search(r"^from\s+std\.ffi\s+import\b[^\n]*\bexternal_call\b", src, re.MULTILINE):
+        block.append("from std.ffi import external_call")
+    for name in sorted(libm_used):
+        if not re.search(rf"^def\s+libm_{name}\(", src, re.MULTILINE):
+            block += ["", *_libm_helper(name).rstrip("\n").split("\n")]
+    for n in sorted(pows_used):
+        if not re.search(rf"^def\s+pow_{n}\(", src, re.MULTILINE):
+            block += ["", *_pow_helper(n).rstrip("\n").split("\n")]
+            fp_used.add("nc_mul")
+    if block:
+        src = _insert_after_imports(src, block + ([""] if block[0] == "" else []))
+    if fp_used - {"nc_mul"}:
+        src = _ensure_fp_names(src, fp_used - {"nc_mul"}, changes)
+    if "nc_mul" in fp_used:
+        src = _ensure_nc_mul_import(src, changes)
+    return src
 
 
 # ---------------------------------------------------------------------------------------------
@@ -422,8 +866,8 @@ def _contains_guard(node: ast.AST, guards: set[int]) -> bool:
 _AUG = {"+=", "-="}
 
 
-def _statement_expressions(tokens: list[tokenize.TokenInfo]) -> list[tuple[int, int, bool]]:
-    """(first token index, last token index, augmented_add) of each expression in a logical line."""
+def _statement_expressions(tokens: list[tokenize.TokenInfo]) -> list[tuple[int, int, bool, str | None]]:
+    """(first token, last token, augmented_add, simple assignment target) of each expression in a logical line."""
     sig = [i for i, t in enumerate(tokens) if t.type not in (tokenize.NL, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT, tokenize.NEWLINE, tokenize.ENDMARKER)]
     if not sig:
         return []
@@ -451,7 +895,13 @@ def _statement_expressions(tokens: list[tokenize.TokenInfo]) -> list[tuple[int, 
             elif depth == 0 and t.string == ":" and kw in {"if", "elif", "while", "for", "else"}:
                 colon_at = i
     lo = sig[0]
+    target: str | None = None
     if assign_at is not None:
+        before = [tokens[i] for i in sig if i < assign_at]
+        if before and before[0].type == tokenize.NAME and not aug:
+            idx = 1 if before[0].string == "var" and len(before) > 1 else 0
+            if before[idx].type == tokenize.NAME and (len(before) == idx + 1 or before[idx + 1].string == ":"):
+                target = before[idx].string
         lo = assign_at + 1
     elif kw in {"if", "elif", "while", "return", "assert"}:
         lo = sig[0] + 1
@@ -465,7 +915,51 @@ def _statement_expressions(tokens: list[tokenize.TokenInfo]) -> list[tuple[int, 
         hi = max(i for i in sig if i < colon_at) if any(i < colon_at for i in sig) else hi
     if lo > hi:
         return []
-    return [(lo, hi, aug)]
+    return [(lo, hi, aug, target)]
+
+
+def _add_operand_names(tree: ast.AST, aug: bool) -> set[str]:
+    names: set[str] = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.BinOp) and isinstance(n.op, (ast.Add, ast.Sub)):
+            for side in (n.left, n.right):
+                if isinstance(side, ast.Name):
+                    names.add(side.id)
+    if aug and isinstance(tree, ast.Name):
+        names.add(tree.id)
+    return names
+
+
+def _product_variables(src: str, tokens: list[tokenize.TokenInfo], ints: set[str], floats: set[str]) -> set[str]:
+    """Names bound to a product (`var hr = a * b * c`) that are also used as an operand of `+`/`-`.
+
+    Contraction works across variables (EnergyPlusMojo measured that `var p = a*b; p + c` still fuses),
+    so the product is guarded where it is defined."""
+    line_offs = [0]
+    for ln in src.split("\n"):
+        line_offs.append(line_offs[-1] + len(ln) + 1)
+    products: set[str] = set()
+    used: set[str] = set()
+    logical: list[tokenize.TokenInfo] = []
+    for tok in tokens:
+        logical.append(tok)
+        if tok.type != tokenize.NEWLINE and tok.type != tokenize.ENDMARKER:
+            continue
+        for lo, hi, aug, target in _statement_expressions(logical):
+            a = line_offs[logical[lo].start[0] - 1] + logical[lo].start[1]
+            b = line_offs[logical[hi].end[0] - 1] + logical[hi].end[1]
+            text = src[a:b]
+            if not text.isascii():
+                continue
+            try:
+                tree = ast.parse("(" + text + ")", mode="eval").body
+            except SyntaxError:
+                continue
+            used |= _add_operand_names(tree, aug)
+            if target and isinstance(tree, ast.BinOp) and isinstance(tree.op, ast.Mult) and _needs_guard(tree, ints, floats):
+                products.add(target)
+        logical = []
+    return products & used
 
 
 def _fix_fma(src: str, changes: list[str], unresolved: list[str]) -> tuple[str, bool]:
@@ -479,6 +973,7 @@ def _fix_fma(src: str, changes: list[str], unresolved: list[str]) -> tuple[str, 
         return src, False
     ints = _int_names(src)
     floats = _float_names(src)
+    product_vars = _product_variables(src, tokens, ints, floats)
     line_offs = [0]
     for ln in src.split("\n"):
         line_offs.append(line_offs[-1] + len(ln) + 1)
@@ -492,7 +987,7 @@ def _fix_fma(src: str, changes: list[str], unresolved: list[str]) -> tuple[str, 
         logical.append(tok)
         if tok.type != tokenize.NEWLINE and tok.type != tokenize.ENDMARKER:
             continue
-        for lo, hi, aug in _statement_expressions(logical):
+        for lo, hi, aug, target in _statement_expressions(logical):
             a, b = abs_off(logical[lo].start), abs_off(logical[hi].end)
             own = [t for t in logical if t.type not in (tokenize.NL, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT)]
             first_row, last_row = own[0].start[0], own[-1].end[0]
@@ -507,6 +1002,13 @@ def _fix_fma(src: str, changes: list[str], unresolved: list[str]) -> tuple[str, 
             except SyntaxError:
                 continue
             guards = _collect_guards(tree, ints, floats, aug)
+            if (
+                target in product_vars
+                and isinstance(tree, ast.BinOp)
+                and isinstance(tree.op, ast.Mult)
+                and _needs_guard(tree, ints, floats)
+            ):
+                guards.add(id(tree))
             if not guards:
                 continue
             offs = [0]
@@ -574,15 +1076,31 @@ def _report_unresolved(src: str, unresolved: list[str]) -> None:
         unresolved.append("no `@export` batch entry (EnergyPlusMojo kernel convention)")
 
 
-def postpass(code: str, *, syntax: bool = True, mut: bool = True, fma: bool = True) -> PostpassResult:
+def postpass(
+    code: str,
+    *,
+    syntax: bool = True,
+    structs: bool = True,
+    arrays: bool = True,
+    mut: bool = True,
+    libm: bool = True,
+    fma: bool = True,
+    source: str | None = None,
+) -> PostpassResult:
     """Apply the mechanical fixes to Mojo source; see the module docstring."""
     changes: list[str] = []
     unresolved: list[str] = []
     text = code.replace("\r\n", "\n")
     if syntax:
         text = _normalise_syntax(text, changes)
+    if structs:
+        text = _unwrap_struct(text, changes, unresolved, source)
+    if arrays:
+        text = _fix_array1d(text, changes, unresolved)
     if mut:
         text = _fix_mut(text, changes)
+    if libm:
+        text = _fix_math(text, changes, unresolved, source)
     if fma:
         text, changed = _fix_fma(text, changes, unresolved)
         if changed:
@@ -604,8 +1122,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("files", nargs="+", type=Path)
     ap.add_argument("--in-place", action="store_true", help="rewrite the files instead of printing")
     ap.add_argument("--no-syntax", action="store_true", help="skip C++/pre-1.0 syntax normalisation")
+    ap.add_argument("--no-structs", action="store_true", help="skip lifting field-less one-method structs")
+    ap.add_argument("--no-arrays", action="store_true", help="skip the Array1D -> List rewrite")
     ap.add_argument("--no-mut", action="store_true", help="skip adding `mut` to index-assigned parameters")
+    ap.add_argument("--no-libm", action="store_true", help="skip the glibc/ObjexxFCL-exact maths rewrite")
     ap.add_argument("--no-fma", action="store_true", help="skip wrapping products in nc_mul")
+    ap.add_argument("--source", type=Path, help="the upstream C++ text (decides std::min vs ObjexxFCL min)")
     args = ap.parse_args(argv)
     if len(args.files) > 1 and not args.in_place:
         ap.error("several files need --in-place")
@@ -613,8 +1135,12 @@ def main(argv: list[str] | None = None) -> int:
         res = postpass(
             path.read_text(encoding="utf-8"),
             syntax=not args.no_syntax,
+            structs=not args.no_structs,
+            arrays=not args.no_arrays,
             mut=not args.no_mut,
+            libm=not args.no_libm,
             fma=not args.no_fma,
+            source=args.source.read_text(encoding="utf-8", errors="replace") if args.source else None,
         )
         if args.in_place:
             path.write_text(res.code, encoding="utf-8", newline="\n")
