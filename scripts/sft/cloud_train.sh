@@ -1,4 +1,4 @@
-
+#!/usr/bin/env bash
 set -euo pipefail
 
 BUNDLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
