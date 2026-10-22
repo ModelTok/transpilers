@@ -1,6 +1,3 @@
-# Triangular numbers two ways: closed-form `n*(n+1)/2` and the
-# loop-summation. The example doubles as a tiny correctness check —
-# both functions should agree for every positive `n`.
 
 
 def triangle_closed(n: int) -> int:

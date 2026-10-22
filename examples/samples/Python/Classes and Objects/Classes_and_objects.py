@@ -1,4 +1,3 @@
-#Q-1
 """class student:
     def __init__(self,f_name,l_name):
         self.f_name=f_name
@@ -11,7 +10,6 @@
 obj1=student('aryan','sohal')
 obj1.display()"""
 
-#Q-2
 class emp:
     raise_qmt=0.10
     def __init__(self,name,age,pay):

@@ -82,16 +82,14 @@ class _PythonTypeTracer:
 
     def __init__(self, source_path: str) -> None:
         self.source_path = source_path
-        # Per-function: list of observed arg-type lists (one per call).
         self._param_types: dict[str, list[list[Type]]] = {}
-        # Per-function: list of observed return types (one per return).
         self._return_types: dict[str, list[Type]] = {}
 
     def _trace(self, frame: types.FrameType, event: str, arg: Any) -> Any:
         """The settrace-compatible trace function."""
         code = frame.f_code
         if not code.co_filename.endswith(self.source_path):
-            return None  # Don't descend into other modules.
+            return None
 
         fn_name = code.co_name
 

@@ -1,8 +1,5 @@
 import java.util.HashMap;
 
-/**
- * Created by NafisaBarlaskar on 14-08-2017.
- */
 public class RomanToInteger {
 
     static HashMap<String, Integer> map = new HashMap<String, Integer>();

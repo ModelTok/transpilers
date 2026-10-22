@@ -1,4 +1,3 @@
-/// not properly understood! :p
 
 #include<stdio.h>
 #include<string.h>
@@ -13,7 +12,6 @@ int main()
         flag=1;
         gets(a);
         l=strlen(a);
-        //printf
         k=l>>1;
         check=0;
         for(i=0;i<l;i++)

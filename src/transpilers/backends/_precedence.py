@@ -21,14 +21,12 @@ from typing import Callable
 
 
 _PREC = {
-    # Logical
     "or": 1,
     "||": 1,
     ".or.": 1,
     "and": 2,
     "&&": 2,
     ".and.": 2,
-    # Equality / comparison (treat as the same band)
     "==": 3,
     "!=": 3,
     "/=": 3,
@@ -42,25 +40,19 @@ _PREC = {
     ".le.": 3,
     ".gt.": 3,
     ".ge.": 3,
-    # Bitwise
     "|": 4,
     "^": 5,
     "&": 6,
     "<<": 7,
     ">>": 7,
-    # Arithmetic
     "+": 8,
     "-": 8,
     "*": 9,
     "/": 9,
     "%": 9,
     "//": 9,
-    # Concat / power (no current use but reserved)
     "**": 10,
-    # Pseudo-op marker for unary; binds tighter than any binop so we
-    # always parenthesize a non-atomic operand.
     "__unary__": 11,
-    # Rust `as` cast — emitted as binop with op="as"; binds loosely.
     "as": 0,
 }
 

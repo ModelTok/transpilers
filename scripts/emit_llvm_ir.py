@@ -106,7 +106,6 @@ def process_directory(
     failure = 0
 
     for i, src in enumerate(cpp_files, 1):
-        # Mirror directory structure under out_dir
         relative = src.relative_to(src_dir)
         out_path = out_dir / relative.with_suffix(".ll")
         out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -10,7 +10,7 @@ Usage: dedup_dataset.py [threshold]   (analyze only if threshold omitted)
 """
 import json, re, sys, collections
 from pathlib import Path
-REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
+REPO = Path(__file__).resolve().parents[2]
 SRC = REPO / "data/sft/diverse/verified.jsonl"
 OUT = REPO / "data/sft/diverse/verified_dedup.jsonl"
 
@@ -25,7 +25,7 @@ bycat = collections.defaultdict(list)
 for p in pairs:
     bycat[p["category"]].append(p)
 
-if len(sys.argv) < 2:   # analysis mode: near-dup counts at several thresholds
+if len(sys.argv) < 2:
     print(f"pool: {len(pairs)} pairs, {len(bycat)} categories")
     for T in (0.6, 0.7, 0.8, 0.9):
         removed = 0

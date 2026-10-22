@@ -40,9 +40,6 @@ TASKS_DIR = Path(__file__).parent / "benchmarks" / "tasks"
 RESULTS_DIR = Path(__file__).parent / "results"
 
 
-# ---------------------------------------------------------------------------
-# Task loading
-# ---------------------------------------------------------------------------
 
 def load_tasks(task_filter: list[str] | None = None, tier_filter: int | None = None) -> list[dict]:
     tasks = []
@@ -57,9 +54,6 @@ def load_tasks(task_filter: list[str] | None = None, tier_filter: int | None = N
     return tasks
 
 
-# ---------------------------------------------------------------------------
-# LLM prompt builders
-# ---------------------------------------------------------------------------
 
 DIRECT_PROMPT = textwrap.dedent("""\
     Translate the following C++ function to Mojo. Output ONLY the Mojo source code with no explanation,
@@ -111,9 +105,6 @@ IR_PIVOT_PROMPT_1 = textwrap.dedent("""\
 """)
 
 
-# ---------------------------------------------------------------------------
-# LLM call stub (replace with real implementation)
-# ---------------------------------------------------------------------------
 
 def call_llm(model: str, prompt: str) -> str:
     """
@@ -129,7 +120,6 @@ def call_llm(model: str, prompt: str) -> str:
 
     Returns the generated text (stripped).
     """
-    # --- OpenAI ---
     if model.startswith("gpt"):
         try:
             from openai import OpenAI
@@ -143,7 +133,6 @@ def call_llm(model: str, prompt: str) -> str:
         except ImportError:
             raise RuntimeError("openai package not installed: pip install openai")
 
-    # --- Anthropic ---
     if model.startswith("claude"):
         try:
             import anthropic
@@ -157,9 +146,7 @@ def call_llm(model: str, prompt: str) -> str:
         except ImportError:
             raise RuntimeError("anthropic package not installed: pip install anthropic")
 
-    # --- Local vLLM ---
     if model.startswith("local:"):
-        # Expects VLLM_BASE_URL env var pointing to your vLLM OpenAI-compatible endpoint
         endpoint = os.environ.get("VLLM_BASE_URL", "http://localhost:8000")
         model_name = model[len("local:"):]
         try:
@@ -178,9 +165,6 @@ def call_llm(model: str, prompt: str) -> str:
     raise ValueError(f"Unknown model: {model}. See call_llm() docstring for supported models.")
 
 
-# ---------------------------------------------------------------------------
-# Translation path runners
-# ---------------------------------------------------------------------------
 
 def translate_direct(task: dict, model: str) -> tuple[str, dict]:
     """C++ → Mojo in one LLM call."""
@@ -211,7 +195,6 @@ def translate_python_pivot(task: dict, model: str) -> tuple[str, dict]:
 
 def translate_ir_pivot(task: dict, model: str) -> tuple[str, dict]:
     """C++ → LLVM IR (via clang) → Mojo."""
-    # Write C++ to temp file and compile to IR
     cpp_file = Path("/tmp/bench_task.cpp")
     ir_file = Path("/tmp/bench_task.ll")
     cpp_file.write_text(task["cpp_source"])
@@ -243,10 +226,6 @@ TRANSLATORS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Test runner: execute generated Python via exec() (Python reference path)
-# For Mojo, execute via `mojo run` subprocess.
-# ---------------------------------------------------------------------------
 
 def run_python_tests(code: str, tests: list[dict]) -> list[dict]:
     results = []
@@ -256,7 +235,6 @@ def run_python_tests(code: str, tests: list[dict]) -> list[dict]:
         try:
             ns: dict[str, Any] = {}
             exec(code, ns)
-            # Find the first callable in the namespace
             fn = next(v for v in ns.values() if callable(v) and not v.__name__.startswith("_"))
             actual = repr(fn(*args))
             passed = actual == expected
@@ -277,7 +255,6 @@ def run_mojo_tests(mojo_code: str, tests: list[dict], task_name: str) -> list[di
         args = test["args"]
         expected = test["expected"]
 
-        # Build a simple Mojo main that calls the function with literal args
         args_str = ", ".join(repr(a) for a in args)
         harness = f"{mojo_code}\n\nfn main():\n    let result = {task_name}({args_str})\n    print(result)\n"
 
@@ -314,9 +291,6 @@ def check_syntax_python(code: str) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Metrics
-# ---------------------------------------------------------------------------
 
 def compute_metrics(task_results: list[dict]) -> dict:
     total = len(task_results)
@@ -326,7 +300,6 @@ def compute_metrics(task_results: list[dict]) -> dict:
     passed_all = sum(1 for r in task_results if r["pass_at_1"])
     syntax_ok = sum(1 for r in task_results if r.get("syntax_ok", True))
 
-    # Tier breakdown
     tier_stats: dict[int, dict] = {}
     for r in task_results:
         t = r["tier"]
@@ -340,7 +313,6 @@ def compute_metrics(task_results: list[dict]) -> dict:
         for t, v in sorted(tier_stats.items())
     }
 
-    # Concept breakdown
     concept_stats: dict[str, dict] = {}
     for r in task_results:
         c = r["concept"]
@@ -363,9 +335,6 @@ def compute_metrics(task_results: list[dict]) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Main evaluation loop
-# ---------------------------------------------------------------------------
 
 def evaluate(model: str, path: str, tasks: list[dict], target: str = "python") -> list[dict]:
     """
@@ -397,10 +366,8 @@ def evaluate(model: str, path: str, tasks: list[dict], target: str = "python") -
             })
             continue
 
-        # Syntax check (Python proxy — always available)
         syntax_ok = check_syntax_python(translated_code) if target == "python" else True
 
-        # Test execution
         if target == "python":
             test_results = run_python_tests(translated_code, task["tests"])
         else:
@@ -424,9 +391,6 @@ def evaluate(model: str, path: str, tasks: list[dict], target: str = "python") -
     return task_results
 
 
-# ---------------------------------------------------------------------------
-# Leaderboard update
-# ---------------------------------------------------------------------------
 
 def update_leaderboard(result_path: Path, metrics: dict, model: str, path: str) -> None:
     lb_path = RESULTS_DIR / "leaderboard.json"
@@ -450,9 +414,6 @@ def update_leaderboard(result_path: Path, metrics: dict, model: str, path: str) 
     print(f"\n  Leaderboard updated: {lb_path}")
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(
@@ -477,11 +438,9 @@ def main():
                         help="Print prompts only, do not call LLM")
     args = parser.parse_args()
 
-    # Resolve output dir
     out_dir = Path(args.output) if args.output else RESULTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load tasks
     task_filter = [t.strip() for t in args.tasks.split(",")] if args.tasks else None
     tasks = load_tasks(task_filter=task_filter, tier_filter=args.tier)
     if not tasks:
@@ -503,10 +462,8 @@ def main():
             print("...")
         sys.exit(0)
 
-    # Run evaluation
     task_results = evaluate(args.model, args.path, tasks, target=args.target)
 
-    # Compute metrics
     metrics = compute_metrics(task_results)
 
     print(f"\n{'='*60}")
@@ -515,7 +472,6 @@ def main():
     print(f"  tier breakdown   : {metrics['tier_breakdown']}")
     print(f"{'='*60}\n")
 
-    # Save results
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_model = args.model.replace("/", "_").replace(":", "_")
     result_path = out_dir / f"{safe_model}_{args.path}_{timestamp}.json"

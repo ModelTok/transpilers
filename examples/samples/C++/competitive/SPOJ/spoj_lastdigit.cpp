@@ -1,8 +1,6 @@
 #include <iostream>
 #include <math.h>
 using namespace std;
-///last digit pattern always stays inside 4 nos
-//google codechef last digit
 int main() {
 int t;
 cin>>t;

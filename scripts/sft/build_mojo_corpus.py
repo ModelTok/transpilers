@@ -24,7 +24,7 @@ from pathlib import Path
 
 EPMOJO = Path(os.environ.get("EP_MOJO_REPO", "/home/bart/github/EnergyPlusMojo"))
 OUT = Path(__file__).resolve().parents[2] / "data/sft/mojo_corpus.jsonl"
-BATCH_KEEP = 5          # keep 1 in N batch templates
+BATCH_KEEP = 5
 
 INSTR = "Write a Mojo implementation for the following specification."
 _CODE_START = re.compile(r'^(comptime|def|fn|@|from |import |var |struct |trait )')
@@ -36,14 +36,11 @@ def split_doc(text: str):
     else the leading `#` comment block (minus license lines). code = the file
     from the first real code line onward."""
     lines = text.splitlines()
-    # find first real code line
     ci = None
     in_doc = False
     for i, ln in enumerate(lines):
         s = ln.strip()
         if s.startswith('"""') or s.startswith("'''"):
-            # a docstring line — if it opens+closes on one line, not code;
-            # otherwise toggle. Either way, not the code start.
             q = s[:3]
             in_doc = not (s.count(q) >= 2)
             continue
@@ -60,10 +57,6 @@ def split_doc(text: str):
         return None, text
     header = "\n".join(lines[:ci])
     code = "\n".join(lines[ci:]).strip()
-    # spec = the leading `#` comment block (minus license lines) + the module
-    # docstring, concatenated. Batch kernels put their rich description in the
-    # comment block and only a one-line docstring; idiomatic kernels do the
-    # reverse — combining captures both.
     comments = "\n".join(l.lstrip("# ").rstrip() for l in header.splitlines()
                          if l.strip().startswith("#") and not _LICENSE.search(l)).strip()
     m = re.search(r'(?:"""(.*?)"""|\'\'\'(.*?)\'\'\')', header, re.S)
@@ -85,7 +78,7 @@ def main():
                 continue
         text = f.read_text(errors="ignore")
         doc, code = split_doc(text)
-        if not doc or len(doc) < 120:        # need a real spec
+        if not doc or len(doc) < 120:
             continue
         if len(code.strip()) < 80 or ("def " not in code and "fn " not in code):
             continue

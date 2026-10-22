@@ -26,7 +26,7 @@ def main():
     args = ap.parse_args()
     held_path = Path(args.heldout)
 
-    _gpu = torch.cuda.is_available()   # CUDA device if present, else CPU
+    _gpu = torch.cuda.is_available()
     _dev = "cuda" if _gpu else "cpu"
     tok = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForCausalLM.from_pretrained(args.model, dtype=(torch.bfloat16 if _gpu else torch.float32))
@@ -55,12 +55,12 @@ def main():
         else:
             status, detail = rh.eval_python(code, ei["function_name"], gt["inputs"], gt["outputs"], ei["arg_types"])
         results.append({"fn": ei["function_name"], "lang": lang, "status": status, "detail": detail,
-                        "code": code or ""})   # persist generation so failures are diagnosable without a rerun
+                        "code": code or ""})
         print(f"[{i}/{len(recs)}] {lang:6s} {ei['function_name']:28s} {status.upper():14s} {detail[:35]}")
 
     from collections import Counter
     import math as _m
-    def _wilson(k, n, z=1.96):   # 95% CI for a proportion, in percent
+    def _wilson(k, n, z=1.96):
         if n == 0: return (0.0, 0.0)
         p = k / n; d = 1 + z*z/n
         c = (p + z*z/(2*n)) / d; h = z*_m.sqrt(p*(1-p)/n + z*z/(4*n*n)) / d
@@ -75,7 +75,6 @@ def main():
         n = len(rs); c = Counter(r["status"] for r in rs); np_ = c.get("pass", 0)
         comp = sum(1 for r in rs if r["status"] in ("pass", "wrong_output", "runtime_error"))
         lo, hi = _wilson(np_, n)
-        # compile@1 = fraction that compiled+ran at all; exec-match@1 = fraction matching ground truth
         print(f"{lang:7s} exec-match@1 {100*np_/n:5.1f}% ({np_}/{n}) [95%CI {lo:.0f}-{hi:.0f}]  "
               f"compile@1 {100*comp/n:5.1f}% ({comp}/{n})  {dict(c)}")
     print(f"-> {out_path}")

@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-# swap two variables using temporary variable
 def swap_temp(a, b):
     print("-" * 32)
     print("Swap with temporary varaiable")
@@ -11,7 +10,6 @@ def swap_temp(a, b):
     a = tmp
     print("After  a: {} b: {}".format(a, b))
 
-# swap two variables using xor and no temporary variable
 def swap_xor(a, b):
     print("-" * 32)
     print("Swap using xor")
@@ -22,7 +20,6 @@ def swap_xor(a, b):
     a ^= b
     print("After  a: {} b: {}".format(a, b))
 
-# swap two variables using idiomatic python
 def swap_python(a, b):
     print("-" * 32)
     print("Swap using python a, b = b, a")

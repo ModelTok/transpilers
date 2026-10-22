@@ -41,20 +41,15 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
-# Default location: one persistent log, append-only, gitignored.
 DEFAULT_LOG_PATH = Path(
     os.environ.get("REPAIR_OUTCOMES_LOG", "data/repair_outcomes.jsonl")
 )
 
-# Snapshot of the aggregated ratio: git-tracked for the trend line.
 DEFAULT_METRICS_PATH = Path(
     os.environ.get("FLYWHEEL_METRICS_PATH", "data/flywheel_metrics.json")
 )
 
 
-# ---------------------------------------------------------------------------
-# Verdict constants
-# ---------------------------------------------------------------------------
 
 VALID_VERDICTS = ("algorithmic", "rule", "llm", "unrepaired")
 
@@ -71,9 +66,6 @@ def _coerce_verdict(v: str) -> str:
     return "unrepaired"
 
 
-# ---------------------------------------------------------------------------
-# The unit-of-work record
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -84,31 +76,23 @@ class RepairOutcome:
     up (counters over the ``verdict`` field give the LLM fraction directly).
     """
 
-    # --- identity (what unit) -------------------------------------------------
     source_lang: str
     target: str
-    fingerprint: str  # sha256[:16] of the source code (caller-computed)
-    source_id: str = ""  # free-form: file path, repo/fn, or record id
-    construct: str = ""  # offending construct / symbol / type hole, if known
-    bucket: str = ""  # taxonomy bucket (parse / unresolved-symbol / ...)
+    fingerprint: str
+    source_id: str = ""
+    construct: str = ""
+    bucket: str = ""
 
-    # --- outcome (who fixed it) ----------------------------------------------
-    # One of: "algorithmic" | "rule" | "llm" | "unrepaired".
-    # ``verdict == "unrepaired"`` is the only terminal state with no LLM that
-    # didn't help; the other three all passed the verify gate.
     verdict: str = "unrepaired"
 
-    # --- accounting -----------------------------------------------------------
-    n_llm_calls: int = 0  # how many LLM round-trips were needed (0, 1, 2, ...)
-    n_rule_passes: int = 0  # how many deterministic rule patches were applied
-    n_repair_passes: int = 0  # total repair iterations (LLM + rule combined)
-    wallclock_ms: int = 0  # end-to-end time for the unit, in milliseconds
+    n_llm_calls: int = 0
+    n_rule_passes: int = 0
+    n_repair_passes: int = 0
+    wallclock_ms: int = 0
 
-    # --- bookkeeping ----------------------------------------------------------
     ts: float = field(default_factory=time.time)
-    notes: str = ""  # free-form: prompt id, cache key, model, etc.
+    notes: str = ""
 
-    # --- convenience predicates ----------------------------------------------
     @property
     def is_pass(self) -> bool:
         """Did the unit make it through the verify gate?"""
@@ -129,22 +113,17 @@ class RepairOutcome:
         v = _coerce_verdict(self.verdict)
         return v == "llm" and self.n_rule_passes == 0
 
-    # --- serialisation -------------------------------------------------------
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False, sort_keys=True)
 
     @classmethod
     def from_json(cls, line: str) -> "RepairOutcome":
         d = json.loads(line)
-        # Tolerate older records that lacked a ts field.
         d.setdefault("ts", 0.0)
         d.setdefault("notes", "")
         return cls(**d)
 
 
-# ---------------------------------------------------------------------------
-# Persistent tracker
-# ---------------------------------------------------------------------------
 
 
 class RepairTracker:
@@ -180,12 +159,8 @@ class RepairTracker:
         if create_dirs:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self.metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        # Append-only; never re-write history.
         self._fh = self.log_path.open("a", encoding="utf-8")
 
-    # -----------------------------------------------------------------------
-    # Writing
-    # -----------------------------------------------------------------------
 
     def record(self, outcome: RepairOutcome) -> None:
         """Append one outcome to the log. Normalises verdict first."""
@@ -211,9 +186,6 @@ class RepairTracker:
     def __exit__(self, *exc: Any) -> None:
         self.close()
 
-    # -----------------------------------------------------------------------
-    # Reading
-    # -----------------------------------------------------------------------
 
     def iter_log(self) -> Iterator[RepairOutcome]:
         """Yield every outcome in the on-disk log (one JSON per line)."""
@@ -226,7 +198,6 @@ class RepairTracker:
             try:
                 yield RepairOutcome.from_json(line)
             except json.JSONDecodeError, TypeError, KeyError:
-                # Skip corrupted lines rather than abort the whole rollup.
                 continue
 
     def aggregate(self) -> dict[str, Any]:
@@ -252,7 +223,6 @@ class RepairTracker:
         by_target: dict[str, Counter[str]] = {}
         frontier_only = 0
         n_llm = 0
-        # For the trend: bin the log into windows of 50 outcomes.
         trend_window = 50
         trend: list[dict[str, Any]] = []
         seen = 0
@@ -295,7 +265,7 @@ class RepairTracker:
                     frontier_only += 1
             if bin_seen >= trend_window:
                 _flush_bin()
-        _flush_bin()  # final partial window
+        _flush_bin()
 
         passed = sum(by_verdict[v] for v in ("algorithmic", "rule", "llm"))
         llm_count = by_verdict["llm"]
@@ -314,9 +284,6 @@ class RepairTracker:
             "trend": trend,
         }
 
-    # -----------------------------------------------------------------------
-    # Snapshot to disk
-    # -----------------------------------------------------------------------
 
     def flush_metrics(self) -> dict[str, Any]:
         """Write the current aggregate to ``metrics_path`` and return it.
@@ -335,9 +302,6 @@ class RepairTracker:
         return snap
 
 
-# ---------------------------------------------------------------------------
-# Convenience: one-liner rollup (used by the dashboard, no class state)
-# ---------------------------------------------------------------------------
 
 
 def rollup(

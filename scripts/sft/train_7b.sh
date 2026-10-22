@@ -1,22 +1,3 @@
-#!/usr/bin/env bash
-# train_7b.sh — one-shot setup + two-phase LoRA finetune of Qwen2.5-Coder-7B
-# for C++/Python -> Mojo (issue #41). The 7B sibling of cloud_train.sh.
-#
-# Run on a fresh Ubuntu + NVIDIA instance after rsync'ing the repo:
-#   bash scripts/sft/train_7b.sh
-#
-# VRAM guidance:
-#   * A100 40/80 GB or H100  -> bf16 LoRA (this script's default). Best quality.
-#   * 24 GB (A10/L4/4090)    -> set QLORA=1 to use the 4-bit qwen7b_qlora.yaml
-#                               (single-phase, cutoff 1024). bash QLORA=1 ... .
-#   * <16 GB                 -> not enough for 7B; use the 3B recipe instead.
-#
-# Env overrides:
-#   QLORA=1            use 4-bit QLoRA single-phase config instead of bf16 LoRA
-#   SKIP_INSTALL=1     assume deps already present (re-runs / warm boxes)
-#   CUDA_WHEEL=cu121   override the torch CUDA wheel index (default cu124)
-#
-# All output is tee'd to ./train_7b.log
 set -euo pipefail
 
 BUNDLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -34,7 +15,6 @@ echo "train_7b.sh  $(date -u '+%Y-%m-%dT%H:%M:%SZ')   QLORA=$QLORA"
 echo "bundle root: $BUNDLE_ROOT"
 echo "========================================================"
 
-# ── 1. GPU sanity ────────────────────────────────────────────────────────────
 echo ""; echo "--- GPU sanity (nvidia-smi) ---"
 nvidia-smi --query-gpu=name,memory.total,driver_version,compute_cap \
            --format=csv,noheader || {
@@ -48,9 +28,7 @@ if [ "$QLORA" != "1" ] && [ -n "$VRAM_MB" ] && [ "$VRAM_MB" -lt 38000 ] 2>/dev/n
     echo "         a larger GPU. Continuing anyway (OOM is likely)."
 fi
 
-# ── 2. venv + deps ───────────────────────────────────────────────────────────
 if [ ! -f "$VENV/bin/activate" ]; then python3 -m venv "$VENV"; fi
-# shellcheck disable=SC1091
 source "$VENV/bin/activate"
 echo "Python: $(which python3)  $(python3 --version)"
 
@@ -71,7 +49,6 @@ if [ "$SKIP_INSTALL" != "1" ]; then
         datasets bitsandbytes tensorboard tqdm scipy
 fi
 
-# ── 3. flash-attn (Ampere+) or fall back to sdpa in the yamls ─────────────────
 echo ""; echo "--- flash-attn ---"
 COMPUTE_CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
 if [ -n "$COMPUTE_CAP" ] && [ "$COMPUTE_CAP" -ge 80 ] 2>/dev/null; then
@@ -83,7 +60,6 @@ else
         "$DATA/sft_7b_phase1_cloud.yaml" "$DATA/sft_7b_phase2_cloud.yaml" || true
 fi
 
-# ── 4. torch CUDA check ──────────────────────────────────────────────────────
 echo ""; echo "--- PyTorch CUDA check ---"
 python3 - <<'PY'
 import torch, sys
@@ -94,7 +70,6 @@ p = torch.cuda.get_device_properties(0)
 print(f"GPU 0: {p.name}  ({p.total_memory // 1024**3} GB)")
 PY
 
-# ── 5. Register datasets into LLaMA-Factory (reuse repo dataset_info.json) ─────
 echo ""; echo "--- Registering datasets ---"
 LF_DATA=$(python3 -c "
 import importlib.util, pathlib
@@ -122,7 +97,6 @@ fi
 
 cd "$BUNDLE_ROOT"
 
-# ── 6. Train ─────────────────────────────────────────────────────────────────
 if [ "$QLORA" = "1" ]; then
     echo ""; echo "=== QLoRA (4-bit, single-phase) ==="
     llamafactory-cli train "$DATA/qwen7b_qlora.yaml"
@@ -136,7 +110,6 @@ else
     echo "Done. Final adapter: $OUT/adapter_7b"
 fi
 
-# ── 7. Optional eval ─────────────────────────────────────────────────────────
 BENCH="$BUNDLE_ROOT/benchmarks/transpilation-bench/benchmarks/tasks"
 EVAL="$BUNDLE_ROOT/scripts/sft/eval_transbench.py"
 if [ -d "$BENCH" ] && [ -f "$EVAL" ]; then

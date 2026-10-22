@@ -1,6 +1,3 @@
-# Linear search with explicit found-flag. Exercises list iteration via
-# range(len(...)) and an early-return pattern that targets must emit
-# faithfully.
 
 
 def find_first(xs: list[int], target: int) -> int:

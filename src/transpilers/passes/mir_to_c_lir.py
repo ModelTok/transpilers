@@ -35,14 +35,10 @@ class _CLowering(MirLoweringBase):
     def type_str(self, ty: Type) -> str:
         return _c_type(ty)
 
-    # -- struct: methods become free `Struct_method` functions ------------- #
 
     def lower_struct_items(self, s: mir.MirStruct) -> list[lir.LirNode]:
         methods: list[lir.CFn] = []
         for m in s.methods:
-            # C has no method binding; emit as a free function `Struct_method`
-            # whose first parameter is `Struct *self`. Rename so different
-            # structs can share method names without colliding.
             lowered = self.lower_function(m)
             lowered.name = f"{s.name}_{lowered.name}"
             methods.append(lowered)
@@ -54,7 +50,6 @@ class _CLowering(MirLoweringBase):
             )
         ]
 
-    # -- field access/assign go through self-pointer ----------------------- #
 
     def lower_field_assign(self, node: mir.MirFieldAssign):
         via_ptr = isinstance(node.obj, mir.MirName) and node.obj.name == "self"
@@ -71,7 +66,6 @@ class _CLowering(MirLoweringBase):
             value=self.lower_expr(node.value), field=node.field, via_pointer=via_ptr
         )
 
-    # -- assign: every local is a plain decl / reassign -------------------- #
 
     def lower_assign(self, node: mir.MirAssign, declared: set[str], mut: set[str]):
         if node.augmented_op is not None:
@@ -87,11 +81,9 @@ class _CLowering(MirLoweringBase):
         ty = _c_type(node.ty) if not isinstance(node.ty, UnknownT) else "int64_t"
         return lir.CDecl(name=node.target, ty=ty, value=self.lower_expr(node.value))
 
-    # -- expressions ------------------------------------------------------- #
 
     def lower_expr_special(self, node: mir.MirNode):
         if isinstance(node, mir.MirBinOp) and node.op == "//":
-            # C: integer division is `/` on integer types.
             return lir.CBinOp(
                 op="/",
                 left=self.lower_expr(node.left),
@@ -100,8 +92,6 @@ class _CLowering(MirLoweringBase):
         return None
 
     def lower_method_call(self, node: mir.MirMethodCall):
-        # `obj.method(args)` → `Struct_method(&obj, args)`. We need the struct
-        # name to mangle; pull it from the receiver's type.
         recv = node.receiver
         recv_ty = getattr(recv, "ty", UnknownT())
         if isinstance(recv_ty, StructT):
@@ -134,9 +124,6 @@ class _CLowering(MirLoweringBase):
         return lir.CName(name="NULL")
 
     def lower_list(self, node: mir.MirList):
-        # Compound-literal slice. The inner `(elem_t[]){...}` array lives in
-        # automatic storage when this expression appears in a function body —
-        # long-lived enough for the slice's lifetime in that scope.
         elem_ty = _c_list_elem_type(node.ty)
         slice_ty = _c_type(node.ty)
         return _CSliceLiteral(
@@ -150,9 +137,6 @@ class _CLowering(MirLoweringBase):
         if node.func == "__ternary__" and len(args) == 3:
             return lir.CTernary(test=args[0], then_=args[1], else_=args[2])
         if node.func == "len":
-            # `len(xs)` on a slice maps to the carrier's `.len` field. Cast
-            # to int64_t so the result composes with the rest of our IntT
-            # arithmetic without warnings.
             if len(args) != 1:
                 raise ValueError("len() takes exactly one argument")
             return lir.CCall(
@@ -160,11 +144,6 @@ class _CLowering(MirLoweringBase):
                 args=[lir.CFieldAccess(value=args[0], field="len", via_pointer=False)],
             )
         if node.func in ("print", "println"):
-            # Build per-arg format specifiers so each type prints the way
-            # Python's `print()` would:
-            #   bool  → %s  with  (x ? "True" : "False")
-            #   float → _py_float() helper defined in the preamble
-            #   int   → %lld
             fmt_parts: list[str] = []
             final_args: list[lir.LirNode] = []
             for orig, lowered in zip(node.args, args):
@@ -190,7 +169,6 @@ class _CLowering(MirLoweringBase):
                 args=[lir.CStringLiteral(value=template), *final_args],
             )
         if node.func == "abs" and len(args) == 1:
-            # C's stdlib has abs/labs/llabs — use llabs for int64.
             return lir.CCall(func="llabs", args=args)
         if node.func == "min" and len(args) == 2:
             return lir.CTernary(
@@ -270,8 +248,6 @@ def _c_type(ty: Type) -> str:
     if isinstance(ty, NoneT):
         return "void"
     if isinstance(ty, ListT):
-        # C has no generics; map to one of the fixed slice typedefs emitted
-        # in the file preamble. Each slice carries `(data, len)`.
         if isinstance(ty.elem, IntT):
             return "slice_i64_t"
         if isinstance(ty.elem, BoolT):

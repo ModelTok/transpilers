@@ -1,4 +1,3 @@
-# Unannotated Python — algorithmic inference fills the holes from literals.
 
 def add_one(x):
     return x + 1

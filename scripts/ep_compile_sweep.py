@@ -40,7 +40,6 @@ for f in files:
         line = (out.splitlines()[e.lineno - 1].strip()[:80]
                 if e.lineno and e.lineno <= len(out.splitlines()) else "")
         fails.append((name, e.lineno, line))
-        # bucket the failing line shape
         if re.search(r"\([^()]*\)\s*[-+*/%]?=[^=]", line):
             cats["assign-to-call(LHS)"] += 1
         elif " = " in line and (line.startswith("if ") or line.startswith("while ") or line.startswith("elif ")):

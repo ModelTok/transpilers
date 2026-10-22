@@ -19,8 +19,6 @@ from typing import Any, Literal
 from transpilers.verify.score import first_error_line
 from transpilers.verify.taxonomy import classify_compile_stderr, classify_run
 
-# The signal kinds the loop recognises. Strings are reporting keys — do not
-# rename without updating flywheel consumers (#51).
 SignalKind = Literal[
     "compile_error",
     "run_mismatch",
@@ -115,9 +113,6 @@ class RepairSignal:
         return out
 
 
-# ---------------------------------------------------------------------------
-# Builders from verifier output
-# ---------------------------------------------------------------------------
 
 
 def signal_from_compile(

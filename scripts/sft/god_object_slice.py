@@ -168,18 +168,7 @@ def field_centric_slice(graph, owner_substr=""):
     }
 
 
-# ---------------------------------------------------------------------------
-# Sub-state struct codegen (the "split the god-object into per-module sub-states"
-# half of #69). Turns a slice manifest into Mojo struct scaffolds: one struct
-# per owning sub-state holding only the sliced fields, plus a thin sliced
-# container that composes them. A function then pulls in the sub-struct it uses
-# instead of the whole EnergyPlusData god-object.
-# ---------------------------------------------------------------------------
 
-# Field-name → Mojo type heuristics. The graph carries names, not C++ types, so
-# fall back to Float64 (the dominant scalar in the runtime path) unless the name
-# strongly signals a count/flag. Kept conservative: a wrong default is a
-# one-line edit, and the slice's value is the *structure*, not the type guess.
 def _mojo_type_for(name: str) -> str:
     n = (name or "").lower()
     if n.startswith(("is", "has", "do", "use")) or n.endswith(("flag", "_on")):
@@ -191,9 +180,6 @@ def _mojo_type_for(name: str) -> str:
     return "Float64"
 
 
-# ---------------------------------------------------------------------------
-# Header type join: stamp real C++ field types from `struct XxxData` headers.
-# ---------------------------------------------------------------------------
 _CPP_SCALARS = {
     "bool": "Bool",
     "int": "Int", "short": "Int", "long": "Int", "unsigned": "Int",
@@ -222,11 +208,11 @@ def parse_header_fields(text: str) -> dict[str, dict[str, str]]:
             i += 1
         body, top, d = text[start:i - 1], [], 0
         buf, brace_init = "", False
-        for ch in body:  # keep only top-level (depth 0) text
+        for ch in body:
             if ch == "{":
                 d += 1
                 if d == 1 and buf.rstrip().endswith(")"):
-                    buf = ""  # method body
+                    buf = ""
                     continue
                 if d == 1:
                     head = buf.rstrip()
@@ -236,7 +222,7 @@ def parse_header_fields(text: str) -> dict[str, dict[str, str]]:
                 d -= 1
                 if d == 0:
                     if brace_init:
-                        buf += "{}"  # keep `T name{...};` as a plain member
+                        buf += "{}"
                     continue
             if d == 0 or ch == "{":
                 buf += ch
@@ -304,7 +290,6 @@ def emit_substate_structs(manifest: dict, header_types: dict | None = None) -> s
     for owner, rows in by_owner.items():
         struct = _struct_name(owner)
         members.append((struct, struct))
-        # Dedup field names (a field can appear read+write); keep mode in comment.
         seen: dict[str, str] = {}
         for r in rows:
             seen.setdefault(r["name"] or "field", r.get("mode", ""))
@@ -319,7 +304,6 @@ def emit_substate_structs(manifest: dict, header_types: dict | None = None) -> s
             ty = types[fname]
             lines.append(f"        self.{fname} = {_MOJO_DEFAULT[ty]}")
         chunks.append("\n".join(lines) + "\n")
-    # Composing container.
     cont = ["struct StateSlice:"]
     for var, ty in members:
         cont.append(f"    var {var}: {ty}")

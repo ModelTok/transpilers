@@ -50,7 +50,6 @@ class _RustLowering(MirLoweringBase):
     def type_str(self, ty: Type) -> str:
         return _rust_type(ty)
 
-    # -- struct: Rust splits into a def + an impl block -------------------- #
 
     def lower_struct_items(self, s: mir.MirStruct) -> list[lir.LirNode]:
         return [
@@ -62,7 +61,6 @@ class _RustLowering(MirLoweringBase):
             ),
         ]
 
-    # -- function signature: mut params + &mut for subscript-assigned ------ #
 
     def lower_params(self, fn: mir.MirFunction):
         mut_names = collect_mutable(fn.body)
@@ -82,12 +80,9 @@ class _RustLowering(MirLoweringBase):
     def function_preamble(self, fn, param_names):
         return set(param_names), collect_mutable(fn.body), []
 
-    # -- assign: let vs reassign, augmented unfold ------------------------- #
 
     def lower_assign(self, node: mir.MirAssign, declared: set[str], mut: set[str]):
         if node.augmented_op is not None:
-            # x += value  →  x = x + value  (explicit form composes more
-            # cleanly with type promotion later).
             rhs = copy_provenance(
                 lir.RustBinOp(
                     op=node.augmented_op,
@@ -103,8 +98,6 @@ class _RustLowering(MirLoweringBase):
                 node,
             )
         declared.add(node.target)
-        # Unknown inferred type → omit annotation; Rust's local inference
-        # picks it up from the initializer.
         try:
             ty_str = _rust_type(node.ty) if not isinstance(node.ty, UnknownT) else None
         except ValueError:
@@ -120,7 +113,6 @@ class _RustLowering(MirLoweringBase):
             node,
         )
 
-    # -- expressions ------------------------------------------------------- #
 
     def lower_binop(self, node: mir.MirBinOp):
         if is_string_concat(node):
@@ -129,20 +121,9 @@ class _RustLowering(MirLoweringBase):
             return _RustListConcat(
                 left=self.lower_expr(node.left), right=self.lower_expr(node.right)
             )
-        # Python `//` (FloorDivide) → Rust `/` on integer types.
         op = "/" if node.op == "//" else node.op
-        # ── Overflow-safe emission ──────────────────────────────────────────
-        # If the MIR node carries a semantic contract saying `ARBITRARY`
-        # precision (Python int), but we know the Rust type is fixed-width
-        # (i64), we must emit a wrapping or checked operation.  The contract
-        # tells us what the source expects; we emit the Rust equivalent or
-        # annotate the binop so the emitter can decide.
         contract: SemanticContract = getattr(node, "contract", SemanticContract())
         if contract.overflow is OverflowBehavior.ARBITRARY and op in ("+", "-", "*"):
-            # Arbitrary-precision source ints flowing into a fixed-width
-            # target need explicit overflow handling.  Emit a wrapping
-            # operation as the safe default (matches Rust's `wrapping_add`,
-            # `wrapping_sub`, `wrapping_mul`).
             style = _overflow_style(contract)
             return copy_provenance(
                 _RustOverflowGuard(
@@ -174,8 +155,6 @@ class _RustLowering(MirLoweringBase):
         )
 
     def lower_null(self, node: mir.MirNullLiteral):
-        # No OptionT in the type lattice yet; emit a bare `None` so the
-        # downstream rustc surfaces the missing context.
         return copy_provenance(lir.RustName(name="None"), node)
 
     def lower_list(self, node: mir.MirList):
@@ -193,8 +172,6 @@ class _RustLowering(MirLoweringBase):
         )
 
     def lower_call(self, node: mir.MirCall):
-        # Stdlib mapping table — turn well-known Python-style builtins into
-        # idiomatic Rust so the output is runnable, not just syntactically OK.
         args = [self.lower_expr(a) for a in node.args]
         if node.func == "__ternary__" and len(args) == 3:
             return _RustIfExpr(test=args[0], then_=args[1], else_=args[2])
@@ -208,10 +185,6 @@ class _RustLowering(MirLoweringBase):
                 node,
             )
         if node.func in ("print", "println"):
-            # Rewrap each arg so the rendering matches Python's str(): bools
-            # become "True"/"False", floats use `{:?}` (Rust Debug for f64
-            # preserves the trailing `.0` that Display drops). Build the
-            # template dynamically per-arg.
             tokens: list[str] = []
             rendered_args: list[lir.LirNode] = []
             for orig, lowered in zip(node.args, args):
@@ -224,11 +197,6 @@ class _RustLowering(MirLoweringBase):
                 node,
             )
         if node.func == "sum" and len(args) == 1:
-            # `sum(xs)` → `xs.iter().sum()`. No cast: the element type flows
-            # through, so `.sum()`'s output is inferred from the iterator
-            # (an `as i64` here would silently truncate an f64 list). The
-            # result type is resolved by the surrounding context (a typed
-            # `let`/return), matching how Rust infers `.sum()`.
             iter_chain = lir.RustMethodChain(receiver=args[0], method="iter", args=[])
             return lir.RustMethodChain(receiver=iter_chain, method="sum", args=[])
         if node.func == "abs" and len(args) == 1:
@@ -268,8 +236,6 @@ class _RustLowering(MirLoweringBase):
                 lir.RustMethodChain(receiver=args[0], method="to_string", args=[]),
                 node,
             )
-        # Default: direct function call. Pass list arguments by reference so
-        # the caller's binding isn't moved.
         refined: list[lir.LirNode] = []
         for orig, lowered in zip(node.args, args):
             if isinstance(getattr(orig, "ty", None), ListT):
@@ -379,8 +345,6 @@ def _rust_type(ty: Type) -> str:
     if isinstance(ty, NoneT):
         return "()"
     if isinstance(ty, ListT):
-        # Recursive unknown element types fall back to the `_` placeholder
-        # so the surrounding `Vec<_>` can be inferred from initializer.
         try:
             return f"Vec<{_rust_type(ty.elem)}>"
         except ValueError:
@@ -421,4 +385,4 @@ class _RustOverflowGuard(lir.LirNode):
         self.op = op
         self.left = left
         self.right = right
-        self.style = style  # "wrapping", "checked", or "saturating"
+        self.style = style

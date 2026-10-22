@@ -1,11 +1,10 @@
-//Binary search first occurance
 
 #include <iostream>
 #include <stdio.h>
 using namespace std;
 
-typedef long long ityp;		// index type
-typedef long long typ;		// data type
+typedef long long ityp;
+typedef long long typ;
 
 ityp bin_search_first(typ ar[],ityp low, ityp high, typ x){
     ityp ret = -1;
@@ -18,10 +17,9 @@ ityp bin_search_first(typ ar[],ityp low, ityp high, typ x){
 	else if(ar[mid] < x)	low = mid + 1;
 	else high = mid - 1;
     }
-    return ret;			// invalid postion return;
+    return ret;
 }
 
-///NOTE : all these return the position in the sorted array!
 int main(){
     ityp N, Q;
     cin>>N>>Q;

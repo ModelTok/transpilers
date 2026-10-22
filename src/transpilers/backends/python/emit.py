@@ -43,8 +43,6 @@ def _emit_class(c: lir.PyClass) -> str:
         lines.append(INDENT + "pass")
         return "\n".join(lines)
     for name, ty in c.fields:
-        # @dataclass requires annotations on fields; default to `int` when
-        # we lack a type rather than emitting a bare name.
         ann = f": {ty}" if ty else ": int"
         lines.append(f"{INDENT}{name}{ann}")
     for m in c.methods:
@@ -143,8 +141,6 @@ def _emit_expr(node: lir.LirNode | None) -> str:
     if node is None:
         return ""
     if isinstance(node, lir.PyRaw):
-        # Expr position: no trailing `#` comment (would swallow the rest of an
-        # enclosing line). Encode the snippet in a never-called marker call.
         text = _flatten_snippet(node.snippet).replace("\\", "\\\\").replace('"', '\\"')
         return f'__todo_port__("{text}")'
     if isinstance(node, lir.PyBinOp):

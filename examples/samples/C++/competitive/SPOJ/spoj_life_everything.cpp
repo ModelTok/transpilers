@@ -8,6 +8,5 @@ int main() {
 		if(n!=42)
 			cout<<n<<endl;
 	}while(n!=42);
-	// your code goes here
 	return 0;
 }

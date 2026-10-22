@@ -40,7 +40,6 @@ def main():
     train = json.load(open(SFT / "_train_pairs.json"))
     held = json.load(open(SFT / "_held_pairs.json"))
 
-    # --- translation SFT (CodePivot schema, rich reasoning) ---
     rows = []
     missing = 0
     for p in train:
@@ -54,7 +53,6 @@ def main():
         rows.append({"instruction": instr, "input": "", "system": sysp, "output": out})
     (SFT / "train_translation.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows))
 
-    # --- held-out verl eval (regenerate test cases) ---
     heldrecs = []
     for idx, p in enumerate(held):
         pair = {"cpp_source": p["cpp"], "function_name": p["fn"], "source_file": p["src"],
@@ -64,10 +62,6 @@ def main():
             heldrecs.append(rec)
     (SFT / "heldout_eval.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in heldrecs))
 
-    # --- Mojo-acquisition data (target language; Mojo only), quality-filtered ---
-    # Drop junk (<40ch), cap length (giant doc sections blow cutoff_len), dedup,
-    # and DOWNSAMPLE the non-idiomatic FFI/address-passing kernels (keep 1 in 4)
-    # so the model isn't biased toward emitting int64-address kernels.
     acq, seen, ffi_i = [], set(), 0
     for src in ("mojo_corpus.jsonl", "docs_instruction.jsonl"):
         for l in (REPO / "data/sft" / src).read_text().splitlines():
@@ -76,16 +70,16 @@ def main():
             r = json.loads(l)
             out = r["output"].strip()
             if len(out) < 40:
-                continue                                  # junk
-            out = out[:2500]                              # cap runaway doc sections
+                continue
+            out = out[:2500]
             is_ffi = "unsafe_from_address" in out or "ptr: Int" in out
             if is_ffi:
                 ffi_i += 1
-                if ffi_i % 4 != 0:                        # keep ~1 in 4 FFI kernels
+                if ffi_i % 4 != 0:
                     continue
             key = out[:200]
             if key in seen:
-                continue                                  # near-dup
+                continue
             seen.add(key)
             acq.append({"instruction": r["instruction"], "input": r.get("input", ""), "output": out})
     (SFT / "mojo_acquisition.json").write_text(json.dumps(acq, indent=1, ensure_ascii=False))

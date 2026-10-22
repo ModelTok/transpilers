@@ -1,5 +1,3 @@
-# Strings: target divergence in action.
-# Rust:  format!() for concat, String::from() for literals
 
 def shout() -> str:
     return "loud"

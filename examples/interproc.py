@@ -1,4 +1,3 @@
-# Interprocedural inference: no annotations, types flow across the call graph.
 
 def square(x):
     return x * x

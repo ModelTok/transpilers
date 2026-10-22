@@ -26,15 +26,12 @@ from typing import Callable
 from transpilers.ir import mir
 
 
-# Names matching these patterns are considered opaque candidates for rename.
-# Includes Ghidra's standard locals/params/typed-var prefixes and the
-# fallback `param_N`/`local_N` patterns we see in decompilation output.
 OPAQUE_PATTERNS = [
     re.compile(r"^local_[0-9a-f]+$"),
     re.compile(r"^param_[0-9]+$"),
-    re.compile(r"^[ipuc]Var[0-9]+$"),  # iVar1, pVar2, uVar3, cVar4
+    re.compile(r"^[ipuc]Var[0-9]+$"),
     re.compile(r"^var_[0-9a-f]+$"),
-    re.compile(r"^[A-Z]+[0-9]+_[0-9]+$"),  # DAT_00112233 style globals
+    re.compile(r"^[A-Z]+[0-9]+_[0-9]+$"),
 ]
 
 
@@ -64,7 +61,6 @@ def _rename_function(fn: mir.MirFunction, llm_fill: LlmFill) -> None:
                 "renames_so_far": rename_map.copy(),
             },
         )
-        # Disambiguate if the LLM picked a name already in use.
         new = proposed
         i = 1
         while new in existing or new in rename_map.values():
@@ -75,7 +71,6 @@ def _rename_function(fn: mir.MirFunction, llm_fill: LlmFill) -> None:
     _apply_renames(fn, rename_map)
 
 
-# ---------- discovery ----------
 
 
 def _find_opaque_names(fn: mir.MirFunction) -> set[str]:
@@ -127,13 +122,11 @@ def _collect_all_names(nodes: list[mir.MirNode], out: set[str]) -> None:
             _collect_all_names(n.body, out)
 
 
-# ---------- apply ----------
 
 
 def _apply_renames(fn: mir.MirFunction, mapping: dict[str, str]) -> None:
     if not mapping:
         return
-    # Rename parameters.
     for i, p in enumerate(fn.params):
         if p.name in mapping:
             fn.params[i] = replace(p, name=mapping[p.name])
@@ -203,7 +196,6 @@ def _rewrite_node(node: mir.MirNode, mapping: dict[str, str]) -> None:
             _rewrite_node(e, mapping)
 
 
-# ---------- LLM context dump ----------
 
 
 def _mir_dump(fn: mir.MirFunction) -> str:

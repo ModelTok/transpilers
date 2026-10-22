@@ -25,7 +25,7 @@ rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 out = []
 for rec in rows:
     if not rec.get("mojo_source"):
-        continue  # agent skipped it
+        continue
     name = rec["function_name"]
     m = FENCE.search(rec["mojo_source"])
     mojo = (m.group(1) if m else rec["mojo_source"]).strip()

@@ -23,8 +23,6 @@ from transpilers.ir import hir
 from transpilers.frontends.errors import UnsupportedConstruct
 
 
-# C types that map onto the shared HIR annotation strings. The HIR->MIR pass
-# resolves these against the type lattice; new aliases land here.
 C_TYPE_ALIASES: dict[str, str] = {
     "int": "int",
     "long": "int",
@@ -47,8 +45,6 @@ def _strip_preprocessor(source: str) -> str:
     pragmatic shortcut that covers the common types in practice."""
     import re as _re
 
-    # pycparser rejects both `//` line comments and `/* ... */` block
-    # comments. Strip both before handing the source over.
     source = _re.sub(r"/\*.*?\*/", "", source, flags=_re.DOTALL)
     source = _re.sub(r"//[^\n]*", "", source)
     out_lines = []
@@ -94,10 +90,6 @@ def parse_c(source: str) -> hir.HirModule:
             body.append(_convert_function(ext))
             continue
         if isinstance(ext, (c_ast.Decl, c_ast.Typedef)):
-            # Top-level variable / typedef declarations — the transpiler emits
-            # function bodies; globals are dropped. Functions that reference
-            # them will surface as later type errors, which is the honest
-            # signal.
             continue
         raise UnsupportedConstruct(f"top-level {type(ext).__name__}")
     return hir.HirModule(source_lang="c", body=body)
@@ -120,7 +112,6 @@ def _convert_params(args) -> list[hir.HirParam]:
     out: list[hir.HirParam] = []
     for p in args.params:
         if isinstance(p, c_ast.Typename):
-            # `int main(void)` — no params.
             continue
         out.append(hir.HirParam(name=p.name, annotation=_type_text(p.type)))
     return out
@@ -155,14 +146,10 @@ def _convert_stmt(node: c_ast.Node) -> list[hir.HirNode]:
     if isinstance(node, c_ast.Assignment):
         return [_convert_assignment(node)]
     if isinstance(node, c_ast.UnaryOp) and node.op in ("p++", "++", "p--", "--"):
-        # `i++;` as a statement
         return [_convert_increment(node)]
     if isinstance(node, c_ast.FuncCall):
-        # Bare call as a statement (`foo(1, 2);`) — value is discarded.
         return [_convert_expr(node)]
     if isinstance(node, c_ast.Compound):
-        # Nested block — flatten. (C scoping is finer-grained than Python's,
-        # but for the initial subset we don't model nested scopes.)
         return _convert_block(node)
     raise UnsupportedConstruct(f"stmt {type(node).__name__}")
 
@@ -171,7 +158,6 @@ def _convert_for(node: c_ast.For) -> list[hir.HirNode]:
     """`for (init; cond; step) body` desugars to `init; while (cond) { body; step; }`."""
     out: list[hir.HirNode] = []
     if node.init is not None:
-        # init can be a Decl (`int i = 0`) or an Assignment or a DeclList
         if isinstance(node.init, c_ast.DeclList):
             for d in node.init.decls:
                 out.append(_convert_decl(d))
@@ -238,8 +224,6 @@ def _convert_increment(node: c_ast.UnaryOp) -> hir.HirNode:
 
 def _convert_expr(node: c_ast.Node) -> hir.HirNode:
     if isinstance(node, c_ast.Constant):
-        # Integer literals may carry `u`/`U`/`l`/`L`/`ll`/`LL` suffixes
-        # (and combinations) on the value text; strip them before parsing.
         if node.type in (
             "int",
             "unsigned int",
@@ -270,20 +254,14 @@ def _convert_expr(node: c_ast.Node) -> hir.HirNode:
     if isinstance(node, c_ast.FuncCall):
         return _convert_call(node)
     if isinstance(node, c_ast.Assignment):
-        # Expression-level assignment (`x = 5` as an expression). C allows this;
-        # we don't, in the initial subset.
         raise UnsupportedConstruct("assignment as expression")
     if isinstance(node, c_ast.ArrayRef):
         return hir.HirSubscript(
             value=_convert_expr(node.name), index=_convert_expr(node.subscript)
         )
     if isinstance(node, c_ast.Cast):
-        # Drop the cast — best-effort; the target's type system handles
-        # whatever the underlying expression already represents.
         return _convert_expr(node.expr)
     if isinstance(node, c_ast.TernaryOp):
-        # `cond ? a : b` desugars to a select-like expression. Render via
-        # method/builtin call so each backend can shape it per target.
         return hir.HirCall(
             func="__ternary__",
             args=[
@@ -311,8 +289,6 @@ def _convert_binop(node: c_ast.BinaryOp) -> hir.HirNode:
         )
     if node.op in ARITH_OPS:
         return hir.HirBinOp(op=node.op, left=left, right=right)
-    # Bitwise operators — pass through. Rust supports `&`, `|`, `^`, `<<`,
-    # `>>` on integers with the same syntax.
     if node.op in ("&", "|", "^", "<<", ">>"):
         return hir.HirBinOp(op=node.op, left=left, right=right)
     raise UnsupportedConstruct(f"binary op {node.op}")
@@ -324,17 +300,12 @@ def _convert_unaryop(node: c_ast.UnaryOp) -> hir.HirNode:
     if node.op == "-":
         return hir.HirUnaryOp(op="-", operand=_convert_expr(node.expr))
     if node.op == "+":
-        # Unary plus is a no-op — return the operand directly.
         return _convert_expr(node.expr)
     if node.op == "&":
-        # Address-of `&x` — we don't model pointers; pass the operand
-        # through. Lossy but lets I/O-heavy corpus parse.
         return _convert_expr(node.expr)
     if node.op == "*":
-        # Pointer dereference `*p` — same drop-the-indirection trick.
         return _convert_expr(node.expr)
     if node.op == "~":
-        # Bitwise NOT — Rust uses `!` for both bool and bitwise.
         return hir.HirUnaryOp(op="-", operand=_convert_expr(node.expr))
     if node.op in ("p++", "++", "p--", "--"):
         raise UnsupportedConstruct("++/-- as expression")
@@ -353,7 +324,6 @@ def _convert_call(node: c_ast.FuncCall) -> hir.HirNode:
     )
 
 
-# ---------- type text rendering ----------
 
 
 def _type_text(node: c_ast.Node) -> str:
@@ -369,11 +339,7 @@ def _type_text(node: c_ast.Node) -> str:
                 return C_TYPE_ALIASES[token]
         return " ".join(names)
     if isinstance(node, c_ast.PtrDecl):
-        # `int *p` — drop the pointer level; the pointee's type carries the
-        # interesting information. Lossy (no ownership), but keeps parsing
-        # going for corpus stress tests.
         return _type_text(node.type)
     if isinstance(node, c_ast.ArrayDecl):
-        # `int arr[N]` — lower to `list[int]`.
         return f"list[{_type_text(node.type)}]"
     raise UnsupportedConstruct(f"C type {type(node).__name__}")

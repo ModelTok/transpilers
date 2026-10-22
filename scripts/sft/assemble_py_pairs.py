@@ -64,7 +64,6 @@ def main():
         sys.exit("missing train_translation.think.jsonl backup")
 
     rows = []
-    # --- C++ pairs: strip <think>, keep code-only, lean system ---
     cpp_n = 0
     for l in think.read_text().splitlines():
         if not l.strip():
@@ -77,7 +76,6 @@ def main():
                      "output": mojo_only(code)})
         cpp_n += 1
 
-    # --- Python pairs: verified, held-out-excluded, leakage-filtered, code-only ---
     frozen = set()
     fz = REPO / "data/sft/benchmark/frozen_diverse.jsonl"
     if fz.exists():
@@ -92,7 +90,7 @@ def main():
             pu, mu = p.get("python_unit"), p.get("mojo_unit")
             if not pu or not mu:
                 continue
-            if p.get("name") in frozen:   # reserved for the Python in-distribution ruler
+            if p.get("name") in frozen:
                 held += 1
                 continue
             if any(jacc(toks(pu), r) >= LEAK_J for r in refs):

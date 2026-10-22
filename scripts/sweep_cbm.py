@@ -44,7 +44,6 @@ def main() -> int:
         out = os.path.join(tempfile.gettempdir(), f"cbm_sweep_{name}.inc")
         written = cp.write_preamble_for_file(TOPO, rel, out)
         had_preamble = written is not None
-        # Reproduce the --cbm CLI path: set env, parse the real source.
         if had_preamble:
             os.environ["TRANSPILERS_CPP_PREAMBLE_FILE"] = out
         else:
@@ -80,7 +79,6 @@ def main() -> int:
     print("Failure buckets:")
     for b, c in buckets.most_common():
         print(f"    {b}: {c}")
-    # The two #80-style overload collapses we specifically expect from the index:
     return 0
 
 

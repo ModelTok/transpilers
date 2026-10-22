@@ -1,6 +1,3 @@
-#TTT, TTH, THT, THH, HTT, HTH, HHT and HHH
-#http://stackoverflow.com/questions/13550423/python-printing-without-commas
-#http://stackoverflow.com/questions/17757450/how-to-print-a-list-with-integers-without-the-brackets-commas-and-no-quotes
 n = int(input())
 i = 1
 while n:

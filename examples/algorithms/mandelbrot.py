@@ -1,7 +1,3 @@
-# Mandelbrot escape-time count for a single point. Exercises:
-#   - nested float arithmetic with squaring
-#   - early loop exit on a magnitude threshold
-#   - explicit int/float interplay
 
 
 def mandelbrot_iters(cx: float, cy: float, max_iter: int) -> int:

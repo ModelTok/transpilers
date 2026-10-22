@@ -25,8 +25,6 @@ MAPPERS = {
                                      r[4], r[5], r[6], r[7]],
     "film": lambda r: [r[0], r[1], abs(r[2]) % 6.0, int(abs(r[3])) % 2,
                        r[4], int(abs(r[5])) % 5 - 3],
-    # spread BessFuncArg across all four error domains: normal, negative
-    # (EC=2), tiny (EC=3 underflow at ord>=5), >90 (EC=4 overflow guard)
     "CalcIBesselFunc": lambda r: [
         [abs(r[0]) % 3.0,
          -(abs(r[0]) % 3.0) - 0.1,

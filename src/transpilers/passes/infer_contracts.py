@@ -72,9 +72,6 @@ def _module_snapshot(module: mir.MirModule) -> tuple:
     return tuple(snap)
 
 
-# --------------------------------------------------------------------------- #
-# Phase 1 - per-function local inference
-# --------------------------------------------------------------------------- #
 
 
 def _infer_module(module: mir.MirModule) -> None:
@@ -313,24 +310,10 @@ def _visit_expr(
     return WILDCARD
 
 
-# --------------------------------------------------------------------------- #
-# Phase 2 - interprocedural propagation
-# --------------------------------------------------------------------------- #
 
 
 def _propagate_interprocedural(fn: mir.MirFunction, fn_map: FnMap) -> None:
     _ip_walk_body(fn.body, fn_map)
-    # `_ip_walk_node`'s MirCall case (below) reads `callee.contract.pure` to
-    # decide whether a call site is pure -- but until this line, `fn.contract`
-    # itself was never written, so it stayed at the MirNode default
-    # (WILDCARD, pure=False) forever. Every callee looked impure regardless
-    # of its actual body, so the whole fixed-point loop in `infer_contracts`
-    # converged instantly on "everything is impure" without ever converging
-    # on real interprocedural purity. Computing it here from the (now
-    # call-site-updated) body is what makes convergence meaningful: on each
-    # outer iteration, a function's purity can only improve once its
-    # callees' purity has been determined, exactly the fixed point the
-    # MAX_ITER loop already exists to reach.
     fn.contract = replace(fn.contract, pure=_body_is_pure(fn.body))
 
 

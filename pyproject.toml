@@ -27,6 +27,7 @@ transpile-api = "transpilers.api.server:main"
 transpile-llm = "transpilers.cli.transpile:main"
 transpile-build-config = "transpilers.cli.build_config:main"
 transpile-comments = "transpilers.cli.strip_comments:main"
+transpile-postpass = "transpilers.repair.mojo_postpass:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -1,4 +1,4 @@
-def fib(n):  # write Fibonacci series up to n
+def fib(n):
     """Print a Fibonacci series up to n."""
     a, b = 0, 1
     while a < n:
@@ -7,5 +7,4 @@ def fib(n):  # write Fibonacci series up to n
     print()
 
 
-# Now call the function we just defined:
 fib(2000)

@@ -30,11 +30,6 @@ WRAP_MAIN = {
 
 
 def run_python(path: pathlib.Path) -> tuple[bool, str]:
-    # The corpus files define `main()` but don't call it at module scope.
-    # Append a top-level call so the reference run produces output to
-    # compare against. The transpilers do this implicitly: Rust/C
-    # treat `main` as the entry point, Mojo/Python need the explicit call
-    # — they pick it up from the Builder's wrapper too.
     src = path.read_text() + "\n\nmain()\n"
     proc = subprocess.run(
         [sys.executable, "-c", src],
@@ -53,9 +48,6 @@ def transpile(path: pathlib.Path, target: str) -> tuple[bool, str]:
 
 def _build_and_run_rust(src: str, td: pathlib.Path) -> tuple[bool, str]:
     main_path = td / "main.rs"
-    # If `main` already exists in the transpiled source, use it directly.
-    # Otherwise we'd need a wrapper that calls the entry point — for the
-    # algorithm corpus, every example defines main() so we just emit as-is.
     main_path.write_text(src)
     exe = td / "prog"
     build = subprocess.run(
@@ -94,7 +86,6 @@ def _build_and_run_fortran(src: str, td: pathlib.Path) -> tuple[bool, str]:
     p.write_text(src)
     exe = td / "main"
     if "program prog" in src:
-        # Full program with entry point — compile and run.
         build = subprocess.run(
             ["gfortran", "-ffree-line-length-none", "-frealloc-lhs", str(p), "-o", str(exe)],
             capture_output=True, text=True, timeout=60,
@@ -104,7 +95,6 @@ def _build_and_run_fortran(src: str, td: pathlib.Path) -> tuple[bool, str]:
         run = subprocess.run([str(exe)], capture_output=True, text=True, timeout=15)
         return run.returncode == 0, (run.stdout if run.returncode == 0 else run.stderr)
     else:
-        # Library-only (no main) — compile as object file to check correctness.
         build = subprocess.run(
             ["gfortran", "-ffree-line-length-none", "-frealloc-lhs", "-c", str(p), "-o", str(td / "lib.o")],
             capture_output=True, text=True, timeout=60,

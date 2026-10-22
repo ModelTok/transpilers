@@ -17,7 +17,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
-# reuse the Mojo pipeline's building blocks
 _spec = importlib.util.spec_from_file_location("bcm", REPO / "scripts/build_cpp_mojo_dataset.py")
 bcm = importlib.util.module_from_spec(_spec); sys.modules["bcm"] = bcm; _spec.loader.exec_module(bcm)
 
@@ -36,7 +35,6 @@ def transpile_py(fn) -> str | None:
 
 def verify_py(fn, py_code, mparams) -> dict | None:
     samples = bcm._sample_inputs([(n, t) for n, t in mparams], fn.body)
-    # --- C++ oracle (with coverage), same as the Mojo pipeline ---
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
         calls = "\n".join(
@@ -56,10 +54,6 @@ def verify_py(fn, py_code, mparams) -> dict | None:
         ok, hit, miss, risky = bcm._coverage_ok(tdp, "o.cpp", fn_first, bcm._body_line_span(fn))
         if not ok:
             return None
-    # --- Python target: exec + call ---
-    # Inject the ObjexxFCL/<cmath> helpers the C++ bodies call (the Python
-    # backend leaves pow_2(...)/exp(...) as bare names) so the verified Python
-    # runs standalone — same semantics as _CPP_HELPERS on the oracle side.
     import math
     ns: dict = {k: getattr(math, k) for k in
                 ("exp", "log", "log10", "log2", "sqrt", "sin", "cos", "tan",
@@ -98,7 +92,6 @@ def verify_py(fn, py_code, mparams) -> dict | None:
             "branch_coverage": "full" if miss == 0 else "computation-full"}
 
 
-# Python param signature parser (def f(a: float, b: int) -> ...)
 import re
 _PYSIG = re.compile(r"def\s+\w+\(([^)]*)\)")
 

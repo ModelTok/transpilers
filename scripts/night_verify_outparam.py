@@ -31,9 +31,6 @@ if os.environ.get("TRANSPILERS_EPMOJO"):
 if "#include <array>" not in bld._CPP_HELPERS:
     bld._CPP_HELPERS = "#include <array>\n" + bld._CPP_HELPERS
 
-# void functions use bare `return;` for early exits; an uncovered bare return
-# carries no value computation (strictly safer than the constant returns the
-# stock filter already tolerates). Extend the trivial-line filter to accept it.
 bld._TRIVIAL_RETURN = re.compile(
     r"^\s*(?:return\s*;|return\s+-?[0-9.][0-9.eE+\-]*\s*;|break\s*;|continue\s*;|\}?\s*)$")
 
@@ -56,11 +53,9 @@ def _run(cmd, **kw):
 
 
 def verify_outparam(rec: dict, mojo: str) -> dict | None:
-    params = rec["params"]            # [[ctype, name, is_ref], ...]
+    params = rec["params"]
     ret = rec["ret_type"]
     name = rec["function_name"]
-    # cpp_prepend: file-local constants the fn needs to compile standalone;
-    # they become part of the training pair's C++ input too.
     body = rec.get("cpp_prepend", "") + rec["cpp_source"]
     mparams = [(nm, MOJO_TY[t]) for t, nm, _r in params]
     samples = bld._sample_inputs(mparams, body)

@@ -21,7 +21,6 @@ OUT    = DATA / "train_translation_v2.jsonl"
 
 SYSTEM = (DATA / "system.txt").read_text(encoding="utf-8").strip()
 
-# ── load existing ────────────────────────────────────────────────────────────
 existing = []
 seen_names: set[str] = set()
 
@@ -33,7 +32,6 @@ with TRAIN.open(encoding="utf-8") as f:
         obj = json.loads(line)
         existing.append(obj)
         out_text = obj.get("output", "")
-        # extract function name from the mojo def line for dedup
         if "def " in out_text:
             fname = out_text.split("def ")[1].split("(")[0].strip()
             seen_names.add(fname)
@@ -41,13 +39,11 @@ with TRAIN.open(encoding="utf-8") as f:
 print(f"Existing pairs  : {len(existing)}")
 print(f"Existing fn names (for dedup): {len(seen_names)}")
 
-# ── load leaves ──────────────────────────────────────────────────────────────
 with LEAVES.open(encoding="utf-8") as f:
     leaves = json.load(f)
 
 print(f"Leaf entries    : {len(leaves)}")
 
-# ── convert + dedup ──────────────────────────────────────────────────────────
 new_pairs = []
 skipped = 0
 
@@ -79,7 +75,6 @@ for leaf in leaves:
 print(f"New pairs added : {len(new_pairs)}  (skipped dedup: {skipped})")
 print(f"Total v2 pairs  : {len(existing) + len(new_pairs)}")
 
-# ── write output ─────────────────────────────────────────────────────────────
 with OUT.open("w", encoding="utf-8") as f:
     for row in existing:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")

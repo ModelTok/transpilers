@@ -72,7 +72,6 @@ def _parse_full(md: str) -> dict[tuple[str, str], dict[str, int]]:
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
         if not cols:
-            # Header row: capture bucket column order.
             if cells[:3] == ["source", "target", "total"]:
                 cols = cells[3:]
             continue
@@ -167,13 +166,9 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     targets = [t.strip() for t in args.targets.split(",") if t.strip()]
 
-    # "after" = current run.
     after_md = _run_sweep(args.root, targets)
     after = _parse_full(after_md)
 
-    # "before" = saved baseline, if it exists. Without it the script
-    # still emits the "after" rows so the user has a record of the
-    # current state.
     if BASELINE_PATH.is_file():
         before = _parse_full(BASELINE_PATH.read_text(encoding="utf-8"))
     else:

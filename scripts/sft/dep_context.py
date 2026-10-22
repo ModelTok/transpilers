@@ -16,9 +16,9 @@ constants), plus the shim's known helpers. Usage:
 import functools, json, os, re
 from pathlib import Path
 EP = Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus"))
-SFT = Path(__file__).resolve().parents[2] / "data/sft/cpp_mojo"  # scripts/sft/<this file> -> repo root
+SFT = Path(__file__).resolve().parents[2] / "data/sft/cpp_mojo"
 
-SHIM = {  # always-available helpers (defined by ep_prelude.mojo / ep_oracle.h)
+SHIM = {
     "pow_2","pow_3","pow_4","pow_5","pow_6","pow_7","root_4","root_8","sign","mod",
 }
 FUNC_DECL = re.compile(r"^\s*(?:static\s+|inline\s+)?(Real64|double|int|bool|void|Int64)\s+([A-Za-z_]\w*)\s*\(([^;{)]*)\)\s*[;{]", re.M)
@@ -36,7 +36,6 @@ def index():
         for m in FUNC_DECL.finditer(txt):
             ret, nm, args = m.group(1), m.group(2), " ".join(m.group(3).split())
             funcs.setdefault(nm, f"{ret} {nm}({args[:80]})")
-        # namespaced constants: track current namespace by brace scan (cheap heuristic)
         for nm_m in re.finditer(r"\bnamespace\s+(\w+)\s*\{([^}]{0,4000})", txt):
             ns = nm_m.group(1)
             for cm in CONST_DECL.finditer(nm_m.group(2)):
@@ -65,7 +64,7 @@ def context_for(cpp):
         else:
             ns, mem = n.split("::", 1)
             lines.append(f"// `{n}` is a {ns} member referenced by this function")
-    return "\n".join(dict.fromkeys(lines))   # dedupe, keep order
+    return "\n".join(dict.fromkeys(lines))
 
 def main():
     recs = [json.loads(l) for l in (SFT/"prod_test_cpp.jsonl").read_text().splitlines() if l.strip()]

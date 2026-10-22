@@ -34,11 +34,11 @@ def run_mojo(mojo_unit, mojo_driver):
             return None, "compile_timeout", ""
         if r.returncode != 0:
             errs = [l for l in r.stderr.splitlines() if ": error:" in l and "failed to parse" not in l]
-            return None, "compile_error", (errs[0][:120] if errs else "link/parse")   # first SPECIFIC error
+            return None, "compile_error", (errs[0][:120] if errs else "link/parse")
         try:
             r = subprocess.run([str(t/"b")], env=dv.MOJO_ENV, capture_output=True, text=True, timeout=30)
         except subprocess.TimeoutExpired:
-            return None, "run_timeout", ""   # model emitted a hang/infinite loop
+            return None, "run_timeout", ""
         if r.returncode != 0:
             return None, "runtime_error", (r.stderr.strip().splitlines() or [""])[-1][:120]
         return r.stdout.strip().splitlines(), "ok", ""
@@ -50,7 +50,7 @@ def main():
     ap.add_argument("--adapter", default=None)
     ap.add_argument("--tag", default="diverse")
     args = ap.parse_args()
-    _gpu = torch.cuda.is_available()   # CUDA device if present, else CPU
+    _gpu = torch.cuda.is_available()
     _dev = "cuda" if _gpu else "cpu"
     tok = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForCausalLM.from_pretrained(args.model, dtype=(torch.bfloat16 if _gpu else torch.float32))
@@ -74,7 +74,7 @@ def main():
             status = "no_code"
         else:
             mojo_out, st, detail = run_mojo(code, rec["mojo_driver"])
-            if st == "compile_error":   # deterministic fixup: add missing math imports, retry once
+            if st == "compile_error":
                 fixed = _repair(code)
                 if fixed != code:
                     m2, s2, d2 = run_mojo(fixed, rec["mojo_driver"])
@@ -89,13 +89,13 @@ def main():
                     for a, b in zip(ref, mojo_out))
                 status = "pass" if ok else "wrong_output"
         results.append({"name": rec["name"], "category": rec["category"], "status": status,
-                        "detail": detail, "code": code or "", "repaired": repaired})   # persist for rerun-free diagnosis
+                        "detail": detail, "code": code or "", "repaired": repaired})
         print(f"[{i}/{len(recs)}] {rec['category']:9s} {rec['name']:18s} {status.upper()}{' (repaired)' if repaired else ''}  {detail[:50]}", flush=True)
 
     json.dump(results, open(REPO/f"data/sft/cpp_mojo/diverse_{args.tag}.json","w"), indent=1)
     c = Counter(r["status"] for r in results)
     np_ = c.get("pass", 0); rep = sum(1 for r in results if r.get("repaired"))
-    raw = np_ - rep   # passes the model achieved with no fixup
+    raw = np_ - rep
     print(f"\n=== {args.tag} DIVERSE === pass@1 {100*np_/len(results):.1f}% ({np_}/{len(results)})  "
           f"[raw {100*raw/len(results):.1f}% + repair {rep}]  {dict(c)}")
 
@@ -105,7 +105,7 @@ def _num(s):
     except: return None
 
 
-def _bnorm(s):   # Mojo prints bools as True/False; C++/ground-truth use 1/0
+def _bnorm(s):
     s = s.strip()
     return "1" if s == "True" else "0" if s == "False" else s
 

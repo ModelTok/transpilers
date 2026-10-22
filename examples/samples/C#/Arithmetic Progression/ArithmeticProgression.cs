@@ -18,7 +18,6 @@ namespace Programming
             Console.WriteLine("number of terms: " + numberOfTerms);
             Console.WriteLine();
 
-            // Arithmetic Progression
             Console.WriteLine("Arithmetic Progression:");
             for (int i = 0; i < numberOfTerms; i++)
             {

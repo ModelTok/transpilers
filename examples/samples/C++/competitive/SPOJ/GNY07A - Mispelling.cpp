@@ -1,16 +1,3 @@
-/*Input:
-4
-4 MISSPELL
-1 PROGRAMMING
-7 CONTEST
-3 BALLOON
-
-Output:
-1 MISPELL
-2 ROGRAMMING
-3 CONTES
-4 BALOON
-*/
 #include <iostream>
 using namespace std;
 

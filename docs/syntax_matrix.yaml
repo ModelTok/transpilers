@@ -1,6 +1,3 @@
-# Syntax construct matrix: MIR-to-LIR emission reference
-# Maps 30 programming constructs across C++ (source) and 7 target languages.
-# Used to drive code-generation decisions in the backend passes.
 
 constructs:
   - concept: "function_definition"

@@ -36,10 +36,10 @@ def lit(a):
         return str(a)
     if isinstance(a, str):
         return '"' + a + '"'
-    if isinstance(a, list) and a:  # non-empty list -> Mojo list literal (typed by elems)
+    if isinstance(a, list) and a:
         inner = [lit(x) for x in a]
         return None if any(x is None for x in inner) else "[" + ", ".join(inner) + "]"
-    return None  # empty list / other -> skip (untyped literal)
+    return None
 
 
 def _param_types(mojo, name):
@@ -68,19 +68,18 @@ def eval_task(task, d):
     if r.returncode != 0:
         return "transpile_fail"
     mojo = r.stdout
-    # real function name = last top-level `def` (task["name"] != fn name sometimes)
     defs = [re.match(r"def (\w+)\(", ln).group(1)
             for ln in mojo.splitlines() if re.match(r"def \w+\(", ln)]
     if not defs:
         return "transpile_fail"
     name = defs[-1]
-    ptypes = _param_types(mojo, name)  # to type empty-list args (e.g. List[Int]())
+    ptypes = _param_types(mojo, name)
     for test in task["tests"]:
         args = []
         bad = False
         for i, a in enumerate(test["args"]):
             if isinstance(a, list) and not a and i < len(ptypes) and ptypes[i]:
-                args.append(f"{ptypes[i]}()")   # empty container -> typed ctor
+                args.append(f"{ptypes[i]}()")
             else:
                 lv = lit(a)
                 if lv is None:

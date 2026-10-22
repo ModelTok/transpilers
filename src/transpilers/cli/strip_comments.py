@@ -45,7 +45,6 @@ def strip_cpp_comments(text: str) -> str:
         c = text[i]
         nc = text[i + 1] if i + 1 < n else ""
 
-        # String literal (double or single quoted)
         if c in ('"', "'"):
             quote = c
             result.append(c)
@@ -62,18 +61,15 @@ def strip_cpp_comments(text: str) -> str:
             i += 1
             continue
 
-        # Line comment //
         if c == "/" and nc == "/":
             i += 2
             while i < n and text[i] != "\n":
                 i += 1
-            # Preserve the newline
             if i < n and text[i] == "\n":
                 result.append("\n")
                 i += 1
             continue
 
-        # Block comment /* */
         if c == "/" and nc == "*":
             i += 2
             while i + 1 < n:
@@ -82,7 +78,6 @@ def strip_cpp_comments(text: str) -> str:
                     break
                 i += 1
             else:
-                # Unterminated comment - reached end of file
                 pass
             continue
 
@@ -142,7 +137,6 @@ def main() -> int:
 
     target = Path(args.target)
 
-    # Single file mode
     if target.suffix in (".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".mojo"):
         if not args.in_place:
             print(
@@ -159,10 +153,8 @@ def main() -> int:
             print(f"{target}: no comments found")
         return 0
 
-    # Config mode
     config = json.loads(target.read_text())
 
-    # Filter entries
     if args.ids:
         id_set = set(args.ids)
         entries = [e for e in config if e.get("id") in id_set]

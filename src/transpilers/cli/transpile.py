@@ -21,9 +21,13 @@ try:
 except ImportError:
     pass
 
-from openrouter import OpenRouter  # noqa: E402  (after env bootstrap)
+from openrouter import OpenRouter  # noqa: E402
 
 from transpilers.cli.domain_prompts import apply_domain_guidance  # noqa: E402
+from transpilers.cli.local_client import OpenAICompatClient  # noqa: E402
+from transpilers.repair.mojo_postpass import postpass as mojo_postpass  # noqa: E402
+
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 
 PROMPT_TEMPLATE = """\
 Convert this C++ file to Mojo. Faithful 1:1 translation, no refactoring.
@@ -78,25 +82,41 @@ def read_file(path: Path, max_chars: int = 0) -> str:
 
 
 def extract_file_block(text: str) -> str | None:
-    # Try with closing tag first
     m = re.search(
         r"<<<\s*FILE\s+(?P<path>[^\n]+?)\s*>>>\n(?P<body>.*?)\n<<<\s*END\s*>>>",
         text,
         re.DOTALL,
     )
     if not m:
-        # Fallback: missing closing tag — take everything after <<<FILE>>> to end
         m = re.search(
             r"<<<\s*FILE\s+(?P<path>[^\n]+?)\s*>>>\n(?P<body>.*)\Z",
             text,
             re.DOTALL,
         )
     if not m:
-        return None
+        return _single_mojo_fence(text)
     body = m.group("body")
     body = re.sub(r"^```[a-zA-Z]*\n", "", body)
     body = re.sub(r"\n```\s*$", "", body)
     return body
+
+
+_FENCE = re.compile(r"```(?P<lang>[^\n`]*)\n(?P<body>.*?)\n```", re.DOTALL)
+
+
+def _single_mojo_fence(text: str) -> str | None:
+    """Fallback for models that answer with one fenced mojo block instead of <<<FILE>>>.
+
+    The repo's fine-tuned adapter was trained to reply with "a single ```mojo fenced block".
+    Only a closed fence tagged ``mojo`` counts, and only when there is exactly one: with
+    several (code plus examples) it is unclear which is the file, so none is taken.
+    """
+    blocks = [
+        m.group("body")
+        for m in _FENCE.finditer(text)
+        if m.group("lang").strip().lower() in ("mojo", "\U0001f525")
+    ]
+    return blocks[0] if len(blocks) == 1 else None
 
 
 def mojo_compile(path: Path) -> tuple[bool, str]:
@@ -121,6 +141,8 @@ def transpile_one(
     repair: bool,
     max_retries: int,
     domain_prompts: bool = False,
+    postpass: bool = False,
+    temperature: float = 0.0,
 ) -> dict:
     cc_path = Path(entry["source"])
     target_path = Path(entry["target"])
@@ -164,12 +186,11 @@ def transpile_one(
             response = client.chat.send(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
+                temperature=temperature,
                 max_tokens=16000,
             )
             raw = response.choices[0].message.content
 
-            # Save raw response for debugging
             if RAW_DIR:
                 raw_dir = Path(RAW_DIR)
                 raw_dir.mkdir(parents=True, exist_ok=True)
@@ -184,13 +205,19 @@ def transpile_one(
 
         code = extract_file_block(raw)
         if not code:
-            # Still save whatever the LLM produced as .mojo for inspection
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_text(raw)
             if attempt < max_retries:
                 continue
             result["status"] = "error: no FILE block"
             return result
+
+        if postpass:
+            fixed = mojo_postpass(code, source=cc_source)
+            code = fixed.code
+            result["postpass_changes"] = len(fixed.changes)
+            if fixed.unresolved:
+                result["postpass_unresolved"] = fixed.unresolved
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(code)
@@ -217,6 +244,54 @@ def transpile_one(
     return result
 
 
+def run_verify(cmd: str, entry: dict, timeout: float) -> tuple[bool, str]:
+    """Run the user's verification command on a written draft; exit status 0 accepts it.
+
+    `{target}` and `{source}` in `cmd` are replaced by the draft and source paths."""
+    shell_cmd = cmd.replace("{target}", entry["target"]).replace("{source}", entry["source"])
+    try:
+        p = subprocess.run(shell_cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, "timed out"
+    tail = (p.stdout + p.stderr).strip().splitlines()
+    return p.returncode == 0, (tail[-1] if tail else "")[:160]
+
+
+def transpile_verified(
+    entry: dict,
+    samples: int,
+    verify_cmd: str | None,
+    verify_timeout: float,
+    **kwargs,
+) -> dict:
+    """`transpile_one` up to `samples` times, stopping at the first draft that `verify_cmd` accepts.
+
+    Each attempt overwrites the target; when none passes the last draft stays and the status says so."""
+    if not verify_cmd or samples <= 1:
+        return transpile_one(entry, **kwargs)
+    result: dict = {}
+    for attempt in range(1, samples + 1):
+        result = transpile_one(dict(entry), **kwargs)
+        result["attempts"] = attempt
+        if result["status"] != "ok":
+            continue
+        ok, detail = run_verify(verify_cmd, entry, verify_timeout)
+        result["verified"] = ok
+        if ok:
+            return result
+        result["verify"] = detail
+    if result.get("status") == "ok":
+        result["status"] = f"error: no verified draft in {samples} samples"
+    return result
+
+
+def make_client(endpoint: str | None, api_key: str, timeout: float):
+    """OpenRouter SDK client, or a local OpenAI-compatible one when ``endpoint`` is set."""
+    if endpoint:
+        return OpenAICompatClient(endpoint, api_key, timeout)
+    return OpenRouter(api_key=api_key)
+
+
 def save_config(config_path: Path, config: list[dict]) -> None:
     tmp = config_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(config, indent=2))
@@ -231,11 +306,25 @@ def step_bar(step: int, total: int, width: int = 40) -> str:
 def main() -> int:
     global RAW_DIR
     ap = argparse.ArgumentParser(
-        description="Transpile C++/Fortran to Mojo via OpenRouter from a JSON config",
+        description=(
+            "Transpile C++/Fortran to Mojo from a JSON config, via OpenRouter or a local "
+            "OpenAI-compatible server (--endpoint)"
+        ),
     )
     ap.add_argument("config", help="JSON config file from build_config.py")
     ap.add_argument(
-        "--model", default="deepseek/deepseek-v4-flash", help="OpenRouter model"
+        "--model",
+        default=None,
+        help=f"Model name (default {DEFAULT_MODEL} on OpenRouter; required with --endpoint)",
+    )
+    ap.add_argument(
+        "--endpoint",
+        default=None,
+        help=(
+            "Base URL of an OpenAI-compatible server (e.g. http://localhost:11434/v1 for "
+            "Ollama, http://localhost:1234/v1 for LM Studio). No OpenRouter key needed; "
+            "LLM_API_KEY is sent if set."
+        ),
     )
     ap.add_argument(
         "--repair", action="store_true", help="Enable compile-driven repair loop"
@@ -283,11 +372,46 @@ def main() -> int:
         "--force", action="store_true", help="Re-transpile even if decision=done"
     )
     ap.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="Sampling temperature (default 0.0); above 0 gives a different draft per run, for best-of-n selection",
+    )
+    ap.add_argument(
+        "--samples",
+        type=int,
+        default=1,
+        help="Best-of-n: draw up to N drafts per file and keep the first that --verify-cmd accepts "
+        "(needs --temperature above 0)",
+    )
+    ap.add_argument(
+        "--verify-cmd",
+        default=None,
+        help="Shell command that accepts a draft with exit status 0; {target} and {source} are replaced "
+        "by the draft and source paths (e.g. a compile-and-compare script)",
+    )
+    ap.add_argument("--verify-timeout", type=float, default=600.0, help="Seconds allowed per verification")
+    ap.add_argument(
+        "--postpass",
+        action="store_true",
+        help=(
+            "Apply the deterministic Mojo post-pass (C++/pre-1.0 syntax, `mut`, nc_mul around "
+            "products that feed an add) to each draft before it is written"
+        ),
+    )
+    ap.add_argument(
         "--domain-prompts",
         action="store_true",
-        help="Add gtest / Eigen-specific guidance when those sources are detected",
+        help=(
+            "Add gtest / Eigen-specific guidance when those sources are detected, and "
+            "EnergyPlusMojo kernel rules for sources named *.upstream.inc"
+        ),
     )
     args = ap.parse_args()
+    if args.samples > 1 and not args.verify_cmd:
+        ap.error("--samples needs --verify-cmd (there is nothing to choose a draft by otherwise)")
+    if args.samples > 1 and args.temperature <= 0:
+        ap.error("--samples needs --temperature above 0 (every sample would be identical)")
 
     config_path = Path(args.config)
     if not config_path.exists():
@@ -295,7 +419,6 @@ def main() -> int:
         return 1
     config = json.loads(config_path.read_text())
 
-    # --- Status mode ---
     if args.status:
         by_decision = {}
         for e in config:
@@ -314,7 +437,6 @@ def main() -> int:
             print(f"  {p}: {c}")
         return 0
 
-    # --- Filter entries ---
     if args.ids:
         id_set = set(args.ids)
         entries = [e for e in config if e.get("id") in id_set]
@@ -342,10 +464,17 @@ def main() -> int:
         print("No entries to transpile")
         return 0
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        print("ERROR: OPENROUTER_API_KEY not set", file=sys.stderr)
-        return 1
+    if args.endpoint:
+        if not args.model:
+            print("ERROR: --model is required with --endpoint", file=sys.stderr)
+            return 1
+        api_key = os.environ.get("LLM_API_KEY") or "local"
+    else:
+        args.model = args.model or DEFAULT_MODEL
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            print("ERROR: OPENROUTER_API_KEY not set", file=sys.stderr)
+            return 1
 
     if args.dry_run:
         print(f"Dry run: {len(entries)} file(s)")
@@ -370,14 +499,19 @@ def main() -> int:
 
     def work(entry: dict) -> dict:
         nonlocal ok_count, completed
-        with OpenRouter(api_key=api_key) as client:
-            result = transpile_one(
+        with make_client(args.endpoint, api_key, args.timeout) as client:
+            result = transpile_verified(
                 entry,
-                args.model,
-                client,
-                args.repair,
-                args.max_retries,
-                args.domain_prompts,
+                args.samples,
+                args.verify_cmd,
+                args.verify_timeout,
+                model=args.model,
+                client=client,
+                repair=args.repair,
+                max_retries=args.max_retries,
+                domain_prompts=args.domain_prompts,
+                postpass=args.postpass,
+                temperature=args.temperature,
             )
         status = result["status"]
         with config_lock:

@@ -19,7 +19,6 @@ REPO = Path(__file__).resolve().parents[2]
 OUT = Path(os.environ.get("DIFF_OUT", str(REPO / "data/sft/diverse/verified.jsonl")))
 EPMOJO = "/home/bart/github/EnergyPlusMojo/.pixi/envs/default"
 MOJO_BIN = f"{EPMOJO}/bin/mojo"
-# system linker in front (handles Python interop too) + MODULAR_HOME
 MOJO_ENV = dict(os.environ, MODULAR_HOME=f"{EPMOJO}/share/max",
                 PATH="/usr/bin:/bin:" + f"{EPMOJO}/bin")
 
@@ -35,7 +34,6 @@ def run(cmd, **kw):
 def verify(item) -> tuple[bool, str]:
     with tempfile.TemporaryDirectory() as td:
         t = Path(td)
-        # --- C++ (ground truth) ---
         (t / "a.cpp").write_text(CPP_PRE + item["cpp_unit"] + "\n" + item["cpp_driver"] + "\n")
         r = run(["g++", "-O2", "-std=c++17", "-o", str(t / "a"), str(t / "a.cpp")])
         if r.returncode != 0:
@@ -46,7 +44,6 @@ def verify(item) -> tuple[bool, str]:
         cpp_out = r.stdout.strip().splitlines()
         if not cpp_out:
             return False, "cpp_no_output"
-        # --- Mojo ---
         (t / "b.mojo").write_text(item["mojo_unit"] + "\n\n" + item["mojo_driver"] + "\n")
         r = run([MOJO_BIN, "build", "-Xlinker", "-ldl", str(t / "b.mojo"), "-o", str(t / "b")], env=MOJO_ENV)
         if r.returncode != 0:
@@ -56,7 +53,6 @@ def verify(item) -> tuple[bool, str]:
         if r.returncode != 0:
             return False, "mojo_run"
         mojo_out = r.stdout.strip().splitlines()
-    # --- compare (numeric tolerance, else exact string) ---
     if len(cpp_out) != len(mojo_out):
         return False, f"line_count {len(cpp_out)}!={len(mojo_out)}"
     for a, b in zip(cpp_out, mojo_out):

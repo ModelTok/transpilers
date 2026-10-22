@@ -1,6 +1,3 @@
-/**
- * Created by NafisaBarlaskar on 14-10-2017.
- */
 public class IsNumberPalindrome {
 
     public static boolean isPalindromeNumber(int inputNumber) {

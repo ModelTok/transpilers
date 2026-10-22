@@ -99,9 +99,6 @@ DEFAULT_TEST_TIMEOUT = 3600
 FUNCTIONS_LABEL = "Production functions (~ = includes heuristic counts)"
 
 
-# ---------------------------------------------------------------------------
-# Language table
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -109,12 +106,12 @@ class LangSpec:
     key: str
     label: str
     exts: tuple[str, ...]
-    style: str  # "hash" | "c" | "fortran"
+    style: str
     line_markers: tuple[str, ...] = ()
     block: tuple[str, str] | None = None
     nested: bool = False
     quotes: str = ""
-    symbols: str | None = None  # "python" | "mojo" | "cpp" | "rust" | "fortran"
+    symbols: str | None = None
     approx_symbols: bool = False
 
 
@@ -148,9 +145,6 @@ def lang_for(path: str) -> LangSpec | None:
     return LANG_BY_EXT.get(Path(path).suffix.lower())
 
 
-# ---------------------------------------------------------------------------
-# Line scanner: code / comment / blank
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -158,7 +152,7 @@ class ScanResult:
     code: int = 0
     comment: int = 0
     blank: int = 0
-    code_lines: list[str] = field(default_factory=list)  # code with comments removed
+    code_lines: list[str] = field(default_factory=list)
 
 
 def split_lines(text: str) -> list[str]:
@@ -296,7 +290,7 @@ def _scan_line(line, tok_re, close_re, spec, opener, closer, depth):
         if opener and tok == opener:
             depth, has_comment, pos = 1, True, m.end()
             continue
-        end = _string_end(line, m.end(), tok)  # a quote character
+        end = _string_end(line, m.end(), tok)
         out.append(line[m.start():end])
         has_code = True
         pos = end
@@ -311,9 +305,6 @@ def scan_text(text: str, spec: LangSpec, fixed_form: bool = False) -> ScanResult
     return _scan_c_like(lines, spec, fixed_form)
 
 
-# ---------------------------------------------------------------------------
-# Symbol counting (functions / classes / declared tests)
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -391,7 +382,6 @@ def count_fortran(code_text: str) -> Symbols:
     return Symbols(len(_F_PROC.findall(code_text)), None)
 
 
-# --- C / C++ -----------------------------------------------------------------
 
 _STR_LITERAL = re.compile(r"\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'")
 _PREPROC = re.compile(r"^[ \t]*#(?:[^\n]*\\\n)*[^\n]*", re.MULTILINE)
@@ -464,7 +454,7 @@ def select_first_branches(lines: list[str]) -> list[str]:
     ``#ifdef X {...} #else {...} #endif`` count once instead of twice.
     """
     out: list[str] = []
-    stack: list[list[bool]] = []  # [parent_emitting, branch_emitting, branch_taken]
+    stack: list[list[bool]] = []
     emitting = True
     for line in lines:
         m = _PP_DIRECTIVE.match(line)
@@ -506,7 +496,7 @@ def count_cpp(code_text: str, want_tests: bool) -> Symbols:
             stack.append(kind)
             if kind in ("ns", "type"):
                 start = i + 1
-        elif stack:  # "}"
+        elif stack:
             kind = stack.pop()
             if kind != "init" and not (stack and stack[-1] in ("func", "block", "init")):
                 start = i + 1
@@ -530,9 +520,6 @@ def count_symbols(spec: LangSpec, text: str, scan: ScanResult, want_tests: bool)
     return Symbols()
 
 
-# ---------------------------------------------------------------------------
-# File discovery
-# ---------------------------------------------------------------------------
 
 
 def is_test_path(rel: str) -> bool:
@@ -663,9 +650,6 @@ def analyse_file(rel: str, text: str) -> FileMetrics:
                        count_symbols(spec, text, scan, test))
 
 
-# ---------------------------------------------------------------------------
-# Git helpers
-# ---------------------------------------------------------------------------
 
 
 def _git(root: Path, *args: str) -> str:
@@ -744,9 +728,6 @@ def export_revision(root: Path, rev: str, dest: Path, includes: list[str], exclu
     return written
 
 
-# ---------------------------------------------------------------------------
-# Migration map
-# ---------------------------------------------------------------------------
 
 _PIPE_SPLIT = re.compile(r"\|(?=(?:[^`]*`[^`]*`)*[^`]*$)")
 _STATUS_RE = re.compile(r"\b(COMPLETE|PARTIAL|NOT[_ -]STARTED)\b", re.IGNORECASE)
@@ -758,7 +739,7 @@ _KNOWN_EXTS = tuple(sorted({e.lstrip(".") for s in LANGS for e in s.exts}, key=l
 
 @dataclass
 class MapRow:
-    key: str  # file stem
+    key: str
     status: str
     upstream: str
     target_modules: str = ""
@@ -906,9 +887,6 @@ def find_default_map(target_root: Path) -> Path | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Test running and result parsing
-# ---------------------------------------------------------------------------
 
 _COUNT_RE = re.compile(
     r"(\d+) (passed|failed|skipped|errors?|xfailed|xpassed|warnings?|deselected|rerun)\b"
@@ -1147,7 +1125,6 @@ def _junit_summary_mismatch(junit: dict, counts: dict) -> str:
     pairs = (("passed", "passed"), ("failed", "failed"), ("skipped", "skipped"))
     bad = [f"{k}: junit {junit[k]} vs summary {counts.get(s, 0)}"
            for k, s in pairs if junit[k] != counts.get(s, 0)]
-    # pytest reports xfail as skipped in junit but separately in its summary line
     if bad and (counts.get("xfailed") or counts.get("xpassed")):
         return ""
     return ("junit and summary line disagree (" + "; ".join(bad) + "); junit used") if bad else ""
@@ -1211,7 +1188,7 @@ def _run_wsl(wsl: WslSpec, command: str, cwd: str, env_vars: dict, addopts: str,
     script = f"{exports}if command -v timeout >/dev/null; then {guard}; else {command}; fi"
     raw = run_shell(wsl.argv(cwd, script), shell=False, cwd=None, env=dict(os.environ),
                     timeout=timeout + 60)
-    if raw["exit_code"] == 124:  # GNU timeout: the command was killed inside the distro
+    if raw["exit_code"] == 124:
         raw["timed_out"], raw["exit_code"] = True, None
     raw["junit_text"] = None
     if junit_path and not raw["timed_out"]:
@@ -1266,9 +1243,6 @@ def parse_test_specs(specs: list[str]) -> list[tuple[str, str]]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Snapshot
-# ---------------------------------------------------------------------------
 
 
 def _part() -> dict:
@@ -1461,9 +1435,6 @@ def _map_relpath(root: Path, map_path: Path | None) -> str | None:
         return None
 
 
-# ---------------------------------------------------------------------------
-# Report rendering
-# ---------------------------------------------------------------------------
 
 
 def fmt_int(n) -> str:
@@ -1748,7 +1719,6 @@ def render_map_deltas(before: dict, after: dict) -> str:
     return md_table(headers, rows)
 
 
-# --- caveats -----------------------------------------------------------------
 
 
 def build_caveats(source: dict | None, target: dict, baseline: dict | None) -> list[str]:
@@ -1832,7 +1802,6 @@ def _run_caveats(side: str, snap: dict, run: dict) -> list[str]:
     return out
 
 
-# --- top level ---------------------------------------------------------------
 
 
 def render_report(*, source: dict | None = None, target: dict | None = None,
@@ -1895,9 +1864,6 @@ def _render_pair(before: dict, after: dict) -> str:
     return "\n".join(parts) + "\n"
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 
 def _add_scope_args(p: argparse.ArgumentParser, prefix: str = "", ) -> None:

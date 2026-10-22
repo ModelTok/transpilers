@@ -44,9 +44,6 @@ from pathlib import Path
 from typing import Literal
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 
 DIFFUSION_MODEL_ID = "google/diffusion-gemma-26b-it"
 """HuggingFace model ID for the instruct-tuned DiffusionGemma."""
@@ -71,9 +68,6 @@ EB_SAMPLER_DEFAULTS = {
 """Recommended entropy-bounded sampler defaults (from Unsloth docs)."""
 
 
-# ---------------------------------------------------------------------------
-# Dataclasses
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -131,9 +125,6 @@ class DiffusionGenerationConfig:
     """Optional system prompt (applied as a prefix)."""
 
 
-# ---------------------------------------------------------------------------
-# Client
-# ---------------------------------------------------------------------------
 
 
 class DiffusionGemmaClient:
@@ -186,7 +177,6 @@ class DiffusionGemmaClient:
         elif backend == "unsloth":
             self._check_unsloth()
 
-    # ---- Public API ----
 
     def generate(
         self,
@@ -237,7 +227,6 @@ class DiffusionGemmaClient:
                 "Streaming is only supported for llamacpp and vllm backends."
             )
 
-    # ---- Prompt formatting ----
 
     def _format_prompt(self, prompt: str, cfg: DiffusionGenerationConfig) -> str:
         """Apply system prompt and thinking-token preamble."""
@@ -249,7 +238,6 @@ class DiffusionGemmaClient:
         parts.append(prompt.strip())
         return "\n\n".join(parts)
 
-    # ---- Backend: llama.cpp ----
 
     def _llamacpp_args(self, cfg: DiffusionGenerationConfig) -> list[str]:
         """Build llama-diffusion-cli argument list."""
@@ -259,8 +247,8 @@ class DiffusionGemmaClient:
             "-m",
             self.model,
             "-ngl",
-            "99",  # offload all layers to GPU
-            "-cnv",  # multi-turn conversation mode
+            "99",
+            "-cnv",
             "-n",
             str(cfg.max_new_tokens),
             "--diffusion-eb-max-steps",
@@ -322,7 +310,6 @@ class DiffusionGemmaClient:
         finally:
             Path(prompt_file).unlink(missing_ok=True)
 
-    # ---- Backend: vLLM (OpenAI-compatible API) ----
 
     def _generate_vllm(self, prompt: str, cfg: DiffusionGenerationConfig) -> str:
         """Call vLLM's ``/chat/completions`` endpoint with diffusion params."""
@@ -333,7 +320,6 @@ class DiffusionGemmaClient:
             "model": self.model,
             "max_tokens": cfg.max_new_tokens,
             "messages": [{"role": "user", "content": prompt}],
-            # Diffusion-specific parameters passed to the vLLM backend.
             "extra_body": {
                 "diffusion_canvas_len": cfg.canvas_len,
                 "diffusion_max_denoising_steps": sampler.max_steps,
@@ -406,7 +392,6 @@ class DiffusionGemmaClient:
                     except json.JSONDecodeError:
                         continue
 
-    # ---- Backend: Unsloth ----
 
     def _generate_unsloth(self, prompt: str, cfg: DiffusionGenerationConfig) -> str:
         """Generate using Unsloth's in-memory FastLanguageModel.
@@ -438,7 +423,6 @@ class DiffusionGemmaClient:
             diffusion_entropy_bound=cfg.sampler.entropy_bound,
         )
         decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        # Strip the input prefix from the output.
         input_len = len(
             tokenizer.decode(inputs["input_ids"][0], skip_special_tokens=True)
         )
@@ -459,7 +443,7 @@ class DiffusionGemmaClient:
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=self.model,
             max_seq_length=4096,
-            dtype=None,  # auto-detect
+            dtype=None,
             load_in_4bit=True,
         )
         FastLanguageModel.for_inference(model)
@@ -468,7 +452,6 @@ class DiffusionGemmaClient:
 
     _unsloth_cache: tuple | None = None
 
-    # ---- Helpers ----
 
     @staticmethod
     def _strip_thinking(text: str) -> str:
@@ -506,9 +489,6 @@ class DiffusionGemmaClient:
             )
 
 
-# ---------------------------------------------------------------------------
-# Module-level helpers
-# ---------------------------------------------------------------------------
 
 
 def _default_model(backend: str) -> str:

@@ -69,18 +69,13 @@ class TaxonomyRecord:
     source_lang: str
     target: str
     bucket: str
-    stage: str  # parse | hir-to-mir | infer-types | lower | emit | compile | structural | run
-    construct: str = ""  # offending construct / symbol / type hole, when known
-    detail: str = ""  # first error line, free-form
-    output: str | None = None  # emitted target source, when emission succeeded
-    # 1-based line of the compiler's first error in `output` (compile stage
-    # only, and only when stderr was parseable); see verify.score.
+    stage: str
+    construct: str = ""
+    detail: str = ""
+    output: str | None = None
     first_error_line: int | None = None
 
 
-# --------------------------------------------------------------------------- #
-# Exception classification (in-pipeline failures)
-# --------------------------------------------------------------------------- #
 
 _HOLE_RE = re.compile(r"unresolved type hole(?::\s*(?P<hint>.*))?", re.DOTALL)
 _SYMBOL_MSG_RE = re.compile(
@@ -106,44 +101,36 @@ def classify_exception(stage: str, exc: BaseException) -> tuple[str, str]:
             return "unfilled-UnknownT-hole", (m.group("hint") or "").strip()
     if isinstance(exc, NameError) or _SYMBOL_MSG_RE.search(msg):
         return "unresolved-symbol", _first_line(msg)
-    # libcst / pycparser / tree-sitter raise their own syntax-error types
-    # (ParserSyntaxError, ParseError, ...); match by class name so every
-    # frontend's parse failure lands in `parse`.
     if "SyntaxError" in type(exc).__name__ or "ParseError" in type(exc).__name__:
         return "parse", _first_line(msg)
     if isinstance(
         exc, (UnsupportedConstruct, SyntaxError, NotImplementedError, ValueError)
     ):
-        # Deliberate refusals: the pipeline won't model this construct. The
-        # `stage` field distinguishes frontend parse from lowering/emit gaps.
         return "parse", _first_line(msg)
     return "internal-error", f"{type(exc).__name__}: {_first_line(msg)}"
 
 
-# --------------------------------------------------------------------------- #
-# Target-compiler stderr classification
-# --------------------------------------------------------------------------- #
 
 _SYMBOL_PATTERNS = [
     r"\bE0425\b",
     r"\bE0433\b",
-    r"\bE0412\b",  # rustc: name/path/type not found
-    r"cannot find (?:function|value|type|macro|struct)",  # rustc prose
+    r"\bE0412\b",
+    r"cannot find (?:function|value|type|macro|struct)",
     r"undeclared identifier",
-    r"undeclared \(first use",  # gcc
-    r"implicit declaration of function",  # gcc
-    r"undefined reference",  # ld
-    r"use of unknown declaration",  # mojo
-    r"has no IMPLICIT type",  # gfortran
+    r"undeclared \(first use",
+    r"implicit declaration of function",
+    r"undefined reference",
+    r"use of unknown declaration",
+    r"has no IMPLICIT type",
 ]
 _TYPE_PATTERNS = [
     r"\bE0308\b",
-    r"mismatched types",  # rustc
+    r"mismatched types",
     r"incompatible type",
-    r"but argument is of type",  # gcc
+    r"but argument is of type",
     r"cannot be converted",
-    r"invalid conversion",  # mojo
-    r"Type mismatch",  # gfortran
+    r"invalid conversion",
+    r"Type mismatch",
 ]
 _SYMBOL_RE = re.compile("|".join(_SYMBOL_PATTERNS))
 _TYPE_RE = re.compile("|".join(_TYPE_PATTERNS))
@@ -166,9 +153,6 @@ def classify_compile_stderr(stderr: str) -> tuple[str, str]:
     return "target-compile-error", detail
 
 
-# --------------------------------------------------------------------------- #
-# Run-result classification
-# --------------------------------------------------------------------------- #
 
 
 def classify_run(
@@ -186,16 +170,13 @@ def classify_run(
     return "output-mismatch", f"line count: expected {len(exp)}, got {len(act)}"
 
 
-# --------------------------------------------------------------------------- #
-# Staged driver
-# --------------------------------------------------------------------------- #
 
 _COMPILER_BINS = {
     "rust": ("rustc",),
     "c": ("gcc", "clang", "cc"),
     "mojo": ("mojo",),
     "fortran": ("gfortran", "flang"),
-    "python": (),  # host interpreter — always available
+    "python": (),
 }
 
 
@@ -243,9 +224,6 @@ def classify_unit(
         )
 
     lower, emit, verify_fn = TARGETS[target]
-    # The C++ frontend returns (HirModule, TypeGroundTruth). Other
-    # frontends still return a bare HirModule. Normalise so the rest
-    # of the staged driver can treat the parse step the same way.
     try:
         parsed = FRONTENDS[source_lang](source)
     except Exception as exc:
@@ -258,8 +236,6 @@ def classify_unit(
         mir_mod = hir_to_mir(hir_mod)
     except Exception as exc:
         return fail("hir-to-mir", exc)
-    # Apply the C++ ground truth (issue #50). No-op for non-C++
-    # frontends.
     if cpp_truth is not None:
         from transpilers.passes.cpp_ground_truth import apply_ground_truth
 

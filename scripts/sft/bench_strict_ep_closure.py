@@ -18,7 +18,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import bench_strict_ep as B  # reuse find_def, DECLS, CPP_FULL, PRELUDE, env, sample_rows
+import bench_strict_ep as B
 
 PLAN = json.loads((B.SFT / "migration_plan.json").read_text())
 NONLEAF = PLAN["nonleaf_deps"]
@@ -44,13 +44,12 @@ def sig_decl(name):
     return body.split("{", 1)[0].strip() + ";", args
 
 
-# math names already imported by ep_prelude.mojo (avoid duplicate-import errors)
 PRELUDE_MATH = {"sqrt", "exp", "log", "log10", "sin", "cos", "tan",
                 "atan", "atan2", "pow", "floor", "ceil", "trunc"}
 
 
 def bench_one(target):
-    order = closure(target)                       # deps..., target  (topo)
+    order = closure(target)
     defs = {n: B.find_def(n) for n in order}
     if any(v is None for v in defs.values()):
         return "skip_extract", None
@@ -58,7 +57,6 @@ def bench_one(target):
     rows = B.sample_rows(len(target_args))
     with tempfile.TemporaryDirectory() as td:
         t = Path(td)
-        # --- C++ reference: all closure bodies + driver on target ---
         bodies = "\n".join(defs[n][0] for n in order)
         calls = "\n".join('    printf("%.10g\\n", ' + target + "(" + ",".join(map(str, r)) + "));" for r in rows)
         (t / "a.cpp").write_text(B.CPP_FULL + bodies + f"\nint main(){{\n{calls}\n  return 0;\n}}\n")
@@ -69,7 +67,6 @@ def bench_one(target):
         if r.returncode != 0:
             return "skip_cpprun", None
         cpp_out = r.stdout.strip().splitlines()
-        # --- transpile each function (declaring its EP-fn deps so it parses) ---
         mojo_defs = []
         math_names = set()
         for n in order:
@@ -87,7 +84,6 @@ def bench_one(target):
                 else:
                     body_lines.append(ln)
             mojo_defs.append("\n".join(body_lines))
-        # one combined import of the math names not already in ep_prelude
         extra = sorted(math_names - PRELUDE_MATH)
         imp = f"from std.math import {', '.join(extra)}\n" if extra else ""
         mdrv = "\n".join(f"    print({target}({','.join(map(str, r))}))" for r in rows)

@@ -46,7 +46,7 @@ def _fmt(v):
     `_typed_lit`, not here.
     """
     s = f"{float(v):.17g}"
-    if not any(c in s for c in ".eEnN"):   # integer-looking -> force float
+    if not any(c in s for c in ".eEnN"):
         s += ".0"
     return s
 
@@ -57,10 +57,10 @@ def _typed_lit(v):
     bool -> Bool literal, int -> Int literal, else full-precision float.
     `bool` is a subclass of `int`, so it MUST be checked first.
     """
-    if isinstance(v, bool):                # bool before int (bool < int in Python)
+    if isinstance(v, bool):
         return "True" if v else "False"
     if isinstance(v, int):
-        return str(v)                      # Int literal (no ".0")
+        return str(v)
     return _fmt(v)
 
 
@@ -70,10 +70,10 @@ def gen_recorder_cpp(item):
     parts.append("static FILE* _fx;")
     for d in item["deps"]:
         n, np = d["name"], int(d["params"])
-        parts.append(d["cpp_impl"])                       # defines NAME_impl
+        parts.append(d["cpp_impl"])
         args = ", ".join(f"double a{i}" for i in range(np))
         call = ", ".join(f"a{i}" for i in range(np))
-        fmt = "\\t".join(["%s"] + ["%.17g"] * (np + 1))   # name, args..., ret
+        fmt = "\\t".join(["%s"] + ["%.17g"] * (np + 1))
         logargs = ", ".join([f'"{n}"'] + [f"a{i}" for i in range(np)] + ["_r"])
         parts.append(
             f"double {n}({args}){{ double _r = {n}_impl({call}); "

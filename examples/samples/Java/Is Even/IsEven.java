@@ -15,7 +15,6 @@ public class IsEven {
 
         boolean isEven = true;
 
-        //Even number checker
         if (number % 2 != 0) {
             isEven = false;
         }

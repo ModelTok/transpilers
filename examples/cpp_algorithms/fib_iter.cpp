@@ -1,4 +1,3 @@
-// Iterative Fibonacci — two-accumulator update.
 int fib_iter(int n) {
     int a = 0;
     int b = 1;

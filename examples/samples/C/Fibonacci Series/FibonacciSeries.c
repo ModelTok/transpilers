@@ -11,7 +11,6 @@ int main() {
 	scanf("%d", &number);
 	printf("\n");
 
-	//limiting the Fibonacci Series
 	number = (number > 16 ? 16 : number);
 
 	if (number < 0) {

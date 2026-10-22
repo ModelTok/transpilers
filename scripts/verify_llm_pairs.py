@@ -28,16 +28,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_cpp_mojo_dataset as _bld  # noqa: E402
 from build_cpp_mojo_dataset import CppFn, mojo_params, verify  # noqa: E402
 
-# Point the imported verify() at this machine's Mojo toolchain without
-# touching build_cpp_mojo_dataset.py (verify reads these module globals).
 if os.environ.get("TRANSPILERS_EPMOJO"):
     _p = Path(os.environ["TRANSPILERS_EPMOJO"])
     _bld.EPMOJO = _p
     _bld.MOJO_BIN = _p / "bin" / "mojo"
     _bld.MODULAR_HOME = _p / "share" / "max"
 
-# The stock preamble lacks <array>; several EnergyPlus fns use std::array
-# lookup tables. Harness scaffolding only — not part of the training pair.
 if "#include <array>" not in _bld._CPP_HELPERS:
     _bld._CPP_HELPERS = "#include <array>\n" + _bld._CPP_HELPERS
 

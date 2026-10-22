@@ -23,7 +23,7 @@ import re
 from pathlib import Path
 
 EP = Path(os.environ.get("EP_SRC", "/home/bart/Github/EnergyPlus/src/EnergyPlus"))
-REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
+REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "data/sft/cpp_mojo/migration_plan.json"
 
 SIG = re.compile(r"\bReal64\s+(?:[A-Za-z_]\w*::)?([A-Za-z_]\w+)\s*\(([^;{)]*)\)\s*\{")
@@ -33,11 +33,6 @@ SHIM = {"pow_2","pow_3","pow_4","pow_5","pow_6","pow_7","root_4","root_8","sign"
 KW = {"if","for","while","return","sizeof","switch","else","do"}
 
 
-# ---------------------------------------------------------------------------
-# Pure graph algorithms (importable + unit-tested without the EnergyPlus tree).
-# A graph is a dict {node: iterable-of-successors}; an edge n -> d means
-# "n depends on d" (n calls d), so d must be ported before n.
-# ---------------------------------------------------------------------------
 def tarjan_scc(graph):
     """Strongly-connected components via iterative Tarjan (no recursion limit).
 
@@ -64,7 +59,7 @@ def tarjan_scc(graph):
             descended = False
             for succ in succ_it:
                 if succ not in graph:
-                    continue  # external symbol, not part of this graph
+                    continue
                 if succ not in index:
                     index[succ] = low[succ] = counter
                     counter += 1
@@ -106,7 +101,7 @@ def cyclic_components(graph, sccs=None):
         if len(comp) > 1:
             cyclic.append(sorted(comp))
         elif comp[0] in set(graph.get(comp[0], ())):
-            cyclic.append([comp[0]])  # direct recursion
+            cyclic.append([comp[0]])
     cyclic.sort(key=lambda c: (-len(c), c[0] if c else ""))
     return cyclic
 
@@ -153,10 +148,9 @@ def graph_node_link(graph, attrs=None, edge_type="calls"):
 
 
 def main():
-    # 1) discover all scalar Real64 functions across EnergyPlus
-    funcs = {}   # name -> {file, scalar}
+    funcs = {}
     allnames = set()
-    for cc in sorted(EP.glob("*.cc")) + sorted(EP.glob("*.hh")):  # index headers too (inline defs)
+    for cc in sorted(EP.glob("*.cc")) + sorted(EP.glob("*.hh")):
         try:
             txt = strip_comments(cc.read_text(errors="ignore"))
         except Exception:
@@ -168,9 +162,8 @@ def main():
             scalar = bool(parts) and all(SCALAR_ARG.match(a) for a in parts)
             funcs.setdefault(name, {"file": cc.name, "scalar": scalar})
 
-    # 2) for scalar fns, extract body + find which OTHER EP functions they call
     scalar_fns = {n: v for n, v in funcs.items() if v["scalar"]}
-    for cc in sorted(EP.glob("*.cc")) + sorted(EP.glob("*.hh")):  # index headers too (inline defs)
+    for cc in sorted(EP.glob("*.cc")) + sorted(EP.glob("*.hh")):
         try:
             txt = strip_comments(cc.read_text(errors="ignore"))
         except Exception:
@@ -184,16 +177,13 @@ def main():
             if body is None:
                 continue
             called = set(re.findall(r"\b([A-Za-z_]\w+)\s*\(", body)) - KW - {n}
-            ep_deps = (called & allnames) - SHIM           # calls to other EP functions
+            ep_deps = (called & allnames) - SHIM
             self_recurses = bool(re.search(rf"\b{re.escape(n)}\s*\(", body))
             non_self = ("Array" in body) or ("state." in body) or ("EnergyPlusData" in body)
             scalar_fns[n]["deps"] = sorted(ep_deps)
             scalar_fns[n]["recursive"] = self_recurses
             scalar_fns[n]["leaf"] = (len(ep_deps) == 0) and not non_self
 
-    # 2b) build the in-set dependency graph (edges to other scalar fns only).
-    #     Self-recursion is kept as an explicit self-edge so cyclic_components
-    #     can flag it.                                                  (#67)
     graph = {}
     for n, v in scalar_fns.items():
         deps = set(v.get("deps") or []) & set(scalar_fns)
@@ -201,17 +191,14 @@ def main():
             deps.add(n)
         graph[n] = sorted(deps)
 
-    # 3) layers via SCC condensation so cycles don't stall a valid topo order (#67)
-    sccs = tarjan_scc(graph)                       # reverse-topological order
+    sccs = tarjan_scc(graph)
     cycles = cyclic_components(graph, sccs)
     comp_of = {n: i for i, comp in enumerate(sccs) for n in comp}
-    # condensed DAG: super-node -> super-nodes it depends on
     cgraph = {i: set() for i in range(len(sccs))}
     for n, deps in graph.items():
         for d in deps:
             if comp_of[n] != comp_of[d]:
                 cgraph[comp_of[n]].add(comp_of[d])
-    # a component is leaf-portable iff every member is a leaf scalar fn
     comp_leaf = [all(scalar_fns[n].get("leaf") for n in comp) for comp in sccs]
 
     done_comps = {i for i in cgraph if comp_leaf[i] and not cgraph[i]}
@@ -226,7 +213,6 @@ def main():
         for i in nxt:
             pending.pop(i, None)
 
-    # expand component-layers back to function names for the report
     layers = [sorted(n for i in layer for n in sccs[i]) for layer in layers_c]
     leaf = layers[0] if layers else []
     still_blocked_comps = list(pending)
@@ -235,12 +221,9 @@ def main():
         n for i in still_blocked_comps for n in sccs[i] if len(sccs[i]) > 1
     )
 
-    # 4) fan-in ranking — max-unlock scaffolding first (#68)
     ranked, fi = fanin_ranked(graph)
     non_leaf = [n for n in ranked if not scalar_fns[n].get("leaf")]
 
-    # 4b) persist the actual directed graph (repo connections), not just the
-    #     layered summary — node-link JSON, networkx-loadable.
     layer_of = {n: i for i, layer in enumerate(layers) for n in layer}
     node_attrs = {
         n: {
@@ -250,7 +233,7 @@ def main():
             "fan_in": fi[n],
             "fan_out": len(graph[n]),
             "scc": comp_of[n],
-            "layer": layer_of.get(n, -1),  # -1 == still blocked
+            "layer": layer_of.get(n, -1),
         }
         for n in graph
     }
@@ -266,12 +249,10 @@ def main():
         "layers_full": layers,
         "nonleaf_deps": {n: graph[n] for layer in layers[1:] for n in layer},
         "still_blocked": len(still_blocked),
-        # --- #67: cycles ---
         "cyclic_scc_count": len(cycles),
         "cyclic_scc_sample": cycles[:10],
         "blocked_by_cycle_count": len(blocked_by_cycle),
         "blocked_by_cycle_sample": blocked_by_cycle[:20],
-        # --- #68: fan-in ---
         "top_fanin": [[n, fi[n]] for n in ranked[:20]],
         "top_fanin_scaffolding": [[n, fi[n]] for n in non_leaf[:20]],
     }

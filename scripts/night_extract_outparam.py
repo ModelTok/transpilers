@@ -75,8 +75,6 @@ def main() -> int:
             params = parse_params(text[paren_open + 1:paren_end - 1])
             if params is None:
                 continue
-            # plain definition check: only qualifiers/comments between `)` and `{`
-            # (linear scan — the original _POST_PAREN regex backtracks badly)
             brace_open = text.find("{", paren_end)
             if brace_open < 0 or brace_open - paren_end > 400:
                 continue

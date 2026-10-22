@@ -15,9 +15,7 @@ limitations under the License.
 '''
 
 
-# Huffman Coding in python
 string = "abhsbaa"
-# Creating tree nodes
 from builtins import object, type, str, dict, len, sorted
 
 
@@ -37,7 +35,6 @@ class NodeTree(object):
         return '%s_%s' % (self.left, self.right)
 
 
-# Main function implementing huffman coding
 def huffman_code_tree(node, left=True, binString=''):
     if type(node) is str:
         return {node: binString}
@@ -48,7 +45,6 @@ def huffman_code_tree(node, left=True, binString=''):
     return d
 
 
-# Calculating frequency
 freq = {}
 for c in string:
     if c in freq:

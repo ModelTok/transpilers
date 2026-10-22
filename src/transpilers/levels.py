@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 import clang.cindex as ci
 
-from transpilers.frontends.cpp import parser as _cfg  # noqa: F401  (configures libclang)
+from transpilers.frontends.cpp import parser as _cfg  # noqa: F401
 from transpilers.cli.main import transpile
 
 K = ci.CursorKind
@@ -37,9 +37,9 @@ _INCLUDE_RE = re.compile(r'#include\s*[<"]([^">]+)[">]')
 
 @dataclass
 class Unit:
-    label: str  # object name / file name
-    source: str  # C++ source for this unit
-    origin: str  # file it came from
+    label: str
+    source: str
+    origin: str
 
 
 @dataclass
@@ -51,9 +51,6 @@ class Result:
     error: str = ""
 
 
-# --------------------------------------------------------------------------- #
-# Extraction
-# --------------------------------------------------------------------------- #
 def extract_objects(
     path: str, name: str | None = None, inc: list[str] | None = None
 ) -> list[Unit]:
@@ -92,8 +89,6 @@ def extract_objects(
             )
 
     def visit(node) -> None:
-        # Only descend through TU / namespaces / classes — NEVER into function
-        # bodies, so locals (loop vars, temporaries) aren't mistaken for objects.
         for c in node.get_children():
             if c.kind == K.NAMESPACE:
                 visit(c)
@@ -101,13 +96,13 @@ def extract_objects(
             if not from_file(c):
                 continue
             if c.kind in (K.FUNCTION_DECL, K.CXX_METHOD) and c.is_definition():
-                take(c)  # whole function/method; do not recurse in
+                take(c)
             elif c.kind in (K.CLASS_DECL, K.STRUCT_DECL) and c.is_definition():
-                take(c)  # whole class/struct as one object
+                take(c)
                 if name is not None:
-                    visit(c)  # also expose its methods/fields by name
+                    visit(c)
             elif c.kind == K.VAR_DECL:
-                take(c)  # only reached at TU/namespace/class scope
+                take(c)
 
     visit(tu.cursor)
     return units
@@ -163,13 +158,10 @@ def folder_files_ordered(root: str) -> list[str]:
             indeg[m] -= 1
             if indeg[m] == 0:
                 queue.append(m)
-    order += [f for f in files if f not in order]  # any cycles: append remainder
+    order += [f for f in files if f not in order]
     return order
 
 
-# --------------------------------------------------------------------------- #
-# Transpile at a level
-# --------------------------------------------------------------------------- #
 def _run(
     label: str,
     origin: str,
@@ -180,7 +172,7 @@ def _run(
     inc: list[str] | None = None,
 ) -> Result:
     try:
-        if engine == "lift":  # never-refuse C++ -> Python lift (whole-unit)
+        if engine == "lift":
             from transpilers.lift import lift_source
 
             out, _ = lift_source(source, inc=inc)
@@ -191,7 +183,7 @@ def _run(
             True,
             output=transpile(source, source_lang=source_lang, target=target),
         )
-    except Exception as ex:  # never abort the batch on one failing unit
+    except Exception as ex:
         return Result(
             label,
             origin,

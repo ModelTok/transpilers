@@ -1,5 +1,3 @@
-///Variable names from AE1B-Tables.cpp
-///Both are quite similar type.
 #include <iostream>
 #include <algorithm>
 #include <vector>
@@ -17,10 +15,8 @@ int main() {
 		}
 		sort(scr.begin(),scr.end());
 		reverse(scr.begin(),scr.end());
-		//cout<<scr[0]<<scr[1]<<scr[2]<<scr[3]<<scr[4]<<endl;
 		long count=1,max=scr[0];
 		long flag = 0,n=scr.size();
-		//cout<<n<<endl<<screw<<endl;
 		while(count<=n){
 			if(max>=screw)	{
 				flag = 1;

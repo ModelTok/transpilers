@@ -14,12 +14,11 @@ the transpiler in isolation. Domain typedefs come from $TRANSPILERS_CPP_PREAMBLE
 import os, re, sys, glob, collections
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-import clang.cindex as ci                                   # noqa: E402
-from transpilers.frontends.cpp import parser as _cppparser  # configures libclang  # noqa: E402,F401
-from transpilers.cli.main import transpile                  # noqa: E402
+import clang.cindex as ci  # noqa: E402
+from transpilers.frontends.cpp import parser as _cppparser  # noqa: E402,F401
+from transpilers.cli.main import transpile  # noqa: E402
 
 EP = os.environ.get("ENERGYPLUS_SRC", "/home/db/EnergyPlus/src/EnergyPlus")
-# EnergyPlus core typedefs so Real64 etc. resolve (project preamble).
 os.environ.setdefault("TRANSPILERS_CPP_PREAMBLE",
                       "typedef double Real64; typedef long long Int64; typedef int Int;")
 

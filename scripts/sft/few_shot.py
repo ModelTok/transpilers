@@ -12,7 +12,7 @@ better recall, but token-TFIDF already captures most of the signal for code.
 import json, math, re, functools
 from collections import Counter
 from pathlib import Path
-REPO = Path(__file__).resolve().parents[2]  # scripts/sft/<this file> -> repo root
+REPO = Path(__file__).resolve().parents[2]
 SRC = REPO / "data/sft/diverse/verified.jsonl"
 
 def toks(s): return re.findall(r"[A-Za-z_]\w+", s)
@@ -37,7 +37,6 @@ def retrieve(cpp, k=3):
     q = vec(Counter(toks(cpp)))
     scored = []
     for i, dv in enumerate(vecs):
-        # cosine = dot of two L2-normalised sparse vectors
         s = sum(q[t] * dv.get(t, 0.0) for t in q)
         scored.append((s, i))
     scored.sort(reverse=True)
@@ -45,7 +44,7 @@ def retrieve(cpp, k=3):
     for s, i in scored[:k]:
         p = pairs[i]
         cu = p.get("cpp_unit", ""); mu = p.get("mojo_unit", "")
-        if cu.strip() == cpp.strip():   # skip an exact self-match
+        if cu.strip() == cpp.strip():
             continue
         out.append({"name": p["name"], "cpp": cu, "mojo": mu, "score": round(s, 3)})
     return out[:k]

@@ -8,7 +8,7 @@ public class DecimalToBinary {
         Scanner scn = new Scanner(System.in);
         
         System.out.println("Enter a Decimal Number : ");
-        int number = scn.nextInt(); // Getting an integer from user
+        int number = scn.nextInt();
         
         for(int x = number ; x != 0; x = x/2) {
             stk.push(x%2);
@@ -37,7 +37,7 @@ class Node {
 }
 
 class Stack {
-    private Node top ; // holds a reference to the top node
+    private Node top ;
     public Stack () {
         top=null;
     }

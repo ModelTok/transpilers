@@ -38,9 +38,6 @@ RESULTS_DIR = Path(__file__).parent.parent / "results"
 TASKS_DIR = Path(__file__).parent.parent / "benchmarks" / "tasks"
 
 
-# ---------------------------------------------------------------------------
-# Result loading and comparison
-# ---------------------------------------------------------------------------
 
 def load_result(path: Path) -> dict:
     with open(path, encoding="utf-8") as f:
@@ -55,7 +52,6 @@ def compare_results(result_paths: list[Path]) -> None:
     print(f"  Tool Comparison — {len(results)} runs")
     print(f"{'='*80}")
 
-    # Header
     header = f"  {'Task':<30}"
     for r in results:
         label = f"{r['model']}/{r['path']}"[:12]
@@ -63,8 +59,6 @@ def compare_results(result_paths: list[Path]) -> None:
     print(header)
     print(f"  {'-'*30}" + " " + "  ".join(["-"*12]*len(results)))
 
-    # Per-task rows
-    # Build task index from first result
     task_ids = [t["id"] for t in results[0]["tasks"]]
     task_map = {t["id"]: t for t in results[0]["tasks"]}
 
@@ -82,7 +76,6 @@ def compare_results(result_paths: list[Path]) -> None:
                 row += f" {'✗':>12}"
         print(row)
 
-    # Summary row
     print(f"\n  {'PASS@1':<30}", end="")
     for r in results:
         m = r.get("metrics", {})
@@ -152,7 +145,6 @@ def analyze_failures(result_path: Path) -> None:
     print(f"\n  Failure analysis: {model}/{path}")
     print(f"  {len(failures)}/{len(tasks)} tasks failed\n")
 
-    # Group by tier
     by_tier: dict[int, list] = {}
     for t in failures:
         tier = t["tier"]
@@ -165,16 +157,12 @@ def analyze_failures(result_path: Path) -> None:
             if t.get("error"):
                 print(f"      error: {t['error'][:80]}")
             else:
-                # Find first failed test
                 for tr in t.get("tests", []):
                     if not tr["passed"]:
                         print(f"      args={tr['args']} expected={tr['expected']!r} got={tr['actual']!r}")
                         break
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def main():
     import argparse
@@ -221,7 +209,6 @@ def main():
             print(f"Tasks: {len(list(TASKS_DIR.glob('*.json')))}")
             print("Run: python run_eval.py --model <model> --path <path>")
             return
-        # Delegate to run_eval.py
         import subprocess
         cmd = [sys.executable, str(Path(__file__).parent.parent / "run_eval.py"),
                "--model", args.model, "--path", args.path]

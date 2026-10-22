@@ -57,7 +57,6 @@ void maxHeapify(int *A, int i, int n) {
 
 	if (largest != i) {
 
-		//swap
 		temp = *(A + i);
 		*(A + i) = *(A + largest);
 		*(A + largest) = temp;
@@ -78,7 +77,6 @@ void heapSort(int *A, int n) {
 	buildMaxHeap(A, n);
 	for (int i = length; i > 0; i--) {
 
-		//swap
 		temp = *(A);
 		*(A) = *(A + i);
 		*(A + i) = temp;

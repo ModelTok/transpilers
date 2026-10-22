@@ -22,7 +22,6 @@ assert target["function_name"] == "CalcASHRAETARPNatural"
 cpp_bundle = "\n\n".join(by_name[c]["cpp_source"] for c in CALLEES)
 cpp_bundle += "\n\n" + target["cpp_source"]
 
-# entry def first so the harness reads its signature; imports hoisted to top
 mojo_callees = []
 imports = set()
 for c in CALLEES:
