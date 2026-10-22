@@ -60,13 +60,9 @@ api = [
     "uvicorn[standard]>=0.49.0",
     "pydantic>=2.13.4",
 ]
-runpod = [
-    "runpod>=1.9.1",
-]
-# Install PyTorch separately with the ROCm build matching your GPU/driver — NOT pinned here
-# because the wheel index is hardware-specific. For AMD RX 7700 XT (RDNA3, gfx1101), ROCm >= 6.2:
-#   uv pip install --index-url https://download.pytorch.org/whl/rocm6.3 torch
-# (built/run with torch==2.9.1+rocm6.3)
+# Install PyTorch separately with the CUDA build matching your NVIDIA driver — NOT pinned here
+# because the wheel index depends on the driver/GPU. For RTX 50-series (Blackwell, sm_120) use cu128:
+#   uv pip install --index-url https://download.pytorch.org/whl/cu128 torch
 ml = [
     "transformers==5.12.1",
     "peft==0.19.1",

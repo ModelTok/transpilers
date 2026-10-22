@@ -1,4 +1,4 @@
-# Qwen2.5-Coder-3B bf16 LoRA — C++/Python -> Mojo, on the 12 GB RX 7700 XT.
+# Qwen2.5-Coder-3B bf16 LoRA — C++/Python -> Mojo, sized for a 12 GB NVIDIA GPU.
 # 3B bf16 weights (~6 GB) + LoRA + grad-checkpointed activations fit cleanly in
 # 12 GB — no quantization needed (unlike the 7B/12B QLoRA experiments).
 model_name_or_path: Qwen/Qwen2.5-Coder-3B-Instruct

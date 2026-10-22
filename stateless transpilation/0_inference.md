@@ -68,32 +68,29 @@ HOME=$APP $APP/.lmstudio/bin/lms ps        # HOME override needed to find the au
 HOME=$APP $APP/.lmstudio/bin/lms load <model> --gpu max -c 32768 -y
 ```
 
-### Multi-machine (round-robin across the 890M + the RX 7700 XT)
+### Multi-machine (round-robin across several endpoints)
 
 `2_transpile.py` is built for this — list every endpoint; the scheduler hands the
 next free file to whichever machine is idle (faster boxes naturally do more):
 
 ```bash
 python3 2_transpile.py --all --backend lmstudio \
-  --endpoints http://localhost:1234/v1 http://<7700xt-ip>:1234/v1 \
+  --endpoints http://localhost:1234/v1 http://<other-host>:1234/v1 \
   --model transpiler-1.5B-Q4 --per-endpoint 16
 ```
 
-On the **7700 XT** box (12 GB GDDR6, ~3–4× this machine): serve the same GGUF via
-Ollama / llama-server / LM Studio with the Vulkan backend (or ROCm with
-`HSA_OVERRIDE_GFX_VERSION=11.0.0`, since it's gfx1101). Tailscale gives stable IPs
-between machines.
+On an **NVIDIA** box: serve the same GGUF via Ollama / llama-server / LM Studio with
+the CUDA backend. Tailscale gives stable IPs between machines.
 
 ---
 
-## Reference: raw `transformers` + ROCm (no GGUF)
+## Reference: raw `transformers` + CUDA (no GGUF)
 
-Slower (~13 tok/s, no batching wins) — only for debugging the un-quantized model.
-Uses the transpilers repo's ROCm venv:
+Only for debugging the un-quantized model (the ~13 tok/s figure was measured on the
+890M iGPU, not on NVIDIA). Use a venv with a CUDA build of torch, transformers and peft:
 
 ```bash
-export HSA_OVERRIDE_GFX_VERSION=11.0.0     # 890M reports gfx1150; coerce to gfx1100
-PY=~/rocm-venv/bin/python                  # torch 2.9.1+rocm6.3, transformers, peft
+PY=~/cuda-venv/bin/python                  # torch (CUDA wheel), transformers, peft
 ```
 ```python
 import torch
@@ -109,8 +106,8 @@ model = PeftModel.from_pretrained(base, ADAPTER).merge_and_unload().to("cuda").e
 
 ## Rebuild the GGUFs from the adapter (if weights are lost)
 
-Requires: `~/rocm-venv` (torch+transformers+peft), `sentencepiece`+`protobuf` in
-that venv (`uv pip install --python ~/rocm-venv/bin/python sentencepiece protobuf`),
+Requires: a CUDA venv (torch+transformers+peft), `sentencepiece`+`protobuf` in
+that venv (`uv pip install --python ~/cuda-venv/bin/python sentencepiece protobuf`),
 and a llama.cpp checkout with `convert_hf_to_gguf.py` + `llama-quantize`
 (`~/Github/llama.cpp-diffusion`).
 
@@ -126,7 +123,7 @@ m.save_pretrained("/tmp/merged"); AutoTokenizer.from_pretrained("model/adapter_1
 PY
 # 2. HF -> f16 GGUF
 cd ~/Github/llama.cpp-diffusion
-PYTHONPATH=gguf-py ~/rocm-venv/bin/python convert_hf_to_gguf.py /tmp/merged --outfile /tmp/t-f16.gguf --outtype f16
+PYTHONPATH=gguf-py ~/cuda-venv/bin/python convert_hf_to_gguf.py /tmp/merged --outfile /tmp/t-f16.gguf --outtype f16
 # 3. quantize
 build/bin/llama-quantize /tmp/t-f16.gguf model/transpiler-1.5B-Q4_K_M.gguf Q4_K_M
 build/bin/llama-quantize /tmp/t-f16.gguf model/transpiler-1.5B-Q8_0.gguf  Q8_0
@@ -151,7 +148,6 @@ Single-stream decode **68 tok/s**, prefill ~1600 tok/s, TTFT ~0.1 s.
 
 - **For bulk transpilation set `--parallel 32`** on the 890M → ~681 tok/s aggregate (10× single-stream) with still-tolerable per-request latency. `--parallel 64` for pure overnight jobs (peak ~871 tok/s); beyond that is wasted.
 - Prefill is compute-bound and constant ~1600 tok/s; its wall-time grows with batch, so very long prompts at high batch shift the bottleneck to prefill.
-- The RX 7700 XT should move this whole curve up ~3–4×.
 
 Q8 is ~35 % slower than Q4 at equal batch; pick it only if draft quality (pass@k
 hit-rate) outweighs speed. The downstream verify gate (`3_verify.py`) catches any

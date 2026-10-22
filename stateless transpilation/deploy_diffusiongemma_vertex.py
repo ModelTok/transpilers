@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Deploy DiffusionGemma-26B on Vertex AI Model Garden (NVIDIA RTX PRO 6000).
-Run with the env that has google-cloud-aiplatform:  ~/rocm-venv/bin/python this.py
+Run with the env that has google-cloud-aiplatform:  python this.py
 Requires ADC:  gcloud auth application-default login
 WARNING: this provisions a GPU endpoint that BILLS BY THE HOUR until undeployed.
 """

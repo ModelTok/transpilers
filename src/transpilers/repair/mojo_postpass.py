@@ -1117,7 +1117,10 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(
         prog="transpile-postpass",
-        description="Deterministic fixes for LLM-drafted Mojo kernels (syntax, mut, nc_mul)",
+        description=(
+            "Deterministic fixes for LLM-drafted Mojo kernels: C++/pre-1.0 syntax, struct and Array1D "
+            "rewrites, mut, glibc-exact maths, nc_mul guards"
+        ),
     )
     ap.add_argument("files", nargs="+", type=Path)
     ap.add_argument("--in-place", action="store_true", help="rewrite the files instead of printing")

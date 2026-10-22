@@ -12,9 +12,8 @@ canonical gate as eval_05b/run_heldout_eval) so the WITHOUT-repair number is
 apples-to-apples with eval_05b. The full compiler stderr used for the repair
 prompt is captured separately, only on failures.
 
-Run on iGPU (rocm venv):
-  HSA_OVERRIDE_GFX_VERSION=11.0.0 /home/bart/rocm-venv/bin/python -u \
-    scripts/sft/eval_repair.py --adapter data/sft/cpp_mojo/adapter_15b_v2 \
+Run (CUDA venv):
+  python -u scripts/sft/eval_repair.py --adapter data/sft/cpp_mojo/adapter_15b_v2 \
     --repair 1 --tag repair-test
 """
 import argparse, importlib.util, json, re, subprocess, sys, tempfile

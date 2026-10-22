@@ -368,6 +368,5 @@ def route_to_tier(ast: ASTNode, max_cost: float | None) -> ModelTier:
 
 - [docs/cost_analysis.md](cost_analysis.md) — cost breakdown per approach
 - [docs/fine_tuning_guide.md](fine_tuning_guide.md) — fine-tuning the 7B model
-- [docs/runpod_guide.md](runpod_guide.md) — hosting on RunPod A40
 - [docs/llvm_ir_pipeline.md](llvm_ir_pipeline.md) — LLVM IR grounding
 - [docs/llm_comparison.md](llm_comparison.md) — model comparison details

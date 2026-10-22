@@ -2,8 +2,8 @@
 #
 # Reproduces the shipped adapter_15b_v2 (base Qwen2.5-Coder-1.5B-Instruct,
 # LoRA r=16 alpha=32 dropout=0.05 on all linear projections). Runs on the
-# Ubuntu-24.04 WSL distro's ROCm GPU (RX 7700 XT, 12 GB) — bf16 LoRA of a 1.5B
-# model fits comfortably, no quantization needed.
+# NVIDIA GPU sized for 12 GB — bf16 LoRA of a 1.5B model fits comfortably, no
+# quantization needed.
 #
 # Datasets are registered in this folder's dataset_info.json. The GUI sees them
 # automatically once scripts/sft/register_datasets.sh has merged them into

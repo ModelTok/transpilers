@@ -1,5 +1,5 @@
 # LLaMA-Factory SFT config — 3B adapter, Phase 1: Mojo acquisition.
-# CLOUD / CUDA edition — portable paths, flash-attn enabled, ROCm workarounds removed.
+# CLOUD / CUDA edition — portable paths, flash-attn enabled.
 #
 # Target: Qwen/Qwen2.5-Coder-3B-Instruct, LoRA r=16/alpha=32/dropout=0.05, bf16
 # Hardware: any NVIDIA GPU with ≥16 GB VRAM (A10 24GB / L4 24GB / A100 40-80GB)

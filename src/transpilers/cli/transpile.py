@@ -395,8 +395,8 @@ def main() -> int:
         "--postpass",
         action="store_true",
         help=(
-            "Apply the deterministic Mojo post-pass (C++/pre-1.0 syntax, `mut`, nc_mul around "
-            "products that feed an add) to each draft before it is written"
+            "Apply the deterministic Mojo post-pass (syntax, struct/Array1D rewrites, `mut`, glibc-exact "
+            "maths, nc_mul guards; see transpile-postpass) to each draft before it is written"
         ),
     )
     ap.add_argument(

@@ -1,4 +1,4 @@
-# Running the transpiler model on a different GPU (e.g. AMD RX 7700 XT)
+# Running the transpiler model on an NVIDIA GPU
 
 Everything needed to run, retrain, and evaluate the C++/Python → Mojo model is in
 this repo. The only thing **not** committed is the stock base model (auto-downloaded
@@ -19,27 +19,29 @@ from HuggingFace on first run) and the throwaway training checkpoints.
 
 The base model is `Qwen/Qwen2.5-Coder-1.5B-Instruct` — pulled from HF automatically.
 
-## Setup on the 7700 XT (gfx1101, RDNA3)
+## Setup on an NVIDIA GPU
 
 ```bash
 python3 -m venv ~/transpilers-venv && source ~/transpilers-venv/bin/activate
-# 1) ROCm PyTorch for your GPU (RDNA3 supported natively in ROCm >= 6.2):
-pip install --index-url https://download.pytorch.org/whl/rocm6.3 torch
+# 1) CUDA PyTorch matching your driver. cu128 is for RTX 50-series (Blackwell, sm_120);
+#    older cards can use cu124 / cu121. Pick the index that matches your driver.
+pip install --index-url https://download.pytorch.org/whl/cu128 torch
 # 2) the rest:
 pip install -r requirements.txt
 ```
 
-**GPU env var:** the iGPU this was built on (Radeon 890M = gfx1150) needed
-`HSA_OVERRIDE_GFX_VERSION=11.0.0` to be recognized. The **7700 XT (gfx1101) is
-natively supported**, so you likely need **no override**. If torch doesn't see the
-GPU, try `HSA_OVERRIDE_GFX_VERSION=11.0.1`. Confirm with:
+Confirm torch sees the GPU:
 ```bash
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
+For a one-command local two-phase 3B run on NVIDIA (includes the CUDA wheel install and
+uses PyTorch SDPA, since flash-attn has no prebuilt wheel for sm_120), see
+`scripts/sft/train_3b_cuda_local.sh`.
+
 ## Retrain the adapter — LLaMA Factory (GUI or CLI)
 
-Training runs through **LLaMA Factory** on the ROCm GPU. It reproduces the shipped
+Training runs through **LLaMA Factory** on the NVIDIA GPU. It reproduces the shipped
 `adapter_15b_v2` LoRA (base Qwen2.5-Coder-1.5B-Instruct, r=16, alpha=32, dropout=0.05,
 all linear projections). Config: `data/sft/cpp_mojo/sft.yaml`; datasets registered in
 `data/sft/cpp_mojo/dataset_info.json`.
@@ -48,7 +50,7 @@ all linear projections). Config: `data/sft/cpp_mojo/sft.yaml`; datasets register
 # One-time: make the datasets visible to LLaMA Factory / the GUI.
 bash scripts/sft/register_datasets.sh
 
-# CLI retrain (the 7700 XT is ~3-4x faster than the iGPU):
+# CLI retrain:
 llamafactory-cli train data/sft/cpp_mojo/sft.yaml
 ```
 
@@ -84,8 +86,8 @@ python scripts/sft/migrate_py_leaves.py --adapter data/sft/cpp_mojo/adapter_15b_
 The differential-verify gate compiles the generated Mojo to confirm correctness. It
 needs a **Mojo 1.0 toolchain**. In this setup that came from the sibling
 `energyplus-mojo` repo's pixi env (`diff_verify.py` points `MOJO_BIN` at
-`energyplus-mojo/.pixi/envs/default/bin/mojo`). To run the verify gate on the 7700 XT
-box, either clone `energyplus-mojo` and run `pixi install`, or install Mojo standalone
+`energyplus-mojo/.pixi/envs/default/bin/mojo`). To run the verify gate on a new
+machine, either clone `energyplus-mojo` and run `pixi install`, or install Mojo standalone
 and set `MOJO_BIN`/`MODULAR_HOME` accordingly. **Pure model inference + eval against
 the benchmark's expected outputs does not need Mojo** — only the live compile-verify of
 generated code does.

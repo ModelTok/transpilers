@@ -1,4 +1,4 @@
-# Gemma 4 12B QLoRA (4-bit) — C++/Python -> Mojo, on the 12 GB RX 7700 XT.
+# Gemma 4 12B QLoRA (4-bit) — C++/Python -> Mojo, sized for a 12 GB NVIDIA GPU.
 # google/gemma-4-12b-it is ungated + multimodal (gemma4_unified w/ vision tower).
 # We freeze the vision tower and 4-bit-quantize the LM. This is RIGHT at the
 # 12 GB edge — conservative cutoff + grad checkpointing; may still OOM (then we

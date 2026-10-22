@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-shot: install deps, train, tar the adapter for download. Run inside a
-# RunPod pytorch pod (or any CUDA box). Pick the base via MODEL env.
+# any CUDA box. Pick the base via MODEL env.
 set -e
 pip install -q -r requirements.txt
 : "${MODEL:=Qwen/Qwen2.5-Coder-1.5B-Instruct}"

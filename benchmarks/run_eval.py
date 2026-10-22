@@ -115,8 +115,8 @@ def call_llm(model: str, prompt: str) -> str:
     Supported model strings:
         gpt-4o, gpt-4o-mini
         claude-3-5-sonnet-20241022, claude-opus-4-7
-        qwen2.5-coder-7b-instruct  (via local vLLM / RunPod)
-        llm-compiler-13b-ftd       (via local vLLM / RunPod)
+        qwen2.5-coder-7b-instruct  (via local vLLM)
+        llm-compiler-13b-ftd       (via local vLLM)
 
     Returns the generated text (stripped).
     """

@@ -48,7 +48,7 @@ Publishing the `pass@1` delta vs frontier models **is** the marketing.
 ## Recommended v1 (cheapest path to validated demand)
 
 ```
-train on cloud (CUDA)            # docs/finetune_qwen7b.md, docs/cloud_training.md
+train on cloud (CUDA)            # docs/finetune_qwen7b.md
   → merge base + adapter         # one merge step
   → package as Cog               # Replicate
   → deploy as "source→Mojo" API
@@ -77,9 +77,8 @@ Two tiers worth pricing separately: **draft** (model output only) and
 
 ## Prerequisites / blockers
 
-- **Needs the trained model first.** Local finetune is BLOCKED (PyTorch+ROCm
-  RDNA3 backward-pass deadlock); train on **cloud CUDA** — `docs/cloud_training.md`
-  and the launch-ready `docs/finetune_qwen7b.md` / `scripts/sft/train_7b.sh` (#41).
+- **Needs the trained model first.** Train on **NVIDIA CUDA** — see the
+  launch-ready `docs/finetune_qwen7b.md` / `scripts/sft/train_7b.sh` (#41).
 - `merge adapter → base` + Cog packaging step.
 - ToS for a code-translation API (IP/licensing of submitted source).
 
@@ -89,7 +88,7 @@ Two tiers worth pricing separately: **draft** (model output only) and
 - [ ] Benchmark proving our Mojo `pass@1` > frontier LLMs (the claim)
 - [ ] Per-use billing validated (OpenRouter listing **or** Stripe-metered gateway)
 - [ ] Pricing + unit-cost analysis ($/1M tok serve vs charge)
-- [ ] `docs/` deploy-for-revenue runbook alongside `cloud_training.md`
+- [ ] `docs/` deploy-for-revenue runbook
 
 ## Risks
 

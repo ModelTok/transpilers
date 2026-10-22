@@ -4,14 +4,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-if [ -d /opt/rocm/bin ]; then
-    export PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH
-fi
-
 echo "=== GPU check ==="
-python3 -c "import torch; p=torch.cuda.get_device_properties(0); print(f'GPU: {p.name}  VRAM: {p.total_memory/1e9:.1f}GB  ROCm: {torch.version.hip}')" 2>/dev/null || {
-    echo "ERROR: ROCm PyTorch not found or GPU not available."
-    echo "Install: pip install torch --index-url https://download.pytorch.org/whl/rocm6.3"
+python3 -c "import torch; p=torch.cuda.get_device_properties(0); print(f'GPU: {p.name}  VRAM: {p.total_memory/1e9:.1f}GB  CUDA: {torch.version.cuda}')" 2>/dev/null || {
+    echo "ERROR: CUDA PyTorch not found or no NVIDIA GPU available."
+    echo "Install: pip install torch --index-url https://download.pytorch.org/whl/cu128"
     exit 1
 }
 

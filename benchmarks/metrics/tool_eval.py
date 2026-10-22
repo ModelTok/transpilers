@@ -23,7 +23,7 @@ Tool comparison matrix:
     claude-sonnet-4-6      | High       | High    | ~$0.01  | Best Mojo
     gpt-4o                 | High       | High    | ~$0.015 | Reliable
     gemini-1.5-pro         | Medium     | Medium  | ~$0.008 | Good value
-    local:qwen2.5-coder-7b | Medium     | Low     | ~$0.001 | RunPod
+    local:qwen2.5-coder-7b | Medium     | Low     | ~$0.001 | Local GPU
     local:codellama-34b    | Medium     | Low     | ~$0.002 | Local GPU
 """
 

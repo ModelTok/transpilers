@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Portable LoRA fine-tune for C++->Mojo, for a cloud NVIDIA GPU (RunPod etc.).
+"""Portable LoRA fine-tune for C++->Mojo on any NVIDIA GPU (local or rented).
 
-Same recipe as the local iGPU run, but CUDA-native and self-contained: reads
-./data/, writes ./adapter/. No ROCm/HSA env needed. Run with:
+CUDA-native and self-contained: reads ./data/, writes ./adapter/. Run with:
   MODEL=Qwen/Qwen2.5-Coder-1.5B-Instruct EPOCHS=2 TR_UP=4 python train.py
 Then download ./adapter/ and eval locally (the Mojo verify-gate lives there).
 """

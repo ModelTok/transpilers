@@ -117,8 +117,8 @@ python run_eval.py --model gpt-4o --path direct --target mojo
 # Evaluate Claude with Python-pivot path on tier-1 tasks only
 python run_eval.py --model claude-3-5-sonnet-20241022 --path python_pivot --tier 1
 
-# Evaluate a local vLLM endpoint (e.g., Qwen2.5-Coder-7B on RunPod)
-VLLM_BASE_URL=http://<runpod-ip>:8000 \
+# Evaluate a local vLLM endpoint (e.g., Qwen2.5-Coder-7B on a local NVIDIA GPU)
+VLLM_BASE_URL=http://<vllm-host>:8000 \
   python run_eval.py --model local:qwen2.5-coder-7b-instruct --path direct
 
 # Dry-run: print first 3 prompts without calling any LLM
