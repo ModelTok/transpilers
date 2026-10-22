@@ -25,6 +25,7 @@ from openrouter import OpenRouter  # noqa: E402
 
 from transpilers.cli.domain_prompts import apply_domain_guidance  # noqa: E402
 from transpilers.cli.local_client import OpenAICompatClient  # noqa: E402
+from transpilers.repair.mojo_postpass import postpass as mojo_postpass  # noqa: E402
 
 DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 
@@ -140,6 +141,7 @@ def transpile_one(
     repair: bool,
     max_retries: int,
     domain_prompts: bool = False,
+    postpass: bool = False,
 ) -> dict:
     cc_path = Path(entry["source"])
     target_path = Path(entry["target"])
@@ -208,6 +210,13 @@ def transpile_one(
                 continue
             result["status"] = "error: no FILE block"
             return result
+
+        if postpass:
+            fixed = mojo_postpass(code)
+            code = fixed.code
+            result["postpass_changes"] = len(fixed.changes)
+            if fixed.unresolved:
+                result["postpass_unresolved"] = fixed.unresolved
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(code)
@@ -321,6 +330,14 @@ def main() -> int:
         "--force", action="store_true", help="Re-transpile even if decision=done"
     )
     ap.add_argument(
+        "--postpass",
+        action="store_true",
+        help=(
+            "Apply the deterministic Mojo post-pass (C++/pre-1.0 syntax, `mut`, nc_mul around "
+            "products that feed an add) to each draft before it is written"
+        ),
+    )
+    ap.add_argument(
         "--domain-prompts",
         action="store_true",
         help=(
@@ -424,6 +441,7 @@ def main() -> int:
                 args.repair,
                 args.max_retries,
                 args.domain_prompts,
+                args.postpass,
             )
         status = result["status"]
         with config_lock:
