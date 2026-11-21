@@ -39,6 +39,11 @@ build-backend = "hatchling.build"
 # group, GPU-specific torch build) - not part of the routine test suite.
 testpaths = ["tests"]
 
+[tool.ruff.lint]
+# Ruff 0.17 widened its default rule set (342 new findings in src/ and
+# tests/). Keep the pre-0.17 defaults until those are worked through.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.ruff.lint.per-file-ignores]
 # Deliberate re-export barrel: each backend LIR dialect is `from .x import *`
 # and re-exported. `__all__` covers every public name, so F403/F405 are noise.
@@ -62,14 +67,14 @@ api = [
 # because the wheel index depends on the driver/GPU. For RTX 50-series (Blackwell, sm_120) use cu128:
 #   uv pip install --index-url https://download.pytorch.org/whl/cu128 torch
 ml = [
-    "transformers==5.12.1",
-    "peft==0.19.1",
-    "trl==1.6.0",
-    "datasets==5.0.1",
-    "accelerate==1.14.0",
+    "transformers==5.24.0",
+    "peft==0.22.0",
+    "trl==1.18.2",
+    "datasets==5.2.0",
+    "accelerate==1.16.0",
     "safetensors==0.8.0",
     "tokenizers",
     "huggingface-hub",
-    "numpy==2.4.6",
-    "sentence-transformers==5.6.0",  # codebase RAG index (scripts/rag/)
+    "numpy==2.5.5",
+    "sentence-transformers==6.3.0",  # codebase RAG index (scripts/rag/)
 ]
