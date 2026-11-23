@@ -81,7 +81,8 @@ def toks(c) -> list[str]:
 def src(c) -> str:
     try:
         e = c.extent
-        raw = open(e.start.file.name, "rb").read()[e.start.offset : e.end.offset]
+        with open(e.start.file.name, "rb") as fh:
+            raw = fh.read()[e.start.offset : e.end.offset]
         return raw.decode("utf-8", "replace")
     except Exception:
         return c.spelling or "?"
@@ -1009,7 +1010,8 @@ def main() -> None:
     tu = ci.Index.create().parse(path, args=args2)
     text, st = _emit(tu, path)
     if out_path:
-        open(out_path, "w").write(text)
+        with open(out_path, "w") as fh:
+            fh.write(text)
     print(text)
     cov = 100 * (1 - st["todo"] / max(st["nodes"], 1))
     print(

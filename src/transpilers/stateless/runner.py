@@ -380,9 +380,11 @@ def call_openrouter(prompt: str, model: str, timeout: int, endpoint: str | None)
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not set (add it to .env)")
 
+    # At least one attempt: OPENROUTER_RETRIES=0 used to skip the loop and `raise None`.
+    retries = max(_RETRIES, 1)
     last = None
-    for attempt in range(_RETRIES):
-        used, temperature = _attempt_plan(model, _FAILOVER, attempt, _RETRIES)
+    for attempt in range(retries):
+        used, temperature = _attempt_plan(model, _FAILOVER, attempt, retries)
         try:
             with OpenRouter(api_key=key) as client:
                 resp = client.chat.send(
@@ -398,7 +400,7 @@ def call_openrouter(prompt: str, model: str, timeout: int, endpoint: str | None)
                 "model_used": used, "attempts": attempt + 1}
         except Exception as e:  # noqa: BLE001
             last = e
-            if attempt == _RETRIES - 1 or not _transient(e):
+            if attempt == retries - 1 or not _transient(e):
                 raise
             time.sleep(2 ** attempt)  # 1, 2, 4, 8, 16s
     raise last  # unreachable, satisfies type checkers

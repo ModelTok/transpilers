@@ -183,3 +183,16 @@ def test_missing_api_key_fails_before_any_call(monkeypatch):
         T.call_openrouter("prompt", PRIMARY, 60, None)
 
     assert calls == []
+
+
+def test_zero_retry_budget_still_makes_one_attempt(monkeypatch):
+    # OPENROUTER_RETRIES=0 used to skip the loop and `raise None` (a TypeError).
+    monkeypatch.setattr(T, "_RETRIES", 0)
+    monkeypatch.setattr(T, "_FAILOVER", [])
+    calls, _ = _install_fake_sdk(monkeypatch, ["<<<FILE out/x.py>>>\nok\n<<<END>>>"])
+
+    text, meta = T.call_openrouter("prompt", PRIMARY, 60, None)
+
+    assert text.startswith("<<<FILE")
+    assert calls == [(PRIMARY, 0.0)]
+    assert meta["attempts"] == 1

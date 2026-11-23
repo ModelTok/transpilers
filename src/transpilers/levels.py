@@ -61,7 +61,8 @@ def extract_objects(
     """
     args = ["-std=c++17", "-x", "c++"] + [f"-I{d}" for d in (inc or [])]
     tu = ci.Index.create().parse(path, args=args)
-    raw = open(path, "rb").read()
+    with open(path, "rb") as fh:
+        raw = fh.read()
     units: list[Unit] = []
     seen: set[tuple[int, int]] = set()
 
@@ -137,9 +138,9 @@ def folder_files_ordered(root: str) -> list[str]:
     deps = {f: set() for f in files}
     for f in files:
         try:
-            for m in _INCLUDE_RE.finditer(
-                open(f, encoding="utf-8", errors="replace").read()
-            ):
+            with open(f, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+            for m in _INCLUDE_RE.finditer(text):
                 s = os.path.splitext(os.path.basename(m.group(1)))[0]
                 if s in stem and stem[s] != f:
                     deps[f].add(stem[s])
@@ -302,9 +303,9 @@ def main() -> None:
                 "rust": ".rs",
                 "c": ".c",
             }.get(args.target, ".txt")
-            open(os.path.join(args.emit_dir, f"{r.origin}.{r.label}{ext}"), "w").write(
-                r.output
-            )
+            out = os.path.join(args.emit_dir, f"{r.origin}.{r.label}{ext}")
+            with open(out, "w") as fh:
+                fh.write(r.output)
     print(f"\n{args.level}: {ok}/{len(results)} units transpiled to {args.target}")
 
 

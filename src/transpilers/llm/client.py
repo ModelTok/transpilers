@@ -14,6 +14,7 @@ require LLM credentials.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -31,6 +32,7 @@ DEFAULT_CACHE_DIR = Path(__file__).parent / "cache"
 
 
 
+@functools.total_ordering
 class ModelTier(Enum):
     """Escalation order for the verification-driven repair loop (issue #47).
 
@@ -49,7 +51,10 @@ class ModelTier(Enum):
         """The escalation order, low → high cost."""
         return (cls.CACHED, cls.LOCAL_FINETUNED, cls.FRONTIER)
 
-    def __lt__(self, other: "ModelTier") -> bool:  # type: ignore[override]
+    def __lt__(self, other: object) -> bool:
+        # total_ordering derives <=, > and >= from this and Enum's __eq__.
+        if not isinstance(other, ModelTier):
+            return NotImplemented
         order = self.ordered()
         return order.index(self) < order.index(other)
 
