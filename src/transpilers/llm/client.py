@@ -204,11 +204,13 @@ class LlmClient:
             )
         from anthropic import Anthropic
 
+        # `temperature` is not sent: API version 2026-10-21 (anthropic>=2)
+        # rejects sampling parameters on every model, and Claude 4.7+ models
+        # rejected non-default values already. It still keys the cache.
         client = Anthropic()
         resp = client.messages.create(
             model=self.model,
             max_tokens=1024,
-            temperature=temperature,
             messages=[{"role": "user", "content": prompt}],
         )
         return resp.content[0].text
