@@ -49,7 +49,7 @@ except Exception:
 
 _CPP_FUNC_DEF = re.compile(
     r"""
-    (?:(?:inline|static|virtual|explicit|constexpr|[[nodiscard]]\s*)*)?
+    (?:(?:inline|static|virtual|explicit|constexpr|\[\[nodiscard\]\])\s*)*
     [\w:<>*&,\s]+?              # return type (rough)
     \b(\w+)\s*\(               # function name + (
     [^)]*\)\s*                 # params )

@@ -43,7 +43,8 @@ def _project_preamble() -> str:
     path = _os.environ.get("TRANSPILERS_CPP_PREAMBLE_FILE", "")
     if path and _os.path.isfile(path):
         try:
-            inline += "\n" + open(path, encoding="utf-8").read()
+            with open(path, encoding="utf-8") as fh:
+                inline += "\n" + fh.read()
         except OSError:
             pass
     return ("\n" + inline + "\n") if inline else ""

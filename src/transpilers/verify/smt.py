@@ -289,8 +289,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    ref_code = open(args.ref).read()
-    trans_code = open(args.trans).read()
+    with open(args.ref) as fh:
+        ref_code = fh.read()
+    with open(args.trans) as fh:
+        trans_code = fh.read()
     param_types = args.types.split(",")
     config = SMTConfig(bound=args.bound)
 
